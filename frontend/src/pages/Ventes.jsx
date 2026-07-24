@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Plus, Trash2, Check, Receipt, CreditCard, Wallet, ChevronRight, AlertTriangle, Printer } from "lucide-react";
-import { getFermes, getClients, getFactures, creerFacture, encaisserVersement } from "../api/client";
+import { getFermes, getClients, getFactures, getVentes, creerFacture, encaisserVersement } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 
 const fcfa = (v) => (Number(v) || 0).toLocaleString("fr-FR") + " F";
@@ -96,11 +96,12 @@ export default function Ventes() {
   const [fermes, setFermes] = useState([]);
   const [clients, setClients] = useState([]);
   const [factures, setFactures] = useState([]);
+  const [ventesManuelles, setVentesManuelles] = useState([]);
   const [chargement, setChargement] = useState(true);
 
   const rafraichir = useCallback(() => {
-    Promise.all([getFermes(), getClients(), getFactures()]).then(([f, c, fa]) => {
-      setFermes(f); setClients(c); setFactures(fa); setChargement(false);
+    Promise.all([getFermes(), getClients(), getFactures(), getVentes({ origine: "SAISIE" })]).then(([f, c, fa, vm]) => {
+      setFermes(f); setClients(c); setFactures(fa); setVentesManuelles(vm); setChargement(false);
     });
   }, []);
 
@@ -135,7 +136,7 @@ export default function Ventes() {
         ) : onglet === "creances" ? (
           <Creances factures={factures} onEncaisse={rafraichir} />
         ) : (
-          <Historique factures={factures} />
+          <Historique factures={factures} ventesManuelles={ventesManuelles} />
         )}
       </div>
     </div>
@@ -403,9 +404,10 @@ function Creances({ factures, onEncaisse }) {
   );
 }
 
-function Historique({ factures }) {
+function Historique({ factures, ventesManuelles }) {
   return (
     <div style={styles.body}>
+      <div style={styles.sectionLabel}>Factures</div>
       <section style={styles.card}>
         {factures.length === 0 ? (
           <p style={styles.empty}>Aucune facture pour l'instant.</p>
@@ -430,6 +432,34 @@ function Historique({ factures }) {
                   <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>{fcfa(f.montant_total)}</td>
                   <td style={styles.td}>{f.mode_paiement === "COMPTANT" ? "Comptant" : f.mode_paiement === "DOIT" ? "Doit" : "Partiel"}</td>
                   <td style={{ ...styles.td, textAlign: "right", color: Number(f.reste_du) > 0 ? CLAY : "inherit" }}>{fcfa(f.reste_du)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <div style={styles.sectionLabel}>Sorties d'œufs saisies sur le Point Journalier</div>
+      <section style={styles.card}>
+        {ventesManuelles.length === 0 ? (
+          <p style={styles.empty}>Aucune vente saisie manuellement.</p>
+        ) : (
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Date</th>
+                <th style={styles.th}>Ferme</th>
+                <th style={{ ...styles.th, textAlign: "right" }}>Quantité</th>
+                <th style={styles.th}>Responsable</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ventesManuelles.map((v) => (
+                <tr key={v.id}>
+                  <td style={styles.td}>{new Date(v.date).toLocaleDateString("fr-FR")}</td>
+                  <td style={styles.td}>{v.ferme}</td>
+                  <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>{nf(v.quantite)}</td>
+                  <td style={styles.td}>{v.responsable}</td>
                 </tr>
               ))}
             </tbody>
