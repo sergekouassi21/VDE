@@ -264,6 +264,12 @@ function NouvelleFacture({ fermes, clients, onCreee }) {
             </select>
             {lignes.length > 1 && <button style={styles.delBtn} onClick={() => delLigne(i)}><Trash2 size={15} /></button>}
           </div>
+          {d.ferme && (
+            <div style={styles.dispoNote}>
+              Stock œufs disponible : <strong>{nf(d.ferme.bande_active?.stock_oeuf_actuel ?? 0)}</strong>
+              {" · "}Effectif disponible : <strong>{nf(d.ferme.bande_active?.effectif_actuel ?? 0)}</strong>
+            </div>
+          )}
           <div style={styles.ligneGrid}>
             <label style={styles.miniField}>
               <span style={styles.miniLabel}>Quantité ({d.produit.plateaux ? "plateau" : d.produit.unite}{d.qte > 1 && d.produit.unite !== "kg" ? "s" : ""})</span>
@@ -502,6 +508,7 @@ const styles = {
   calcExpr: { fontSize: 12, color: "#8A948D" },
   ligneTotal: { fontWeight: 700, fontSize: 16, color: GREEN_DARK },
   note: { fontSize: 11, color: "#A0A89F", marginTop: 8, fontStyle: "italic" },
+  dispoNote: { fontSize: 11.5, color: GREEN_DARK, background: "#EAF3EE", padding: "6px 10px", borderRadius: 8, marginBottom: 10 },
   addBtn: { width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#EAF3EE", border: `1px dashed ${GREEN}`, color: GREEN_DARK, padding: "11px", borderRadius: 10, fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer", marginTop: 4 },
   payRow: { display: "flex", gap: 7 },
   payBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, background: "#fff", border: "1px solid #ECE9DF", color: "#5A655F", padding: "11px 6px", borderRadius: 11, fontSize: 12.5, fontFamily: "inherit", cursor: "pointer", fontWeight: 500 },
