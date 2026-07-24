@@ -28,7 +28,7 @@ export default function Dashboard() {
     const effectif = pondeuses.reduce((s, f) => s + effectifActuel(f), 0);
     const prod = pondeuses.reduce((s, f) => s + (f.dernier_point?.production_oeufs || 0), 0);
     const morts = actives.reduce((s, f) => s + (f.dernier_point?.morts || 0), 0);
-    const stockOeuf = pondeuses.reduce((s, f) => s + (f.dernier_point?.stock_oeuf_total || 0), 0);
+    const stockOeuf = pondeuses.reduce((s, f) => s + (f.bande_active?.stock_oeuf_actuel || 0), 0);
     const tauxMoyen = effectif > 0 ? (prod / effectif) * 100 : 0;
     return { effectif, prod, morts, stockOeuf, tauxMoyen };
   }, [actives, pondeuses]);

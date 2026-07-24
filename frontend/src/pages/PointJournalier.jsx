@@ -41,7 +41,7 @@ export default function PointJournalier() {
   const calc = useMemo(() => {
     if (!ferme || !bande || !magasin) return null;
     const effectifVeille = ferme.dernier_point ? ferme.dernier_point.effectif_reste : bande.effectif_actuel;
-    const stockOeufVeille = ferme.dernier_point ? ferme.dernier_point.stock_oeuf_total : 0;
+    const stockOeufVeille = ferme.dernier_point ? ferme.dernier_point.stock_oeuf_total : bande.stock_oeuf_actuel;
     const resteEffectif = effectifVeille - n(form.morts);
     const stockOeufJour = n(form.production_oeufs) - n(form.casse) - n(form.brise);
     const stockTotal = stockOeufVeille + stockOeufJour - n(form.sortie_oeuf);
