@@ -201,6 +201,8 @@ function NouvelleFacture({ fermes, clients, onCreee }) {
 
   const pretAEnvoyer = clientNom.trim() && date && lignes.every((l) => l.ferme && Number(l.quantite) > 0) && total > 0;
 
+  const stockOeufTotal = fermes.reduce((s, f) => s + (f.bande_active?.stock_oeuf_actuel ?? 0), 0);
+
   async function valider() {
     setEnvoi(true); setErreur("");
     try {
@@ -232,6 +234,11 @@ function NouvelleFacture({ fermes, clients, onCreee }) {
 
   return (
     <div style={styles.body}>
+      <div style={styles.stockGlobal}>
+        <span style={styles.stockGlobalLabel}>Stock d'œufs disponible (toutes fermes)</span>
+        <span style={styles.stockGlobalVal}>{nf(stockOeufTotal)} œufs</span>
+      </div>
+
       <div style={styles.card}>
         <div style={styles.fieldRow}>
           <label style={styles.field}>
@@ -491,6 +498,9 @@ const styles = {
   tabOn: { background: GREEN, borderColor: GREEN, color: "#fff", fontWeight: 600 },
   body: { display: "flex", flexDirection: "column", gap: 0 },
   card: { background: "#fff", borderRadius: 12, border: "1px solid #ECE9DF", padding: "12px 14px", marginBottom: 12 },
+  stockGlobal: { display: "flex", justifyContent: "space-between", alignItems: "center", background: `linear-gradient(150deg, ${GREEN}, ${GREEN_DARK})`, color: "#fff", borderRadius: 14, padding: "14px 18px", marginBottom: 14 },
+  stockGlobalLabel: { fontSize: 12.5, opacity: .9 },
+  stockGlobalVal: { fontSize: 20, fontWeight: 700 },
   fieldRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
   field: { display: "flex", flexDirection: "column", gap: 5, padding: "6px 0" },
   fieldLabel: { fontSize: 12, color: "#7A857F", fontWeight: 500 },
