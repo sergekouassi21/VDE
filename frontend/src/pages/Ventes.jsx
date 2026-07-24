@@ -108,6 +108,7 @@ export default function Ventes() {
   useEffect(() => { rafraichir(); }, [rafraichir]);
 
   const fermesActives = fermes.filter((f) => !f.est_vide);
+  const totalVentesManuelles = ventesManuelles.reduce((s, v) => s + v.quantite, 0);
 
   return (
     <div style={styles.page}>
@@ -132,7 +133,7 @@ export default function Ventes() {
         {chargement ? (
           <p style={{ padding: 20 }}>Chargement...</p>
         ) : onglet === "facture" ? (
-          <NouvelleFacture fermes={fermesActives} clients={clients} onCreee={rafraichir} />
+          <NouvelleFacture fermes={fermesActives} clients={clients} onCreee={rafraichir} totalVentesManuelles={totalVentesManuelles} />
         ) : onglet === "creances" ? (
           <Creances factures={factures} onEncaisse={rafraichir} />
         ) : (
@@ -143,7 +144,7 @@ export default function Ventes() {
   );
 }
 
-function NouvelleFacture({ fermes, clients, onCreee }) {
+function NouvelleFacture({ fermes, clients, onCreee, totalVentesManuelles }) {
   const [clientNom, setClientNom] = useState("");
   const [clientTel, setClientTel] = useState("");
   const [date, setDate] = useState(today());
@@ -201,8 +202,6 @@ function NouvelleFacture({ fermes, clients, onCreee }) {
 
   const pretAEnvoyer = clientNom.trim() && date && lignes.every((l) => l.ferme && Number(l.quantite) > 0) && total > 0;
 
-  const stockOeufTotal = fermes.reduce((s, f) => s + (f.bande_active?.stock_oeuf_actuel ?? 0), 0);
-
   async function valider() {
     setEnvoi(true); setErreur("");
     try {
@@ -235,8 +234,8 @@ function NouvelleFacture({ fermes, clients, onCreee }) {
   return (
     <div style={styles.body}>
       <div style={styles.stockGlobal}>
-        <span style={styles.stockGlobalLabel}>Stock d'œufs disponible (toutes fermes)</span>
-        <span style={styles.stockGlobalVal}>{nf(stockOeufTotal)} œufs</span>
+        <span style={styles.stockGlobalLabel}>Total des sorties d'œufs saisies (Point Journalier)</span>
+        <span style={styles.stockGlobalVal}>{nf(totalVentesManuelles)} œufs</span>
       </div>
 
       <div style={styles.card}>
