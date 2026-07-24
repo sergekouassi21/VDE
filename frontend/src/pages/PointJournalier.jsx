@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Egg, Skull, Wheat, Package, TrendingUp, Check, ChevronDown, AlertTriangle, Calendar } from "lucide-react";
 import { getFermes, soumettrePointJournalier, declarerBande } from "../api/client";
-import { GREEN, GREEN_DARK, CREAM, INK, CLAY, formatSacs, AGE_REFORME_SEMAINES } from "../theme";
+import { GREEN, GREEN_DARK, CREAM, INK, CLAY, formatSacs, formatColis, AGE_REFORME_SEMAINES } from "../theme";
 
 const n = (v) => (v === "" || v === null || v === undefined || isNaN(v) ? 0 : Number(v));
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -165,9 +165,10 @@ export default function PointJournalier() {
             <Section icon={<Package size={15} />} titre="Alvéoles">
               <FieldNum label="Alvéole reçu" value={form.alveole_recu_unites} onChange={(v) => set("alveole_recu_unites", v)} unit="unités" />
               <FieldCalc label="Conso alvéoles (auto)" value={calc.alveoleConsoAuto.toLocaleString("fr-FR")} unit="unités" hint="production ÷ 30" />
-              <FieldCalc label="Stock alvéole restant" value={calc.stockAlveole.toLocaleString("fr-FR")} unit="unités"
+              <FieldCalc label="Stock alvéole restant" value={formatColis(calc.stockAlveole)}
+                unit={`≈ ${calc.stockAlveole.toLocaleString("fr-FR")} unités`}
                 hint="report + reçu − conso auto" strong danger={alveoleAlerte} />
-              {alveoleAlerte && <Alerte txt={`Stock alvéole bas (seuil ${magasin.seuil_alerte_alveoles_unites}) — réapprovisionner`} />}
+              {alveoleAlerte && <Alerte txt={`Stock alvéole bas (seuil ${formatColis(magasin.seuil_alerte_alveoles_unites)}) — réapprovisionner`} />}
             </Section>
           )}
 

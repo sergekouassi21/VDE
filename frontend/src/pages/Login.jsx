@@ -32,17 +32,23 @@ export default function Login() {
         <p style={styles.sousTitre}>Point Journalier &amp; Tableau de bord</p>
         <input
           style={styles.input}
+          name="vde-username"
           placeholder="Nom d'utilisateur"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
+          onPaste={(e) => { const v = e.clipboardData.getData("text"); if (v) { setUsername(v); e.preventDefault(); } }}
+          autoComplete="off"
           autoFocus
         />
         <input
           style={styles.input}
+          name="vde-password"
           type="password"
           placeholder="Mot de passe"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          onPaste={(e) => { const v = e.clipboardData.getData("text"); if (v) { setPassword(v); e.preventDefault(); } }}
+          autoComplete="new-password"
         />
         {erreur && <p style={styles.erreur}>{erreur}</p>}
         <button style={styles.bouton} type="submit" disabled={chargement}>

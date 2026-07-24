@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import { Egg, TrendingUp, AlertTriangle, Skull, Package, ChevronRight, Activity } from "lucide-react";
 import { getDashboard } from "../api/client";
-import { GREEN, GREEN_DARK, INK, formatSacs, AGE_REFORME_SEMAINES } from "../theme";
+import { GREEN, GREEN_DARK, INK, formatSacs, formatColis, AGE_REFORME_SEMAINES } from "../theme";
 
 const nf = (v) => (v ?? 0).toLocaleString("fr-FR");
 
@@ -44,7 +44,7 @@ export default function Dashboard() {
         a.push({ ferme: f.nom, txt: `Aliment bas : ${formatSacs(Number(f.magasin.stock_aliment_sacs))}`, grav: "haut" });
       }
       if (f.type === "PONTE" && f.magasin.stock_alveoles_unites <= f.magasin.seuil_alerte_alveoles_unites) {
-        a.push({ ferme: f.nom, txt: `Alvéoles basses : ${nf(f.magasin.stock_alveoles_unites)}`, grav: "moy" });
+        a.push({ ferme: f.nom, txt: `Alvéoles basses : ${formatColis(f.magasin.stock_alveoles_unites)}`, grav: "moy" });
       }
       if (f.dernier_point && f.dernier_point.morts > 5) {
         a.push({ ferme: f.nom, txt: `Mortalité ${f.dernier_point.morts} sujets`, grav: "moy" });
