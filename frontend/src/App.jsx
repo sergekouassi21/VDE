@@ -1,8 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, LogOut } from "lucide-react";
+import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket } from "lucide-react";
 import Login from "./pages/Login";
 import PointJournalier from "./pages/PointJournalier";
 import Dashboard from "./pages/Dashboard";
+import Ventes from "./pages/Ventes";
 import { isAuthenticated, logout } from "./api/client";
 import { GREEN_DARK } from "./theme";
 
@@ -18,6 +19,7 @@ function NavBar() {
       <span style={navStyles.brand}>VDE</span>
       <Link to="/" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
       <Link to="/tableau-de-bord" style={navStyles.link}><LayoutDashboard size={16} /> Tableau de bord</Link>
+      <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
       <button style={navStyles.logout} onClick={() => { logout(); navigate("/connexion"); }}>
         <LogOut size={15} /> Déconnexion
       </button>
@@ -42,6 +44,9 @@ export default function App() {
         } />
         <Route path="/tableau-de-bord" element={
           <RequireAuth><NavBar /><Dashboard /></RequireAuth>
+        } />
+        <Route path="/ventes" element={
+          <RequireAuth><NavBar /><Ventes /></RequireAuth>
         } />
       </Routes>
     </BrowserRouter>
