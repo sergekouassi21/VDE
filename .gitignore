@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.env
+.env.local
+
+# Django
+backend/venv/
+backend/db.sqlite3
+backend/staticfiles/
+**/__pycache__/
+*.pyc
+
+# Logs
+npm-debug.*
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
