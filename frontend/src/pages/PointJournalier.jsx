@@ -7,8 +7,9 @@ const n = (v) => (v === "" || v === null || v === undefined || isNaN(v) ? 0 : Nu
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const FORM_VIDE = {
   morts: "", conso_aliment_sacs: "", aliment_recu_sacs: "", traitement: "",
-  alveole_recu_unites: "", production_oeufs: "", casse: "", brise: "", sortie_oeuf: "", observation: "",
+  alveole_recu_unites: "", production_oeufs: "", casse: "", brise: "", observation: "",
 };
+const NOUVELLE_SORTIE_VIDE = { quantite: "", type_sortie: "VENTE", responsable: "" };
 
 export default function PointJournalier() {
   const [fermes, setFermes] = useState([]);
@@ -17,6 +18,8 @@ export default function PointJournalier() {
   const [openFerme, setOpenFerme] = useState(false);
   const [dateJour, setDateJour] = useState(todayISO());
   const [form, setForm] = useState(FORM_VIDE);
+  const [sorties, setSorties] = useState([]);
+  const [nouvelleSortie, setNouvelleSortie] = useState(NOUVELLE_SORTIE_VIDE);
   const [envoye, setEnvoye] = useState(false);
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
   const [erreur, setErreur] = useState("");
@@ -36,7 +39,20 @@ export default function PointJournalier() {
   const magasin = ferme?.magasin;
 
   const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setEnvoye(false); };
-  const reset = () => setForm(FORM_VIDE);
+  const reset = () => { setForm(FORM_VIDE); setSorties([]); setNouvelleSortie(NOUVELLE_SORTIE_VIDE); };
+
+  const totalSorties = sorties.reduce((s, x) => s + n(x.quantite), 0);
+
+  function ajouterSortie() {
+    if (!n(nouvelleSortie.quantite) || !nouvelleSortie.responsable.trim()) return;
+    setSorties((s) => [...s, { ...nouvelleSortie, quantite: n(nouvelleSortie.quantite) }]);
+    setNouvelleSortie(NOUVELLE_SORTIE_VIDE);
+    setEnvoye(false);
+  }
+  function retirerSortie(index) {
+    setSorties((s) => s.filter((_, i) => i !== index));
+    setEnvoye(false);
+  }
 
   const calc = useMemo(() => {
     if (!ferme || !bande || !magasin) return null;
@@ -44,13 +60,13 @@ export default function PointJournalier() {
     const stockOeufVeille = ferme.dernier_point ? ferme.dernier_point.stock_oeuf_total : bande.stock_oeuf_actuel;
     const resteEffectif = effectifVeille - n(form.morts);
     const stockOeufJour = n(form.production_oeufs) - n(form.casse) - n(form.brise);
-    const stockTotal = stockOeufVeille + stockOeufJour - n(form.sortie_oeuf);
+    const stockTotal = stockOeufVeille + stockOeufJour - totalSorties;
     const tauxPonte = resteEffectif > 0 ? (n(form.production_oeufs) / resteEffectif) * 100 : 0;
     const stockAlimentSacs = Number(magasin.stock_aliment_sacs) + n(form.aliment_recu_sacs) - n(form.conso_aliment_sacs);
     const alveoleConsoAuto = Math.floor(n(form.production_oeufs) / 30);
     const stockAlveole = magasin.stock_alveoles_unites + n(form.alveole_recu_unites) - alveoleConsoAuto;
     return { resteEffectif, stockOeufJour, stockTotal, tauxPonte, stockAlimentSacs, alveoleConsoAuto, stockAlveole };
-  }, [form, ferme, bande, magasin]);
+  }, [form, ferme, bande, magasin, totalSorties]);
 
   const tauxAlerte = ferme?.type === "PONTE" && n(form.production_oeufs) > 0 && calc && calc.tauxPonte < 60;
   const mortsAlerte = n(form.morts) > 5;
@@ -66,7 +82,7 @@ export default function PointJournalier() {
         morts: n(form.morts), conso_aliment_sacs: n(form.conso_aliment_sacs),
         aliment_recu_sacs: n(form.aliment_recu_sacs), traitement: form.traitement,
         alveole_recu_unites: n(form.alveole_recu_unites), production_oeufs: n(form.production_oeufs),
-        casse: n(form.casse), brise: n(form.brise), sortie_oeuf: n(form.sortie_oeuf),
+        casse: n(form.casse), brise: n(form.brise), sorties,
         observation: form.observation,
       });
       setEnvoye(true);
@@ -180,8 +196,40 @@ export default function PointJournalier() {
                 <FieldNum label="Brisé" value={form.brise} onChange={(v) => set("brise", v)} unit="œufs" />
               </div>
               <FieldCalc label="Stock du jour" value={calc.stockOeufJour.toLocaleString("fr-FR")} unit="œufs" hint="prod − cassé − brisé" />
-              <FieldNum label="Sortie œuf" value={form.sortie_oeuf} onChange={(v) => set("sortie_oeuf", v)} unit="œufs" />
-              <FieldCalc label="Stock total œuf" value={calc.stockTotal.toLocaleString("fr-FR")} unit="œufs" hint="report + stock jour − sortie" strong />
+            </Section>
+          )}
+
+          {ferme.type === "PONTE" && (
+            <Section icon={<Egg size={15} />} titre="Sorties d'œufs">
+              {sorties.length > 0 && (
+                <div style={styles.sortieList}>
+                  {sorties.map((s, i) => (
+                    <div key={i} style={styles.sortieRow}>
+                      <span style={styles.sortieType}>{s.type_sortie === "VENTE" ? "Vente" : "Don"}</span>
+                      <span style={styles.sortieDetail}>{s.quantite.toLocaleString("fr-FR")} œufs — {s.responsable}</span>
+                      <button type="button" style={styles.sortieRemove} onClick={() => retirerSortie(i)}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={styles.sortieForm}>
+                <div style={styles.row2}>
+                  <input type="number" inputMode="numeric" style={styles.input} placeholder="Quantité"
+                    value={nouvelleSortie.quantite}
+                    onChange={(e) => setNouvelleSortie((s) => ({ ...s, quantite: e.target.value }))} />
+                  <select style={styles.input} value={nouvelleSortie.type_sortie}
+                    onChange={(e) => setNouvelleSortie((s) => ({ ...s, type_sortie: e.target.value }))}>
+                    <option value="VENTE">Vente</option>
+                    <option value="DON">Don</option>
+                  </select>
+                </div>
+                <input type="text" style={styles.input} placeholder="Responsable de la sortie"
+                  value={nouvelleSortie.responsable}
+                  onChange={(e) => setNouvelleSortie((s) => ({ ...s, responsable: e.target.value }))} />
+                <button type="button" style={styles.sortieAddBtn} onClick={ajouterSortie}>+ Ajouter cette sortie</button>
+              </div>
+              <FieldCalc label="Total sorties" value={totalSorties.toLocaleString("fr-FR")} unit="œufs" hint={`${sorties.length} sortie(s) enregistrée(s)`} />
+              <FieldCalc label="Stock total œuf" value={calc.stockTotal.toLocaleString("fr-FR")} unit="œufs" hint="report + stock jour − sorties" strong />
             </Section>
           )}
 
@@ -285,4 +333,11 @@ const styles = {
   videTxt: { fontSize: 13.5, color: "#6B756E", lineHeight: 1.5, margin: "0 0 20px" },
   videBtn: { background: GREEN, color: "#fff", border: "none", borderRadius: 11, padding: "12px 22px", fontSize: 14.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", width: "100%" },
   magasinNote: { fontSize: 12, color: GREEN_DARK, background: "#EAF3EE", borderRadius: 8, padding: "7px 11px", margin: "6px 0 2px", fontWeight: 500 },
+  sortieList: { display: "flex", flexDirection: "column", gap: 6, padding: "10px 0 4px" },
+  sortieRow: { display: "flex", alignItems: "center", gap: 8, background: "#F4F9F6", borderRadius: 9, padding: "8px 10px" },
+  sortieType: { fontSize: 11, fontWeight: 700, color: GREEN_DARK, background: "#fff", borderRadius: 6, padding: "2px 7px", textTransform: "uppercase" },
+  sortieDetail: { flex: 1, fontSize: 13, color: INK },
+  sortieRemove: { border: "none", background: "none", color: CLAY, cursor: "pointer", fontSize: 14, padding: "0 2px" },
+  sortieForm: { display: "flex", flexDirection: "column", gap: 8, padding: "10px 0" },
+  sortieAddBtn: { background: GREEN_DARK, color: "#fff", border: "none", borderRadius: 9, padding: "10px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
 };
