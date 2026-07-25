@@ -23,6 +23,7 @@ export function logout() {
   localStorage.removeItem("vde_token");
   localStorage.removeItem("vde_role");
   localStorage.removeItem("vde_nom");
+  localStorage.removeItem("vde_photo");
 }
 
 export function isAuthenticated() {

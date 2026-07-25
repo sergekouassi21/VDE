@@ -18,6 +18,7 @@ const NOUVELLE_SORTIE_VIDE = { quantite: "", type_sortie: "VENTE", responsable: 
 
 export default function PointJournalier() {
   const nomChef = localStorage.getItem("vde_nom") || "";
+  const photoChef = localStorage.getItem("vde_photo") || "";
   const [fermes, setFermes] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [fermeId, setFermeId] = useState(null);
@@ -164,7 +165,12 @@ export default function PointJournalier() {
             </label>
           </div>
           <h1 style={styles.title}>Point Journalier</h1>
-          {nomChef && <p style={styles.chefNom}>{nomChef}</p>}
+          {nomChef && (
+            <div style={styles.chefRow}>
+              {photoChef && <img src={photoChef} alt={nomChef} style={styles.chefPhoto} />}
+              <p style={styles.chefNom}>{nomChef}</p>
+            </div>
+          )}
           <div style={styles.selectWrap}>
             <button style={styles.select} onClick={() => setOpenFerme((o) => !o)}>
               <span><strong style={{ fontWeight: 600 }}>{ferme?.nom}</strong>
@@ -376,7 +382,9 @@ const styles = {
   datePick: { display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,.16)", padding: "6px 11px", borderRadius: 9, color: "#fff", cursor: "pointer" },
   dateInput: { background: "none", border: "none", color: "#fff", fontSize: 13, fontFamily: "inherit", colorScheme: "dark", cursor: "pointer" },
   title: { fontWeight: 700, fontSize: 27, margin: "14px 0 0", letterSpacing: -.5 },
-  chefNom: { fontSize: 13, opacity: .85, margin: "2px 0 16px" },
+  chefRow: { display: "flex", alignItems: "center", gap: 8, margin: "4px 0 16px" },
+  chefPhoto: { width: 24, height: 24, borderRadius: "50%", objectFit: "cover", border: "1.5px solid rgba(255,255,255,.5)" },
+  chefNom: { fontSize: 13, opacity: .85, margin: 0 },
   selectWrap: { position: "relative" },
   select: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,.14)", border: "1px solid rgba(255,255,255,.25)", color: "#fff", padding: "13px 16px", borderRadius: 12, fontSize: 15, cursor: "pointer", fontFamily: "inherit" },
   selectSub: { opacity: .8, fontWeight: 400, fontSize: 13 },
