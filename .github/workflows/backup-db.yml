@@ -1,0 +1,32 @@
+name: Sauvegarde quotidienne de la base de données
+
+on:
+  schedule:
+    # 02:00 UTC chaque jour (~03:00/04:00 Abidjan selon la saison — hors
+    # heures d'utilisation habituelles de l'app)
+    - cron: "0 2 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Installer le client PostgreSQL
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Exporter la base (pg_dump)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL n'est pas configuré (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          pg_dump "$DATABASE_URL" --no-owner --no-privileges | gzip > "vde-backup-$(date +%Y-%m-%d).sql.gz"
+
+      - name: Publier la sauvegarde comme artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vde-backup-${{ github.run_id }}
+          path: vde-backup-*.sql.gz
+          retention-days: 90
