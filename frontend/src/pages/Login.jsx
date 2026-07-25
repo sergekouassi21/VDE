@@ -24,8 +24,10 @@ export default function Login() {
     try {
       const moi = await getMoi();
       localStorage.setItem("vde_role", moi.role || "");
+      localStorage.setItem("vde_nom", moi.nom_complet || "");
     } catch {
       localStorage.setItem("vde_role", "");
+      localStorage.setItem("vde_nom", "");
     }
     navigate("/");
     setChargement(false);

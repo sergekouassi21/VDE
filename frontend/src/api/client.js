@@ -22,6 +22,7 @@ export async function login(username, password) {
 export function logout() {
   localStorage.removeItem("vde_token");
   localStorage.removeItem("vde_role");
+  localStorage.removeItem("vde_nom");
 }
 
 export function isAuthenticated() {
