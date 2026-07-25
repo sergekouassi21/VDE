@@ -1,7 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Egg, Skull, Wheat, Package, TrendingUp, Check, ChevronDown, AlertTriangle, Calendar } from "lucide-react";
+import { Egg, Skull, Wheat, Package, TrendingUp, Check, ChevronDown, AlertTriangle, Calendar, Download, Share2 } from "lucide-react";
 import { getFermes, soumettrePointJournalier, declarerBande } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, CLAY, formatSacs, formatColis, AGE_REFORME_SEMAINES } from "../theme";
+import { genererPdfPointJournalier, telechargerPdf, partagerPdf } from "../utils/pdf";
+
+const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
 
 const n = (v) => (v === "" || v === null || v === undefined || isNaN(v) ? 0 : Number(v));
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -252,7 +255,25 @@ export default function PointJournalier() {
           <button style={{ ...styles.submit, ...(envoye ? styles.submitDone : {}) }} onClick={handleSubmit} disabled={envoiEnCours}>
             {envoye ? (<><Check size={18} /> Envoyé au serveur</>) : envoiEnCours ? "Envoi..." : "Valider et transmettre"}
           </button>
-          {envoye && <p style={styles.synced}>Données {ferme.nom} · {dateAffiche} synchronisées avec le tableau de bord central</p>}
+          {envoye && (
+            <>
+              <p style={styles.synced}>Données {ferme.nom} · {dateAffiche} synchronisées avec le tableau de bord central</p>
+              <button style={styles.pdfBtn} onClick={() => telechargerPdf(
+                genererPdfPointJournalier({ ferme, bande, dateJour, form, calc, sorties, totalSorties }),
+                `point-journalier-${ferme.nom.replace(/\s+/g, "-")}-${dateJour}.pdf`
+              )}>
+                <Download size={17} /> Télécharger le PDF
+              </button>
+              {partageDisponible && (
+                <button style={styles.pdfBtn} onClick={() => partagerPdf(
+                  genererPdfPointJournalier({ ferme, bande, dateJour, form, calc, sorties, totalSorties }),
+                  `point-journalier-${ferme.nom.replace(/\s+/g, "-")}-${dateJour}.pdf`
+                )}>
+                  <Share2 size={17} /> Partager
+                </button>
+              )}
+            </>
+          )}
         </>}
         <p style={styles.foot}>Volailles de l'Est</p>
       </div>
@@ -326,6 +347,7 @@ const styles = {
   submit: { margin: "22px 16px 0", width: "calc(100% - 32px)", background: GREEN, color: "#fff", border: "none", borderRadius: 13, padding: "16px", fontSize: 16, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 },
   submitDone: { background: GREEN_DARK },
   synced: { textAlign: "center", fontSize: 12.5, color: GREEN_DARK, margin: "10px 16px 0" },
+  pdfBtn: { margin: "10px 16px 0", width: "calc(100% - 32px)", background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 13, padding: "13px", fontSize: 14.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 },
   foot: { textAlign: "center", fontSize: 11, color: "#B5BBB2", margin: "24px 0 0", letterSpacing: .5 },
   vide: { margin: "28px 16px 0", background: "#fff", border: "1px dashed #C9CFC8", borderRadius: 16, padding: "34px 24px", textAlign: "center" },
   videIcon: { fontSize: 40, marginBottom: 8 },

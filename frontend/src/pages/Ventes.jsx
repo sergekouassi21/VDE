@@ -1,7 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Plus, Trash2, Pencil, Check, X, Receipt, CreditCard, Wallet, ChevronRight, AlertTriangle, Printer } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X, Receipt, CreditCard, Wallet, ChevronRight, AlertTriangle, Download, Share2 } from "lucide-react";
 import { getFermes, getClients, getFactures, getVentes, creerFacture, encaisserVersement, updateSortieOeuf, deleteSortieOeuf } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+import { genererPdfFacture, telechargerPdf, partagerPdf } from "../utils/pdf";
+
+const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
 
 const fcfa = (v) => (Number(v) || 0).toLocaleString("fr-FR") + " F";
 const nf = (v) => (Number(v) || 0).toLocaleString("fr-FR");
@@ -23,72 +26,8 @@ const CATALOGUE_MAP = Object.fromEntries(CATALOGUE.map((p) => [p.id, p]));
 
 const LIGNE_VIDE = { ferme: "", type_produit: "OEUF_CARTON", quantite: "", prix_unitaire: String(CATALOGUE_MAP.OEUF_CARTON.prixDefaut) };
 
-function imprimerRecu(facture) {
-  const dateStr = new Date(facture.date).toLocaleDateString("fr-FR");
-  const lignesHtml = facture.lignes.map((l) => {
-    const p = CATALOGUE_MAP[l.type_produit];
-    const uniteLabel = p.plateaux ? "plateau" : p.unite;
-    const desig = `${Number(l.quantite)} ${p.unite}${Number(l.quantite) > 1 && p.unite !== "kg" ? "s" : ""} — ${p.label.split("—")[1]?.trim() || p.label}`;
-    const pu = `${fcfa(l.prix_unitaire)}/${uniteLabel}`;
-    return `<tr><td>${desig}</td><td class="r">${pu}</td><td class="r">${fcfa(l.montant)}</td></tr>`;
-  }).join("");
-
-  const statutPaie = facture.mode_paiement === "COMPTANT" ? "PAYÉ COMPTANT"
-    : facture.mode_paiement === "DOIT" ? "CRÉDIT (DOIT)"
-    : `PARTIEL — versé ${fcfa(facture.montant_verse)}`;
-  const resteHtml = Number(facture.reste_du) > 0 ? `<div class="reste">Reste dû : ${fcfa(facture.reste_du)}</div>` : "";
-
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reçu ${facture.numero}</title>
-  <style>
-    @page { size: 80mm auto; margin: 4mm; }
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: 'Courier New', monospace; font-size: 12px; color:#000; width: 72mm; }
-    .center { text-align:center; }
-    .b { font-weight:bold; }
-    h1 { font-size:15px; margin:2px 0; }
-    .sub { font-size:10px; line-height:1.4; }
-    hr { border:none; border-top:1px dashed #000; margin:8px 0; }
-    table { width:100%; border-collapse:collapse; font-size:11px; }
-    td { padding:3px 0; vertical-align:top; }
-    td.r { text-align:right; white-space:nowrap; padding-left:6px; }
-    .meta { font-size:11px; margin:2px 0; }
-    .total { font-size:15px; font-weight:bold; display:flex; justify-content:space-between; margin-top:6px; }
-    .statut { text-align:center; font-weight:bold; margin-top:8px; padding:4px; border:1px solid #000; font-size:11px; }
-    .reste { text-align:center; font-size:12px; font-weight:bold; margin-top:4px; }
-    .foot { font-size:9px; text-align:center; margin-top:10px; line-height:1.4; }
-  </style></head><body>
-    <div class="center">
-      <h1>VOLAILLES DE L'EST</h1>
-      <div class="sub b">AGNIBILÉKROU</div>
-    </div>
-    <hr>
-    <div class="meta">Facture N° <span class="b">${String(facture.numero).padStart(7, "0")}</span></div>
-    <div class="meta">Date : ${dateStr}</div>
-    <div class="meta">Client : <span class="b">${facture.client.nom}</span></div>
-    <hr>
-    <table>
-      <tr class="b"><td>Désignation</td><td class="r">P.U.</td><td class="r">Total</td></tr>
-      ${lignesHtml}
-    </table>
-    <hr>
-    <div class="total"><span>TOTAL</span><span>${fcfa(facture.montant_total)}</span></div>
-    <div class="statut">${statutPaie}</div>
-    ${resteHtml}
-    <div class="foot">Merci de votre confiance !</div>
-  </body></html>`;
-
-  const iframe = document.createElement("iframe");
-  Object.assign(iframe.style, { position: "fixed", right: "0", bottom: "0", width: "0", height: "0", border: "0" });
-  document.body.appendChild(iframe);
-  const doc = iframe.contentWindow.document;
-  doc.open(); doc.write(html); doc.close();
-  iframe.onload = () => {
-    setTimeout(() => {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      setTimeout(() => document.body.removeChild(iframe), 1000);
-    }, 250);
-  };
+function nomFichierFacture(facture) {
+  return `facture-${String(facture.numero).padStart(7, "0")}.pdf`;
 }
 
 export default function Ventes() {
@@ -339,7 +278,14 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
       {facture ? (
         <>
           <p style={styles.synced}>Facture n°{String(facture.numero).padStart(7, "0")} enregistrée · {fcfa(facture.montant_total)}</p>
-          <button style={styles.printBtn} onClick={() => imprimerRecu(facture)}><Printer size={17} /> Imprimer le reçu</button>
+          <button style={styles.printBtn} onClick={() => telechargerPdf(genererPdfFacture(facture), nomFichierFacture(facture))}>
+            <Download size={17} /> Télécharger le PDF
+          </button>
+          {partageDisponible && (
+            <button style={styles.printBtn} onClick={() => partagerPdf(genererPdfFacture(facture), nomFichierFacture(facture))}>
+              <Share2 size={17} /> Partager
+            </button>
+          )}
           <button style={styles.addBtn} onClick={nouvelle}>Nouvelle facture</button>
         </>
       ) : (
