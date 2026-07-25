@@ -167,6 +167,7 @@ export function genererPdfPointJournalier({ ferme, bande, dateJour, form, calc, 
   y = ligneCle(doc, y, "Reçu", `${form.aliment_recu_sacs || 0} sacs`);
   y = ligneCle(doc, y, "Stock restant", formatSacs(calc.stockAlimentSacs));
   if (form.traitement) y = ligneCle(doc, y, "Traitement", form.traitement);
+  if (Number(form.eau_consommee_litres) > 0) y = ligneCle(doc, y, "Eau consommée", `${form.eau_consommee_litres} litres`);
 
   if (ferme.type === "PONTE") {
     y = bandeauSection(doc, y + 2, "Alvéoles");

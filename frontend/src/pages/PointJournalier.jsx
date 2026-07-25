@@ -11,7 +11,7 @@ const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
 const n = (v) => (v === "" || v === null || v === undefined || isNaN(v) ? 0 : Number(v));
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const FORM_VIDE = {
-  morts: "", conso_aliment_sacs: "", aliment_recu_sacs: "", traitement: "",
+  morts: "", conso_aliment_sacs: "", aliment_recu_sacs: "", traitement: "", eau_consommee_litres: "",
   alveole_recu_unites: "", production_oeufs: "", casse: "", brise: "", observation: "",
 };
 const NOUVELLE_SORTIE_VIDE = { quantite: "", type_sortie: "VENTE", responsable: "" };
@@ -110,6 +110,7 @@ export default function PointJournalier() {
       date: dateJour,
       morts: n(form.morts), conso_aliment_sacs: n(form.conso_aliment_sacs),
       aliment_recu_sacs: n(form.aliment_recu_sacs), traitement: form.traitement,
+      eau_consommee_litres: n(form.eau_consommee_litres),
       alveole_recu_unites: n(form.alveole_recu_unites), production_oeufs: n(form.production_oeufs),
       casse: n(form.casse), brise: n(form.brise), sorties,
       observation: form.observation,
@@ -239,6 +240,7 @@ export default function PointJournalier() {
             <FieldNum label="Conso aliment" value={form.conso_aliment_sacs} onChange={(v) => set("conso_aliment_sacs", v)} unit="sacs" step="0.1" />
             <FieldNum label="Aliment reçu" value={form.aliment_recu_sacs} onChange={(v) => set("aliment_recu_sacs", v)} unit="sacs" step="0.1" />
             <FieldText label="Traitement" value={form.traitement} onChange={(v) => set("traitement", v)} placeholder="ex. MAXI LAYER (1000L)" />
+            <FieldNum label="Eau consommée" value={form.eau_consommee_litres} onChange={(v) => set("eau_consommee_litres", v)} unit="litres" step="0.1" />
             <FieldCalc label="Stock aliment restant" value={formatSacs(calc.stockAlimentSacs)}
               unit={`≈ ${Math.round(calc.stockAlimentSacs * 50).toLocaleString("fr-FR")} kg`}
               hint="report + reçu − conso" strong danger={alimentAlerte} />
