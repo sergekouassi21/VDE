@@ -1,0 +1,59 @@
+name: Test de restauration de sauvegarde
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  test-restore:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: vde_restore_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Installer le client PostgreSQL
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Exporter la production (pg_dump)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL n'est pas configuré (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          pg_dump "$DATABASE_URL" --no-owner --no-privileges > backup_test.sql
+          echo "Taille de l'export :"
+          wc -l backup_test.sql
+
+      - name: Restaurer dans une base vide et jetable
+        env:
+          PGPASSWORD: test
+        run: psql -h localhost -U postgres -d vde_restore_test -f backup_test.sql
+
+      - name: Vérifier que les données restaurées sont cohérentes
+        env:
+          PGPASSWORD: test
+        run: |
+          echo "--- Fermes ---"
+          psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_ferme;"
+          echo "--- Bandes ---"
+          psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_bande;"
+          echo "--- Points journaliers ---"
+          psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_pointjournalier;"
+          echo "--- Sorties d'œufs ---"
+          psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_sortieoeuf;"
+          echo "--- Factures ---"
+          psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_facture;"
+          echo ""
+          echo "Si ces nombres sont > 0 et cohérents avec la production, la restauration fonctionne."
