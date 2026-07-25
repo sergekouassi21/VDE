@@ -1,9 +1,12 @@
 import { useState, useEffect, Fragment } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Download, Share2 } from "lucide-react";
 import { getFermes, getPointsJournaliers } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY, formatSacs, formatColis } from "../theme";
+import { genererPdfHistoriquePoint, telechargerPdf, partagerPdf } from "../utils/pdf";
 
 const nf = (v) => (Number(v) || 0).toLocaleString("fr-FR");
+const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
+const nomFichierPoint = (p) => `point-journalier-${p.ferme_nom.replace(/\s+/g, "-")}-${p.date}.pdf`;
 
 export default function Historique() {
   const [fermes, setFermes] = useState([]);
@@ -119,6 +122,16 @@ export default function Historique() {
                                 </div>
                               )}
                               {p.observation && <p style={styles.observation}>« {p.observation} »</p>}
+                              <div style={styles.pdfRow}>
+                                <button style={styles.pdfBtn} onClick={() => telechargerPdf(genererPdfHistoriquePoint(p), nomFichierPoint(p))}>
+                                  <Download size={15} /> Télécharger le PDF
+                                </button>
+                                {partageDisponible && (
+                                  <button style={styles.pdfBtn} onClick={() => partagerPdf(genererPdfHistoriquePoint(p), nomFichierPoint(p))}>
+                                    <Share2 size={15} /> Partager
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         )}
@@ -170,4 +183,6 @@ const styles = {
   sortiesTitre: { fontSize: 11, fontWeight: 600, color: "#8A948D", textTransform: "uppercase", letterSpacing: .5, marginBottom: 5 },
   sortieLigne: { display: "flex", justifyContent: "space-between", fontSize: 12.5, color: GREEN_DARK, padding: "3px 0" },
   observation: { marginTop: 12, fontSize: 12.5, color: "#6B756E", fontStyle: "italic", margin: "12px 0 0" },
+  pdfRow: { display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" },
+  pdfBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 9, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
 };

@@ -213,6 +213,79 @@ export function genererPdfPointJournalier({ ferme, bande, dateJour, form, calc, 
   return doc;
 }
 
+// Variante pour un point déjà enregistré (onglet Historique) — toutes les
+// valeurs viennent directement du point stocké, pas d'un formulaire en cours
+// de saisie ni d'un recalcul côté client.
+export function genererPdfHistoriquePoint(p) {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  entete(doc);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(...INK);
+  doc.text("Point Journalier", 15, 42);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(...GRAY);
+  doc.text(`Ferme : ${p.ferme_nom}`, 15, 49);
+  doc.text(`Date : ${new Date(p.date).toLocaleDateString("fr-FR")}`, 15, 55);
+
+  let y = 70;
+  y = bandeauSection(doc, y, "Cheptel");
+  y = ligneCle(doc, y, "Morts", `${nf(p.morts)} sujets`);
+  y = ligneCle(doc, y, "Effectif restant", `${nf(p.effectif_reste)} sujets`);
+  if (Number(p.sortie_effectif) > 0) y = ligneCle(doc, y, "Sorties d'effectif", `${nf(p.sortie_effectif)} sujets`);
+
+  y = bandeauSection(doc, y + 2, "Aliment");
+  y = ligneCle(doc, y, "Consommé", `${p.conso_aliment_sacs} sacs`);
+  y = ligneCle(doc, y, "Reçu", `${p.aliment_recu_sacs} sacs`);
+  y = ligneCle(doc, y, "Stock après", formatSacs(Number(p.stock_aliment_apres_sacs)));
+  if (p.traitement) y = ligneCle(doc, y, "Traitement", p.traitement);
+  if (Number(p.eau_consommee_litres) > 0) y = ligneCle(doc, y, "Eau consommée", `${p.eau_consommee_litres} litres`);
+
+  y = bandeauSection(doc, y + 2, "Alvéoles");
+  y = ligneCle(doc, y, "Reçu", `${nf(p.alveole_recu_unites)} unités`);
+  y = ligneCle(doc, y, "Consommé (auto)", `${nf(p.alveole_conso_unites)} unités`);
+  y = ligneCle(doc, y, "Stock après", formatColis(p.stock_alveole_apres_unites));
+
+  y = bandeauSection(doc, y + 2, "Production œufs");
+  y = ligneCle(doc, y, "Production", `${nf(p.production_oeufs)} œufs`);
+  y = ligneCle(doc, y, "Cassé", `${nf(p.casse)} œufs`);
+  y = ligneCle(doc, y, "Brisé", `${nf(p.brise)} œufs`);
+  y = ligneCle(doc, y, "Taux de ponte", `${Number(p.taux_ponte).toFixed(1)} %`);
+
+  y = bandeauSection(doc, y + 2, "Sorties d'œufs");
+  if (p.sorties.length === 0) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(10);
+    doc.setTextColor(...GRAY);
+    doc.text("Aucune sortie", 18, y);
+    y += 7;
+  } else {
+    p.sorties.forEach((s) => {
+      y = ligneCle(doc, y, `${s.type_sortie === "VENTE" ? "Vente" : "Don"} — ${s.responsable}`, `${nf(s.quantite)} œufs`);
+    });
+  }
+  y = ligneCle(doc, y, "Total sorties", `${nf(p.sortie_oeuf)} œufs`);
+  y = ligneCle(doc, y, "Stock total œuf", `${nf(p.stock_oeuf_total)} œufs`);
+
+  if (p.observation) {
+    y = bandeauSection(doc, y + 2, "Observation");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(...INK);
+    doc.text(p.observation, 18, y, { maxWidth: 174 });
+  }
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY);
+  doc.text("Volailles de l'Est", 105, 285, { align: "center" });
+
+  return doc;
+}
+
 // Tente le partage natif (mobile/PWA) ; retombe sur un téléchargement classique
 // si l'API Web Share n'est pas disponible ou si le partage échoue.
 export async function partagerPdf(doc, nomFichier) {
