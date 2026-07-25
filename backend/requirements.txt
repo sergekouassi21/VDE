@@ -13,6 +13,7 @@ packaging==26.2
 pillow==12.3.0
 psycopg==3.3.4
 psycopg-binary==3.3.4
+qrcode==8.2
 requests==2.34.2
 six==1.17.0
 sqlparse==0.5.5

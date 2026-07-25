@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History } from "lucide-react";
+import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock } from "lucide-react";
 import Login from "./pages/Login";
 import PointJournalier from "./pages/PointJournalier";
 import Dashboard from "./pages/Dashboard";
 import Ventes from "./pages/Ventes";
 import Historique from "./pages/Historique";
+import PointageScan from "./pages/PointageScan";
+import PointageEmployes from "./pages/PointageEmployes";
+import PointageHistorique from "./pages/PointageHistorique";
 import { isAuthenticated, logout, ADMIN_URL } from "./api/client";
 import { GREEN_DARK } from "./theme";
 
@@ -60,6 +63,8 @@ function NavBar() {
         {autorise && (
           <>
             <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
+            <Link to="/employes" style={navStyles.link}><Users size={16} /> Employés</Link>
+            <Link to="/heures-travaillees" style={navStyles.link}><Clock size={16} /> Heures travaillées</Link>
             <a href={ADMIN_URL} target="_blank" rel="noopener noreferrer" style={navStyles.link}><Shield size={16} /> Admin</a>
           </>
         )}
@@ -93,6 +98,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/connexion" element={<Login />} />
+        <Route path="/pointage/:token" element={<PointageScan />} />
         <Route path="/" element={
           <RequireAuth><AccueilSelonRole /></RequireAuth>
         } />
@@ -107,6 +113,12 @@ export default function App() {
         } />
         <Route path="/historique" element={
           <RequireAuth><Layout><Historique /></Layout></RequireAuth>
+        } />
+        <Route path="/employes" element={
+          <RequireAuth><RequireDirectionOuAdmin><Layout><PointageEmployes /></Layout></RequireDirectionOuAdmin></RequireAuth>
+        } />
+        <Route path="/heures-travaillees" element={
+          <RequireAuth><RequireDirectionOuAdmin><Layout><PointageHistorique /></Layout></RequireDirectionOuAdmin></RequireAuth>
         } />
       </Routes>
     </BrowserRouter>

@@ -52,3 +52,21 @@ export const getFactures = () => api.get("/factures/").then((r) => r.data);
 export const creerFacture = (payload) => api.post("/factures/", payload).then((r) => r.data);
 export const encaisserVersement = (factureId, payload) =>
   api.post(`/factures/${factureId}/encaisser/`, payload).then((r) => r.data);
+
+// --- Pointage des employés (heures de travail) ---
+export const getEmployes = (params) => api.get("/pointage/employes/", { params }).then((r) => r.data);
+export const creerEmploye = (payload) => api.post("/pointage/employes/", payload).then((r) => r.data);
+export const modifierEmploye = (id, payload) => api.patch(`/pointage/employes/${id}/`, payload).then((r) => r.data);
+export const supprimerEmploye = (id) => api.delete(`/pointage/employes/${id}/`);
+// Le endpoint QR exige une authentification par token — un <img src=...>
+// classique n'enverrait pas l'en-tête Authorization, d'où le passage par
+// un blob récupéré via axios puis converti en URL locale.
+export const getQrEmployeBlob = (id) =>
+  api.get(`/pointage/employes/${id}/qr/`, { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
+export const getPointages = (params) => api.get("/pointage/historique/", { params }).then((r) => r.data);
+
+// Écran de scan public — pas de token d'authentification, le token du QR
+// (dans l'URL) fait office d'identifiant.
+const scanApi = axios.create({ baseURL: API_BASE_URL });
+export const getInfosPointageScan = (token) => scanApi.get(`/pointage/scan/${token}/`).then((r) => r.data);
+export const validerPointageScan = (token) => scanApi.post(`/pointage/scan/${token}/valider/`).then((r) => r.data);

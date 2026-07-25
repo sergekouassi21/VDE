@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'corsheaders',
     'exploitation',
+    'pointage',
 ]
 
 MIDDLEWARE = [
@@ -166,6 +167,11 @@ CORS_ALLOWED_ORIGINS = [
 ] + [o.strip() for o in os.environ.get('DJANGO_CORS_ALLOWED_ORIGINS', '').split(',') if o.strip()]
 
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()]
+
+# Base publique du frontend, utilisée pour générer l'URL encodée dans les QR
+# codes de pointage (le backend n'a sinon aucun moyen de connaître l'adresse
+# du frontend Netlify).
+FRONTEND_URL = os.environ.get('DJANGO_FRONTEND_URL', 'http://localhost:5173')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
