@@ -17,7 +17,8 @@ function RequireAuth({ children }) {
 // hors-ligne qu'en ligne (pas d'appel réseau nécessaire).
 function AccueilSelonRole() {
   const role = localStorage.getItem("vde_role");
-  return <Navigate to={role === "CHEF_FERME" ? "/point-journalier" : "/tableau-de-bord"} replace />;
+  const versPointJournalier = role === "CHEF_FERME" || role === "SOUS_CHEF_FERME";
+  return <Navigate to={versPointJournalier ? "/point-journalier" : "/tableau-de-bord"} replace />;
 }
 
 const NAV_HEIGHT = 52;
@@ -25,7 +26,7 @@ const NAV_HEIGHT = 52;
 function NavBar() {
   const navigate = useNavigate();
   const role = localStorage.getItem("vde_role");
-  const estDirectionOuAdmin = role !== "CHEF_FERME";
+  const estDirectionOuAdmin = !role || role === "DIRECTION" || role === "ADMIN";
   return (
     <nav style={navStyles.nav}>
       <img src="/logo.png" alt="Volailles de l'Est" style={navStyles.brand} />
