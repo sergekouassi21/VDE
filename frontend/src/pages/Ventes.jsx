@@ -113,7 +113,7 @@ export default function Ventes() {
     const p = CATALOGUE_MAP[l.type_produit];
     return s2 + (p.oeufsParUnite ? Number(l.quantite) * p.oeufsParUnite : 0);
   }, 0), 0);
-  const totalVentesOeufs = totalOeufsManuel + totalOeufsFacture;
+  const totalVentesOeufs = totalOeufsManuel - totalOeufsFacture;
 
   return (
     <div style={styles.page}>
@@ -239,7 +239,7 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
   return (
     <div style={styles.body}>
       <div style={styles.stockGlobal}>
-        <span style={styles.stockGlobalLabel}>Total des œufs vendus (Point Journalier + Factures)</span>
+        <span style={styles.stockGlobalLabel}>Œufs restants à facturer (Point Journalier − Factures)</span>
         <span style={styles.stockGlobalVal}>{nf(totalVentesOeufs)} œufs</span>
       </div>
 
@@ -283,7 +283,7 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
           )}
           <div style={styles.ligneGrid}>
             <label style={styles.miniField}>
-              <span style={styles.miniLabel}>Quantité ({d.produit.plateaux ? "plateau" : d.produit.unite}{d.qte > 1 && d.produit.unite !== "kg" ? "s" : ""})</span>
+              <span style={styles.miniLabel}>Quantité ({d.produit.unite}{d.qte > 1 && d.produit.unite !== "kg" ? "s" : ""})</span>
               <input type="number" inputMode="decimal" style={styles.miniInput} placeholder="0" value={d.quantite} onChange={(e) => setLigne(i, "quantite", e.target.value)} />
             </label>
             <label style={styles.miniField}>
