@@ -8,6 +8,12 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      devOptions: {
+        // Active le service worker sous `npm run dev` pour pouvoir tester
+        // le mode hors-ligne sans build de prod.
+        enabled: true,
+        type: 'module',
+      },
       manifest: {
         name: "Volailles de l'Est — Point Journalier",
         short_name: 'VDE',
@@ -25,6 +31,21 @@ export default defineConfig({
         // Mise en cache de l'app shell — tolère les coupures réseau sur le
         // terrain (cf. cahier des charges technique, section 6).
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        runtimeCaching: [
+          {
+            // Réponses GET de l'API (fermes, bandes, stock...) mises en cache
+            // pour rester consultables hors-ligne ; les écritures (POST/PATCH)
+            // ne sont jamais mises en cache ici, elles passent par la file
+            // d'attente IndexedDB (cf. src/offline/).
+            urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'vde-api-cache',
+              networkTimeoutSeconds: 4,
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],

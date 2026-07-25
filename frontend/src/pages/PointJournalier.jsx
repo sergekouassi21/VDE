@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Egg, Skull, Wheat, Package, TrendingUp, Check, ChevronDown, AlertTriangle, Calendar, Download, Share2 } from "lucide-react";
+import { Egg, Skull, Wheat, Package, TrendingUp, Check, ChevronDown, AlertTriangle, Calendar, Download, Share2, WifiOff, RefreshCw } from "lucide-react";
 import { getFermes, soumettrePointJournalier, declarerBande } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, CLAY, formatSacs, formatColis, AGE_REFORME_SEMAINES } from "../theme";
 import { genererPdfPointJournalier, telechargerPdf, partagerPdf } from "../utils/pdf";
+import { ajouterSoumissionEnAttente, listerSoumissionsEnAttente } from "../offline/queue";
+import { synchroniserSoumissionsEnAttente } from "../offline/sync";
 
 const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
 
@@ -27,6 +29,9 @@ export default function PointJournalier() {
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
   const [erreur, setErreur] = useState("");
   const [declaration, setDeclaration] = useState({ date_mise_en_place: todayISO(), effectif_initial: "" });
+  const [horsLigneEnvoi, setHorsLigneEnvoi] = useState(false);
+  const [enLigne, setEnLigne] = useState(navigator.onLine);
+  const [enAttenteCount, setEnAttenteCount] = useState(0);
 
   const chargerFermes = useCallback(async () => {
     const data = await getFermes();
@@ -35,13 +40,33 @@ export default function PointJournalier() {
     setFermeId((id) => id ?? data[0]?.id ?? null);
   }, []);
 
+  const rafraichirEnAttente = useCallback(async () => {
+    const items = await listerSoumissionsEnAttente();
+    setEnAttenteCount(items.length);
+  }, []);
+
   useEffect(() => { chargerFermes(); }, [chargerFermes]);
+
+  useEffect(() => {
+    rafraichirEnAttente();
+    const synchroniser = () => synchroniserSoumissionsEnAttente(() => { rafraichirEnAttente(); chargerFermes(); });
+    function onOnline() { setEnLigne(true); synchroniser(); }
+    function onOffline() { setEnLigne(false); }
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    const interval = setInterval(() => { if (navigator.onLine) synchroniser(); }, 30000);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      clearInterval(interval);
+    };
+  }, [rafraichirEnAttente, chargerFermes]);
 
   const ferme = fermes.find((f) => f.id === fermeId);
   const bande = ferme?.bande_active;
   const magasin = ferme?.magasin;
 
-  const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setEnvoye(false); };
+  const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setEnvoye(false); setHorsLigneEnvoi(false); };
   const reset = () => { setForm(FORM_VIDE); setSorties([]); setNouvelleSortie(NOUVELLE_SORTIE_VIDE); };
 
   const totalSorties = sorties.reduce((s, x) => s + n(x.quantite), 0);
@@ -50,11 +75,11 @@ export default function PointJournalier() {
     if (!n(nouvelleSortie.quantite) || !nouvelleSortie.responsable.trim()) return;
     setSorties((s) => [...s, { ...nouvelleSortie, quantite: n(nouvelleSortie.quantite) }]);
     setNouvelleSortie(NOUVELLE_SORTIE_VIDE);
-    setEnvoye(false);
+    setEnvoye(false); setHorsLigneEnvoi(false);
   }
   function retirerSortie(index) {
     setSorties((s) => s.filter((_, i) => i !== index));
-    setEnvoye(false);
+    setEnvoye(false); setHorsLigneEnvoi(false);
   }
 
   const calc = useMemo(() => {
@@ -79,19 +104,40 @@ export default function PointJournalier() {
 
   async function handleSubmit() {
     setErreur(""); setEnvoiEnCours(true);
+    const payload = {
+      date: dateJour,
+      morts: n(form.morts), conso_aliment_sacs: n(form.conso_aliment_sacs),
+      aliment_recu_sacs: n(form.aliment_recu_sacs), traitement: form.traitement,
+      alveole_recu_unites: n(form.alveole_recu_unites), production_oeufs: n(form.production_oeufs),
+      casse: n(form.casse), brise: n(form.brise), sorties,
+      observation: form.observation,
+    };
+
+    if (!navigator.onLine) {
+      await ajouterSoumissionEnAttente(ferme.id, ferme.nom, payload);
+      await rafraichirEnAttente();
+      setHorsLigneEnvoi(true);
+      setEnvoye(true);
+      setEnvoiEnCours(false);
+      return;
+    }
+
     try {
-      await soumettrePointJournalier(ferme.id, {
-        date: dateJour,
-        morts: n(form.morts), conso_aliment_sacs: n(form.conso_aliment_sacs),
-        aliment_recu_sacs: n(form.aliment_recu_sacs), traitement: form.traitement,
-        alveole_recu_unites: n(form.alveole_recu_unites), production_oeufs: n(form.production_oeufs),
-        casse: n(form.casse), brise: n(form.brise), sorties,
-        observation: form.observation,
-      });
+      await soumettrePointJournalier(ferme.id, payload);
+      setHorsLigneEnvoi(false);
       setEnvoye(true);
       await chargerFermes();
     } catch (err) {
-      setErreur(err.response?.data?.detail || "Erreur lors de l'envoi. Réessayez.");
+      if (!err.response) {
+        // Pas de réponse serveur = coupure réseau pendant l'envoi : on met en file
+        // plutôt que d'afficher une erreur, la fiche sera synchronisée plus tard.
+        await ajouterSoumissionEnAttente(ferme.id, ferme.nom, payload);
+        await rafraichirEnAttente();
+        setHorsLigneEnvoi(true);
+        setEnvoye(true);
+      } else {
+        setErreur(err.response?.data?.detail || "Erreur lors de l'envoi. Réessayez.");
+      }
     } finally {
       setEnvoiEnCours(false);
     }
@@ -113,7 +159,7 @@ export default function PointJournalier() {
             <img src="/logo.png" alt="Volailles de l'Est" style={styles.logo} />
             <label style={styles.datePick}>
               <Calendar size={14} />
-              <input type="date" value={dateJour} max={todayISO()} onChange={(e) => { setDateJour(e.target.value); setEnvoye(false); }} style={styles.dateInput} />
+              <input type="date" value={dateJour} max={todayISO()} onChange={(e) => { setDateJour(e.target.value); setEnvoye(false); setHorsLigneEnvoi(false); }} style={styles.dateInput} />
             </label>
           </div>
           <h1 style={styles.title}>Point Journalier</h1>
@@ -127,7 +173,7 @@ export default function PointJournalier() {
               <div style={styles.dropdown}>
                 {fermes.map((f) => (
                   <button key={f.id} style={{ ...styles.option, ...(f.id === fermeId ? styles.optionActive : {}) }}
-                    onClick={() => { setFermeId(f.id); setOpenFerme(false); reset(); setEnvoye(false); }}>
+                    onClick={() => { setFermeId(f.id); setOpenFerme(false); reset(); setEnvoye(false); setHorsLigneEnvoi(false); }}>
                     <span>{f.nom}</span>
                     <span style={styles.optionMeta}>{f.est_vide ? "vide" : `${f.nombre_chambres} ch.`}</span>
                   </button>
@@ -145,6 +191,17 @@ export default function PointJournalier() {
             </div>
           )}
         </header>
+
+        {(!enLigne || enAttenteCount > 0) && (
+          <div style={styles.offlineBanner}>
+            {!enLigne ? <WifiOff size={14} /> : <RefreshCw size={14} />}
+            <span>
+              {!enLigne
+                ? "Hors-ligne — vos saisies seront synchronisées automatiquement au retour du réseau"
+                : `${enAttenteCount} fiche(s) en attente de synchronisation`}
+            </span>
+          </div>
+        )}
 
         {ferme?.est_vide && (
           <div style={styles.vide}>
@@ -253,11 +310,17 @@ export default function PointJournalier() {
 
           {erreur && <p style={{ color: CLAY, textAlign: "center", fontSize: 13, margin: "10px 16px 0" }}>{erreur}</p>}
           <button style={{ ...styles.submit, ...(envoye ? styles.submitDone : {}) }} onClick={handleSubmit} disabled={envoiEnCours}>
-            {envoye ? (<><Check size={18} /> Envoyé au serveur</>) : envoiEnCours ? "Envoi..." : "Valider et transmettre"}
+            {envoye
+              ? (<><Check size={18} /> {horsLigneEnvoi ? "Enregistré (hors-ligne)" : "Envoyé au serveur"}</>)
+              : envoiEnCours ? "Envoi..." : "Valider et transmettre"}
           </button>
           {envoye && (
             <>
-              <p style={styles.synced}>Données {ferme.nom} · {dateAffiche} synchronisées avec le tableau de bord central</p>
+              <p style={styles.synced}>
+                {horsLigneEnvoi
+                  ? `Enregistré localement · ${ferme.nom} · ${dateAffiche} — sera synchronisé dès le retour du réseau`
+                  : `Données ${ferme.nom} · ${dateAffiche} synchronisées avec le tableau de bord central`}
+              </p>
               <button style={styles.pdfBtn} onClick={() => telechargerPdf(
                 genererPdfPointJournalier({ ferme, bande, dateJour, form, calc, sorties, totalSorties }),
                 `point-journalier-${ferme.nom.replace(/\s+/g, "-")}-${dateJour}.pdf`
@@ -347,6 +410,7 @@ const styles = {
   submit: { margin: "22px 16px 0", width: "calc(100% - 32px)", background: GREEN, color: "#fff", border: "none", borderRadius: 13, padding: "16px", fontSize: 16, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 },
   submitDone: { background: GREEN_DARK },
   synced: { textAlign: "center", fontSize: 12.5, color: GREEN_DARK, margin: "10px 16px 0" },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12.5, fontWeight: 500, padding: "9px 16px", margin: "14px 16px 0", borderRadius: 10 },
   pdfBtn: { margin: "10px 16px 0", width: "calc(100% - 32px)", background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 13, padding: "13px", fontSize: 14.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 },
   foot: { textAlign: "center", fontSize: 11, color: "#B5BBB2", margin: "24px 0 0", letterSpacing: .5 },
   vide: { margin: "28px 16px 0", background: "#fff", border: "1px dashed #C9CFC8", borderRadius: 16, padding: "34px 24px", textAlign: "center" },
