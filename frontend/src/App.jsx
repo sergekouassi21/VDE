@@ -12,13 +12,15 @@ function RequireAuth({ children }) {
   return children;
 }
 
+const NAV_HEIGHT = 52;
+
 function NavBar() {
   const navigate = useNavigate();
   return (
     <nav style={navStyles.nav}>
       <span style={navStyles.brand}>VDE</span>
-      <Link to="/" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
       <Link to="/tableau-de-bord" style={navStyles.link}><LayoutDashboard size={16} /> Tableau de bord</Link>
+      <Link to="/" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
       <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
       <button style={navStyles.logout} onClick={() => { logout(); navigate("/connexion"); }}>
         <LogOut size={15} /> Déconnexion
@@ -27,8 +29,17 @@ function NavBar() {
   );
 }
 
+function Layout({ children }) {
+  return (
+    <>
+      <NavBar />
+      <div style={{ paddingTop: NAV_HEIGHT }}>{children}</div>
+    </>
+  );
+}
+
 const navStyles = {
-  nav: { display: "flex", alignItems: "center", gap: 18, padding: "10px 20px", background: GREEN_DARK, color: "#fff", fontFamily: "'Inter', sans-serif", fontSize: 14 },
+  nav: { display: "flex", alignItems: "center", gap: 18, height: NAV_HEIGHT, boxSizing: "border-box", padding: "0 20px", background: GREEN_DARK, color: "#fff", fontFamily: "'Inter', sans-serif", fontSize: 14, position: "fixed", top: 0, left: 0, right: 0, zIndex: 100 },
   brand: { fontWeight: 700, letterSpacing: 1, marginRight: 8 },
   link: { color: "#fff", textDecoration: "none", display: "flex", alignItems: "center", gap: 6, opacity: .9 },
   logout: { marginLeft: "auto", background: "none", border: "none", color: "#fff", opacity: .8, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: "inherit", fontSize: 14 },
@@ -40,13 +51,13 @@ export default function App() {
       <Routes>
         <Route path="/connexion" element={<Login />} />
         <Route path="/" element={
-          <RequireAuth><NavBar /><PointJournalier /></RequireAuth>
+          <RequireAuth><Layout><PointJournalier /></Layout></RequireAuth>
         } />
         <Route path="/tableau-de-bord" element={
-          <RequireAuth><NavBar /><Dashboard /></RequireAuth>
+          <RequireAuth><Layout><Dashboard /></Layout></RequireAuth>
         } />
         <Route path="/ventes" element={
-          <RequireAuth><NavBar /><Ventes /></RequireAuth>
+          <RequireAuth><Layout><Ventes /></Layout></RequireAuth>
         } />
       </Routes>
     </BrowserRouter>
