@@ -1,8 +1,16 @@
 import jsPDF from "jspdf";
 import { formatSacs, formatColis } from "../theme";
+import { LOGO_BASE64 } from "./logoBase64";
 
-const fcfa = (v) => (Number(v) || 0).toLocaleString("fr-FR") + " F";
-const nf = (v) => (Number(v) || 0).toLocaleString("fr-FR");
+// Les polices standard de jsPDF (WinAnsi) n'ont pas le glyphe de l'espace
+// insécable utilisé par toLocaleString("fr-FR") pour séparer les milliers —
+// ça s'affichait comme un "/" dans le PDF. On formate donc à la main avec
+// un espace normal.
+function separeMilliers(n) {
+  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+const fcfa = (v) => separeMilliers(Number(v) || 0) + " F";
+const nf = (v) => separeMilliers(Number(v) || 0);
 
 const GREEN_DARK = [18, 61, 38];
 const INK = [26, 36, 32];
@@ -25,6 +33,11 @@ const PRIX_UNITE_PRODUIT = {
 };
 
 function entete(doc, sousTitre) {
+  try {
+    doc.addImage(LOGO_BASE64, "PNG", 15, 8, 16, 16);
+  } catch {
+    // pas bloquant si l'image ne peut pas être décodée
+  }
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
   doc.setTextColor(...GREEN_DARK);

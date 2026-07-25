@@ -1,12 +1,17 @@
-import { useState, useEffect, Fragment } from "react";
-import { ChevronRight, Download, Share2 } from "lucide-react";
-import { getFermes, getPointsJournaliers } from "../api/client";
+import { useState, useEffect, useCallback, Fragment } from "react";
+import { ChevronRight, Download, Share2, Pencil, Trash2, Check, X } from "lucide-react";
+import { getFermes, getPointsJournaliers, corrigerPointJournalier, deletePointJournalier } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY, formatSacs, formatColis } from "../theme";
 import { genererPdfHistoriquePoint, telechargerPdf, partagerPdf } from "../utils/pdf";
 
 const nf = (v) => (Number(v) || 0).toLocaleString("fr-FR");
 const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
 const nomFichierPoint = (p) => `point-journalier-${p.ferme_nom.replace(/\s+/g, "-")}-${p.date}.pdf`;
+
+function peutSupprimer() {
+  const role = localStorage.getItem("vde_role");
+  return !role || role === "DIRECTION" || role === "ADMIN";
+}
 
 export default function Historique() {
   const [fermes, setFermes] = useState([]);
@@ -16,10 +21,14 @@ export default function Historique() {
   const [dateDebut, setDateDebut] = useState("");
   const [dateFin, setDateFin] = useState("");
   const [ouvert, setOuvert] = useState(null);
+  const [edition, setEdition] = useState(null);
+  const [brouillon, setBrouillon] = useState({});
+  const [erreurEdition, setErreurEdition] = useState("");
+  const [envoi, setEnvoi] = useState(false);
 
   useEffect(() => { getFermes().then(setFermes); }, []);
 
-  useEffect(() => {
+  const rafraichir = useCallback(() => {
     setChargement(true);
     const params = {};
     if (fermeId) params.ferme = fermeId;
@@ -27,6 +36,63 @@ export default function Historique() {
     if (dateFin) params.date_fin = dateFin;
     getPointsJournaliers(params).then((data) => { setPoints(data); setChargement(false); });
   }, [fermeId, dateDebut, dateFin]);
+
+  useEffect(() => { rafraichir(); }, [rafraichir]);
+
+  function commencerEdition(p) {
+    setEdition(p.id);
+    setErreurEdition("");
+    setBrouillon({
+      date: p.date,
+      morts: String(p.morts),
+      conso_aliment_sacs: String(p.conso_aliment_sacs),
+      aliment_recu_sacs: String(p.aliment_recu_sacs),
+      traitement: p.traitement,
+      eau_consommee_litres: String(p.eau_consommee_litres),
+      alveole_recu_unites: String(p.alveole_recu_unites),
+      production_oeufs: String(p.production_oeufs),
+      casse: String(p.casse),
+      brise: String(p.brise),
+      observation: p.observation,
+    });
+  }
+
+  async function enregistrerEdition(id) {
+    setEnvoi(true);
+    setErreurEdition("");
+    try {
+      await corrigerPointJournalier(id, {
+        date: brouillon.date,
+        morts: Number(brouillon.morts) || 0,
+        conso_aliment_sacs: Number(brouillon.conso_aliment_sacs) || 0,
+        aliment_recu_sacs: Number(brouillon.aliment_recu_sacs) || 0,
+        traitement: brouillon.traitement,
+        eau_consommee_litres: Number(brouillon.eau_consommee_litres) || 0,
+        alveole_recu_unites: Number(brouillon.alveole_recu_unites) || 0,
+        production_oeufs: Number(brouillon.production_oeufs) || 0,
+        casse: Number(brouillon.casse) || 0,
+        brise: Number(brouillon.brise) || 0,
+        observation: brouillon.observation,
+      });
+      setEdition(null);
+      rafraichir();
+    } catch (e) {
+      setErreurEdition(e.response?.data?.detail || "Erreur lors de la modification.");
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  async function supprimer(p) {
+    if (!window.confirm(`Supprimer le point journalier de ${p.ferme_nom} du ${new Date(p.date).toLocaleDateString("fr-FR")} ? Cette action est irréversible.`)) return;
+    setEnvoi(true);
+    try {
+      await deletePointJournalier(p.id);
+      rafraichir();
+    } finally {
+      setEnvoi(false);
+    }
+  }
 
   return (
     <div style={styles.page}>
@@ -79,6 +145,7 @@ export default function Historique() {
                 <tbody>
                   {points.map((p) => {
                     const estOuvert = ouvert === p.id;
+                    const enEdition = edition === p.id;
                     return (
                       <Fragment key={p.id}>
                         <tr style={{ cursor: "pointer" }} onClick={() => setOuvert(estOuvert ? null : p.id)}>
@@ -94,44 +161,84 @@ export default function Historique() {
                           <td style={{ ...styles.td, textAlign: "right" }}>{nf(p.stock_oeuf_total)}</td>
                         </tr>
                         {estOuvert && (
-                          <tr key={`${p.id}-detail`}>
+                          <tr>
                             <td colSpan={8} style={styles.detailCell}>
-                              <div style={styles.detailGrid}>
-                                <DetailItem label="Aliment consommé" value={`${p.conso_aliment_sacs} sacs`} />
-                                <DetailItem label="Aliment reçu" value={`${p.aliment_recu_sacs} sacs`} />
-                                <DetailItem label="Stock aliment après" value={formatSacs(Number(p.stock_aliment_apres_sacs))} />
-                                <DetailItem label="Alvéole reçu" value={`${nf(p.alveole_recu_unites)} unités`} />
-                                <DetailItem label="Alvéole consommé (auto)" value={`${nf(p.alveole_conso_unites)} unités`} />
-                                <DetailItem label="Stock alvéole après" value={formatColis(p.stock_alveole_apres_unites)} />
-                                <DetailItem label="Cassé" value={`${nf(p.casse)} œufs`} />
-                                <DetailItem label="Brisé" value={`${nf(p.brise)} œufs`} />
-                                <DetailItem label="Sorties d'œufs" value={`${nf(p.sortie_oeuf)} œufs`} />
-                                <DetailItem label="Sorties d'effectif" value={`${nf(p.sortie_effectif)} sujets`} />
-                                {Number(p.eau_consommee_litres) > 0 && <DetailItem label="Eau consommée" value={`${p.eau_consommee_litres} litres`} />}
-                                {p.traitement && <DetailItem label="Traitement" value={p.traitement} />}
-                              </div>
-                              {p.sorties.length > 0 && (
-                                <div style={styles.sortiesDetail}>
-                                  <div style={styles.sortiesTitre}>Sorties d'œufs saisies</div>
-                                  {p.sorties.map((s) => (
-                                    <div key={s.id} style={styles.sortieLigne}>
-                                      <span>{s.type_sortie === "VENTE" ? "Vente" : "Don"} — {s.responsable}</span>
-                                      <span style={{ fontWeight: 600 }}>{nf(s.quantite)} œufs</span>
+                              {enEdition ? (
+                                <>
+                                  <div style={styles.editGrid}>
+                                    <EditItem label="Date" type="date" value={brouillon.date} onChange={(v) => setBrouillon((b) => ({ ...b, date: v }))} />
+                                    <EditItem label="Morts" type="number" value={brouillon.morts} onChange={(v) => setBrouillon((b) => ({ ...b, morts: v }))} />
+                                    <EditItem label="Aliment consommé (sacs)" type="number" value={brouillon.conso_aliment_sacs} onChange={(v) => setBrouillon((b) => ({ ...b, conso_aliment_sacs: v }))} />
+                                    <EditItem label="Aliment reçu (sacs)" type="number" value={brouillon.aliment_recu_sacs} onChange={(v) => setBrouillon((b) => ({ ...b, aliment_recu_sacs: v }))} />
+                                    <EditItem label="Eau consommée (litres)" type="number" value={brouillon.eau_consommee_litres} onChange={(v) => setBrouillon((b) => ({ ...b, eau_consommee_litres: v }))} />
+                                    <EditItem label="Alvéole reçu (unités)" type="number" value={brouillon.alveole_recu_unites} onChange={(v) => setBrouillon((b) => ({ ...b, alveole_recu_unites: v }))} />
+                                    <EditItem label="Production (œufs)" type="number" value={brouillon.production_oeufs} onChange={(v) => setBrouillon((b) => ({ ...b, production_oeufs: v }))} />
+                                    <EditItem label="Cassé (œufs)" type="number" value={brouillon.casse} onChange={(v) => setBrouillon((b) => ({ ...b, casse: v }))} />
+                                    <EditItem label="Brisé (œufs)" type="number" value={brouillon.brise} onChange={(v) => setBrouillon((b) => ({ ...b, brise: v }))} />
+                                    <EditItem label="Traitement" value={brouillon.traitement} onChange={(v) => setBrouillon((b) => ({ ...b, traitement: v }))} />
+                                  </div>
+                                  <label style={styles.editObsLabel}>
+                                    Observation
+                                    <textarea style={styles.editTextarea} rows={2} value={brouillon.observation} onChange={(e) => setBrouillon((b) => ({ ...b, observation: e.target.value }))} />
+                                  </label>
+                                  {erreurEdition && <p style={styles.erreur}>{erreurEdition}</p>}
+                                  <div style={styles.editActions}>
+                                    <button style={styles.saveBtn} disabled={envoi} onClick={() => enregistrerEdition(p.id)}>
+                                      <Check size={15} /> Enregistrer
+                                    </button>
+                                    <button style={styles.cancelBtn} disabled={envoi} onClick={() => setEdition(null)}>
+                                      <X size={15} /> Annuler
+                                    </button>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div style={styles.detailGrid}>
+                                    <DetailItem label="Aliment consommé" value={`${p.conso_aliment_sacs} sacs`} />
+                                    <DetailItem label="Aliment reçu" value={`${p.aliment_recu_sacs} sacs`} />
+                                    <DetailItem label="Stock aliment après" value={formatSacs(Number(p.stock_aliment_apres_sacs))} />
+                                    <DetailItem label="Alvéole reçu" value={`${nf(p.alveole_recu_unites)} unités`} />
+                                    <DetailItem label="Alvéole consommé (auto)" value={`${nf(p.alveole_conso_unites)} unités`} />
+                                    <DetailItem label="Stock alvéole après" value={formatColis(p.stock_alveole_apres_unites)} />
+                                    <DetailItem label="Cassé" value={`${nf(p.casse)} œufs`} />
+                                    <DetailItem label="Brisé" value={`${nf(p.brise)} œufs`} />
+                                    <DetailItem label="Sorties d'œufs" value={`${nf(p.sortie_oeuf)} œufs`} />
+                                    <DetailItem label="Sorties d'effectif" value={`${nf(p.sortie_effectif)} sujets`} />
+                                    {Number(p.eau_consommee_litres) > 0 && <DetailItem label="Eau consommée" value={`${p.eau_consommee_litres} litres`} />}
+                                    {p.traitement && <DetailItem label="Traitement" value={p.traitement} />}
+                                  </div>
+                                  {p.sorties.length > 0 && (
+                                    <div style={styles.sortiesDetail}>
+                                      <div style={styles.sortiesTitre}>Sorties d'œufs saisies</div>
+                                      {p.sorties.map((s) => (
+                                        <div key={s.id} style={styles.sortieLigne}>
+                                          <span>{s.type_sortie === "VENTE" ? "Vente" : "Don"} — {s.responsable}</span>
+                                          <span style={{ fontWeight: 600 }}>{nf(s.quantite)} œufs</span>
+                                        </div>
+                                      ))}
                                     </div>
-                                  ))}
-                                </div>
+                                  )}
+                                  {p.observation && <p style={styles.observation}>« {p.observation} »</p>}
+                                  <div style={styles.pdfRow}>
+                                    <button style={styles.pdfBtn} onClick={() => telechargerPdf(genererPdfHistoriquePoint(p), nomFichierPoint(p))}>
+                                      <Download size={15} /> Télécharger le PDF
+                                    </button>
+                                    {partageDisponible && (
+                                      <button style={styles.pdfBtn} onClick={() => partagerPdf(genererPdfHistoriquePoint(p), nomFichierPoint(p))}>
+                                        <Share2 size={15} /> Partager
+                                      </button>
+                                    )}
+                                    <button style={styles.pdfBtn} onClick={() => commencerEdition(p)}>
+                                      <Pencil size={15} /> Modifier
+                                    </button>
+                                    {peutSupprimer() && (
+                                      <button style={styles.deleteBtn} disabled={envoi} onClick={() => supprimer(p)}>
+                                        <Trash2 size={15} /> Supprimer
+                                      </button>
+                                    )}
+                                  </div>
+                                </>
                               )}
-                              {p.observation && <p style={styles.observation}>« {p.observation} »</p>}
-                              <div style={styles.pdfRow}>
-                                <button style={styles.pdfBtn} onClick={() => telechargerPdf(genererPdfHistoriquePoint(p), nomFichierPoint(p))}>
-                                  <Download size={15} /> Télécharger le PDF
-                                </button>
-                                {partageDisponible && (
-                                  <button style={styles.pdfBtn} onClick={() => partagerPdf(genererPdfHistoriquePoint(p), nomFichierPoint(p))}>
-                                    <Share2 size={15} /> Partager
-                                  </button>
-                                )}
-                              </div>
                             </td>
                           </tr>
                         )}
@@ -154,6 +261,15 @@ function DetailItem({ label, value }) {
       <span style={styles.detailLabel}>{label}</span>
       <span style={styles.detailValue}>{value}</span>
     </div>
+  );
+}
+
+function EditItem({ label, type = "text", value, onChange }) {
+  return (
+    <label style={styles.editItem}>
+      <span style={styles.detailLabel}>{label}</span>
+      <input type={type} style={styles.editInput} value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
   );
 }
 
@@ -185,4 +301,14 @@ const styles = {
   observation: { marginTop: 12, fontSize: 12.5, color: "#6B756E", fontStyle: "italic", margin: "12px 0 0" },
   pdfRow: { display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" },
   pdfBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 9, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  deleteBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: CLAY, border: "1.5px solid #E0BBA9", borderRadius: 9, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  editGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: "10px 16px" },
+  editItem: { display: "flex", flexDirection: "column", gap: 4 },
+  editInput: { border: "1px solid #DDE2DE", borderRadius: 7, padding: "7px 9px", fontSize: 13, fontFamily: "inherit", color: INK, background: "#fff" },
+  editObsLabel: { display: "flex", flexDirection: "column", gap: 4, marginTop: 12, fontSize: 11, color: "#8A948D" },
+  editTextarea: { border: "1px solid #DDE2DE", borderRadius: 7, padding: "8px 9px", fontSize: 13, fontFamily: "inherit", color: INK, resize: "vertical", background: "#fff" },
+  erreur: { color: "#9E4527", background: "#FBF0EB", borderRadius: 8, padding: "8px 12px", fontSize: 12.5, margin: "12px 0 0" },
+  editActions: { display: "flex", gap: 10, marginTop: 14 },
+  saveBtn: { display: "flex", alignItems: "center", gap: 6, background: GREEN, color: "#fff", border: "none", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  cancelBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: "#7A857F", border: "1px solid #DAD5C7", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
 };
