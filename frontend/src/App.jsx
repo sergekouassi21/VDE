@@ -12,6 +12,14 @@ function RequireAuth({ children }) {
   return children;
 }
 
+// Chaque type d'utilisateur arrive sur son propre écran après connexion —
+// basé sur le rôle mis en cache localement, donc ça fonctionne aussi bien
+// hors-ligne qu'en ligne (pas d'appel réseau nécessaire).
+function AccueilSelonRole() {
+  const role = localStorage.getItem("vde_role");
+  return <Navigate to={role === "CHEF_FERME" ? "/point-journalier" : "/tableau-de-bord"} replace />;
+}
+
 const NAV_HEIGHT = 52;
 
 function NavBar() {
@@ -20,7 +28,7 @@ function NavBar() {
     <nav style={navStyles.nav}>
       <img src="/logo.png" alt="Volailles de l'Est" style={navStyles.brand} />
       <Link to="/tableau-de-bord" style={navStyles.link}><LayoutDashboard size={16} /> Tableau de bord</Link>
-      <Link to="/" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
+      <Link to="/point-journalier" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
       <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
       <a href={ADMIN_URL} target="_blank" rel="noopener noreferrer" style={navStyles.link}><Shield size={16} /> Admin</a>
       <button style={navStyles.logout} onClick={() => { logout(); navigate("/connexion"); }}>
@@ -52,6 +60,9 @@ export default function App() {
       <Routes>
         <Route path="/connexion" element={<Login />} />
         <Route path="/" element={
+          <RequireAuth><AccueilSelonRole /></RequireAuth>
+        } />
+        <Route path="/point-journalier" element={
           <RequireAuth><Layout><PointJournalier /></Layout></RequireAuth>
         } />
         <Route path="/tableau-de-bord" element={

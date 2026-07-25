@@ -21,11 +21,14 @@ export async function login(username, password) {
 
 export function logout() {
   localStorage.removeItem("vde_token");
+  localStorage.removeItem("vde_role");
 }
 
 export function isAuthenticated() {
   return !!localStorage.getItem("vde_token");
 }
+
+export const getMoi = () => api.get("/moi/").then((r) => r.data);
 
 export const getFermes = () => api.get("/fermes/").then((r) => r.data);
 export const getFerme = (id) => api.get(`/fermes/${id}/`).then((r) => r.data);

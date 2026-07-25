@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { login } from "../api/client";
+import { login, getMoi } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK } from "../theme";
 
 export default function Login() {
@@ -16,12 +16,19 @@ export default function Login() {
     setChargement(true);
     try {
       await login(username, password);
-      navigate("/");
     } catch {
       setErreur("Identifiants incorrects.");
-    } finally {
       setChargement(false);
+      return;
     }
+    try {
+      const moi = await getMoi();
+      localStorage.setItem("vde_role", moi.role || "");
+    } catch {
+      localStorage.setItem("vde_role", "");
+    }
+    navigate("/");
+    setChargement(false);
   }
 
   return (
