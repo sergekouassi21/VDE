@@ -24,13 +24,17 @@ const NAV_HEIGHT = 52;
 
 function NavBar() {
   const navigate = useNavigate();
+  const role = localStorage.getItem("vde_role");
+  const estDirectionOuAdmin = role !== "CHEF_FERME";
   return (
     <nav style={navStyles.nav}>
       <img src="/logo.png" alt="Volailles de l'Est" style={navStyles.brand} />
       <Link to="/tableau-de-bord" style={navStyles.link}><LayoutDashboard size={16} /> Tableau de bord</Link>
       <Link to="/point-journalier" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
       <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
-      <a href={ADMIN_URL} target="_blank" rel="noopener noreferrer" style={navStyles.link}><Shield size={16} /> Admin</a>
+      {estDirectionOuAdmin && (
+        <a href={ADMIN_URL} target="_blank" rel="noopener noreferrer" style={navStyles.link}><Shield size={16} /> Admin</a>
+      )}
       <button style={navStyles.logout} onClick={() => { logout(); navigate("/connexion"); }}>
         <LogOut size={15} /> Déconnexion
       </button>
