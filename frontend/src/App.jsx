@@ -1,10 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket } from "lucide-react";
+import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield } from "lucide-react";
 import Login from "./pages/Login";
 import PointJournalier from "./pages/PointJournalier";
 import Dashboard from "./pages/Dashboard";
 import Ventes from "./pages/Ventes";
-import { isAuthenticated, logout } from "./api/client";
+import { isAuthenticated, logout, ADMIN_URL } from "./api/client";
 import { GREEN_DARK } from "./theme";
 
 function RequireAuth({ children }) {
@@ -22,6 +22,7 @@ function NavBar() {
       <Link to="/tableau-de-bord" style={navStyles.link}><LayoutDashboard size={16} /> Tableau de bord</Link>
       <Link to="/" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
       <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
+      <a href={ADMIN_URL} target="_blank" rel="noopener noreferrer" style={navStyles.link}><Shield size={16} /> Admin</a>
       <button style={navStyles.logout} onClick={() => { logout(); navigate("/connexion"); }}>
         <LogOut size={15} /> Déconnexion
       </button>
