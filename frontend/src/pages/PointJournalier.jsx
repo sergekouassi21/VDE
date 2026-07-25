@@ -8,6 +8,11 @@ import { synchroniserSoumissionsEnAttente } from "../offline/sync";
 
 const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
 
+function peutDeclarerBande() {
+  const role = localStorage.getItem("vde_role");
+  return !role || role === "DIRECTION" || role === "ADMIN";
+}
+
 const n = (v) => (v === "" || v === null || v === undefined || isNaN(v) ? 0 : Number(v));
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const FORM_VIDE = {
@@ -216,13 +221,19 @@ export default function PointJournalier() {
           <div style={styles.vide}>
             <div style={styles.videIcon}>🐣</div>
             <p style={styles.videTitre}>Aucune bande en place</p>
-            <p style={styles.videTxt}>{ferme.nom} est actuellement vide. Déclarez une mise en place pour activer le point journalier.</p>
-            <input style={styles.input} type="date" value={declaration.date_mise_en_place}
-              onChange={(e) => setDeclaration((d) => ({ ...d, date_mise_en_place: e.target.value }))} />
-            <input style={{ ...styles.input, marginTop: 8 }} type="number" placeholder="Effectif de départ"
-              value={declaration.effectif_initial}
-              onChange={(e) => setDeclaration((d) => ({ ...d, effectif_initial: e.target.value }))} />
-            <button style={{ ...styles.videBtn, marginTop: 14 }} onClick={handleDeclarerBande}>+ Déclarer une bande</button>
+            {peutDeclarerBande() ? (
+              <>
+                <p style={styles.videTxt}>{ferme.nom} est actuellement vide. Déclarez une mise en place pour activer le point journalier.</p>
+                <input style={styles.input} type="date" value={declaration.date_mise_en_place}
+                  onChange={(e) => setDeclaration((d) => ({ ...d, date_mise_en_place: e.target.value }))} />
+                <input style={{ ...styles.input, marginTop: 8 }} type="number" placeholder="Effectif de départ"
+                  value={declaration.effectif_initial}
+                  onChange={(e) => setDeclaration((d) => ({ ...d, effectif_initial: e.target.value }))} />
+                <button style={{ ...styles.videBtn, marginTop: 14 }} onClick={handleDeclarerBande}>+ Déclarer une bande</button>
+              </>
+            ) : (
+              <p style={styles.videTxt}>{ferme.nom} est actuellement vide. Seule la direction peut déclarer une nouvelle bande.</p>
+            )}
           </div>
         )}
 
