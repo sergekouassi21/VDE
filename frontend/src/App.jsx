@@ -18,7 +18,7 @@ function NavBar() {
   const navigate = useNavigate();
   return (
     <nav style={navStyles.nav}>
-      <span style={navStyles.brand}>VDE</span>
+      <img src="/logo.png" alt="Volailles de l'Est" style={navStyles.brand} />
       <Link to="/tableau-de-bord" style={navStyles.link}><LayoutDashboard size={16} /> Tableau de bord</Link>
       <Link to="/" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
       <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
@@ -40,7 +40,7 @@ function Layout({ children }) {
 
 const navStyles = {
   nav: { display: "flex", alignItems: "center", gap: 18, height: NAV_HEIGHT, boxSizing: "border-box", padding: "0 20px", background: GREEN_DARK, color: "#fff", fontFamily: "'Inter', sans-serif", fontSize: 14, position: "fixed", top: 0, left: 0, right: 0, zIndex: 100 },
-  brand: { fontWeight: 700, letterSpacing: 1, marginRight: 8 },
+  brand: { height: 36, width: 36, borderRadius: 8, marginRight: 8, objectFit: "cover" },
   link: { color: "#fff", textDecoration: "none", display: "flex", alignItems: "center", gap: 6, opacity: .9 },
   logout: { marginLeft: "auto", background: "none", border: "none", color: "#fff", opacity: .8, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: "inherit", fontSize: 14 },
 };

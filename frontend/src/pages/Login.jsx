@@ -27,7 +27,7 @@ export default function Login() {
   return (
     <div style={styles.page}>
       <form style={styles.card} onSubmit={handleSubmit}>
-        <div style={styles.logo}>VDE</div>
+        <img src="/logo.png" alt="Volailles de l'Est" style={styles.logo} />
         <h1 style={styles.titre}>Volailles de l'Est</h1>
         <p style={styles.sousTitre}>Point Journalier &amp; Tableau de bord</p>
         <input
@@ -69,8 +69,7 @@ const styles = {
     display: "flex", flexDirection: "column", gap: 12, boxShadow: "0 20px 60px rgba(0,0,0,.25)",
   },
   logo: {
-    fontWeight: 700, fontSize: 20, letterSpacing: 1, background: GREEN, color: "#fff",
-    padding: "6px 14px", borderRadius: 8, alignSelf: "flex-start", marginBottom: 6,
+    height: 56, width: 56, borderRadius: 12, objectFit: "cover", alignSelf: "flex-start", marginBottom: 6,
   },
   titre: { fontSize: 22, fontWeight: 700, margin: 0, color: INK },
   sousTitre: { fontSize: 13, color: "#6B756E", margin: "0 0 12px" },

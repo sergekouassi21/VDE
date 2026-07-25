@@ -110,7 +110,7 @@ export default function PointJournalier() {
       <div style={styles.shell}>
         <header style={styles.header}>
           <div style={styles.headTop}>
-            <div style={styles.logo}>VDE</div>
+            <img src="/logo.png" alt="Volailles de l'Est" style={styles.logo} />
             <label style={styles.datePick}>
               <Calendar size={14} />
               <input type="date" value={dateJour} max={todayISO()} onChange={(e) => { setDateJour(e.target.value); setEnvoye(false); }} style={styles.dateInput} />
@@ -307,7 +307,7 @@ const styles = {
   shell: { maxWidth: 440, margin: "0 auto", background: CREAM, minHeight: "100vh", boxShadow: "0 0 60px rgba(0,0,0,.08)" },
   header: { background: `linear-gradient(160deg, ${GREEN} 0%, ${GREEN_DARK} 100%)`, color: "#fff", padding: "18px 20px 20px", borderRadius: "0 0 22px 22px" },
   headTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  logo: { fontWeight: 700, fontSize: 20, letterSpacing: 1, background: "rgba(255,255,255,.16)", padding: "4px 12px", borderRadius: 8 },
+  logo: { height: 40, width: 40, borderRadius: 9, objectFit: "cover", background: "rgba(255,255,255,.16)" },
   datePick: { display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,.16)", padding: "6px 11px", borderRadius: 9, color: "#fff", cursor: "pointer" },
   dateInput: { background: "none", border: "none", color: "#fff", fontSize: 13, fontFamily: "inherit", colorScheme: "dark", cursor: "pointer" },
   title: { fontWeight: 700, fontSize: 27, margin: "14px 0 16px", letterSpacing: -.5 },
