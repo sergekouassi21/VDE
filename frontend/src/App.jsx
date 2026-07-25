@@ -12,6 +12,18 @@ function RequireAuth({ children }) {
   return children;
 }
 
+function estDirectionOuAdmin() {
+  const role = localStorage.getItem("vde_role");
+  return !role || role === "DIRECTION" || role === "ADMIN";
+}
+
+// Ventes reserve a Direction/Admin — chef, sous-chef et superviseur n'y ont
+// pas acces, meme en tapant l'URL directement.
+function RequireDirectionOuAdmin({ children }) {
+  if (!estDirectionOuAdmin()) return <Navigate to="/" replace />;
+  return children;
+}
+
 // Chaque type d'utilisateur arrive sur son propre écran après connexion —
 // basé sur le rôle mis en cache localement, donc ça fonctionne aussi bien
 // hors-ligne qu'en ligne (pas d'appel réseau nécessaire).
@@ -25,16 +37,17 @@ const NAV_HEIGHT = 52;
 
 function NavBar() {
   const navigate = useNavigate();
-  const role = localStorage.getItem("vde_role");
-  const estDirectionOuAdmin = !role || role === "DIRECTION" || role === "ADMIN";
+  const autorise = estDirectionOuAdmin();
   return (
     <nav style={navStyles.nav}>
       <img src="/logo.png" alt="Volailles de l'Est" style={navStyles.brand} />
       <Link to="/tableau-de-bord" style={navStyles.link}><LayoutDashboard size={16} /> Tableau de bord</Link>
       <Link to="/point-journalier" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
-      <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
-      {estDirectionOuAdmin && (
-        <a href={ADMIN_URL} target="_blank" rel="noopener noreferrer" style={navStyles.link}><Shield size={16} /> Admin</a>
+      {autorise && (
+        <>
+          <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
+          <a href={ADMIN_URL} target="_blank" rel="noopener noreferrer" style={navStyles.link}><Shield size={16} /> Admin</a>
+        </>
       )}
       <button style={navStyles.logout} onClick={() => { logout(); navigate("/connexion"); }}>
         <LogOut size={15} /> Déconnexion
@@ -74,7 +87,7 @@ export default function App() {
           <RequireAuth><Layout><Dashboard /></Layout></RequireAuth>
         } />
         <Route path="/ventes" element={
-          <RequireAuth><Layout><Ventes /></Layout></RequireAuth>
+          <RequireAuth><RequireDirectionOuAdmin><Layout><Ventes /></Layout></RequireDirectionOuAdmin></RequireAuth>
         } />
       </Routes>
     </BrowserRouter>
