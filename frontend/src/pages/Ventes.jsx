@@ -186,6 +186,9 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
   const total = detail.reduce((s, d) => s + d.montant, 0);
   const resteDu = paiement === "COMPTANT" ? 0 : paiement === "DOIT" ? total : Math.max(0, total - (Number(avance) || 0));
 
+  const oeufsBrouillon = detail.reduce((s, d) => s + d.oeufs, 0);
+  const totalAffiche = totalVentesOeufs - oeufsBrouillon;
+
   const avertissements = useMemo(() => {
     const parFerme = {};
     detail.forEach((d) => {
@@ -239,8 +242,8 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
   return (
     <div style={styles.body}>
       <div style={styles.stockGlobal}>
-        <span style={styles.stockGlobalLabel}>Œufs restants à facturer (Point Journalier − Factures)</span>
-        <span style={styles.stockGlobalVal}>{nf(totalVentesOeufs)} œufs</span>
+        <span style={styles.stockGlobalLabel}>Œufs restants à facturer (Point Journalier − Factures{oeufsBrouillon > 0 ? " − en cours" : ""})</span>
+        <span style={styles.stockGlobalVal}>{nf(totalAffiche)} œufs</span>
       </div>
 
       <div style={styles.card}>
