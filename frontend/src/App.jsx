@@ -1,5 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield } from "lucide-react";
+import { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from "react-router-dom";
+import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X } from "lucide-react";
 import Login from "./pages/Login";
 import PointJournalier from "./pages/PointJournalier";
 import Dashboard from "./pages/Dashboard";
@@ -37,21 +38,33 @@ const NAV_HEIGHT = 52;
 
 function NavBar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const autorise = estDirectionOuAdmin();
+  const [ouvert, setOuvert] = useState(false);
+
+  useEffect(() => { setOuvert(false); }, [location.pathname]);
+
   return (
-    <nav style={navStyles.nav}>
-      <img src="/logo.png" alt="Volailles de l'Est" style={navStyles.brand} />
-      <Link to="/tableau-de-bord" style={navStyles.link}><LayoutDashboard size={16} /> Tableau de bord</Link>
-      <Link to="/point-journalier" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
-      {autorise && (
-        <>
-          <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
-          <a href={ADMIN_URL} target="_blank" rel="noopener noreferrer" style={navStyles.link}><Shield size={16} /> Admin</a>
-        </>
-      )}
-      <button style={navStyles.logout} onClick={() => { logout(); navigate("/connexion"); }}>
-        <LogOut size={15} /> Déconnexion
-      </button>
+    <nav className="nav-bar" style={navStyles.nav}>
+      <div className="nav-top">
+        <img src="/logo.png" alt="Volailles de l'Est" style={navStyles.brand} />
+        <button className="nav-hamburger" style={navStyles.hamburger} onClick={() => setOuvert((o) => !o)} aria-label="Menu">
+          {ouvert ? <X size={22} /> : <Menu size={22} />}
+        </button>
+      </div>
+      <div className={`nav-links${ouvert ? " open" : ""}`}>
+        <Link to="/tableau-de-bord" style={navStyles.link}><LayoutDashboard size={16} /> Tableau de bord</Link>
+        <Link to="/point-journalier" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
+        {autorise && (
+          <>
+            <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
+            <a href={ADMIN_URL} target="_blank" rel="noopener noreferrer" style={navStyles.link}><Shield size={16} /> Admin</a>
+          </>
+        )}
+        <button className="nav-logout" style={navStyles.logout} onClick={() => { logout(); navigate("/connexion"); }}>
+          <LogOut size={15} /> Déconnexion
+        </button>
+      </div>
     </nav>
   );
 }
@@ -66,8 +79,9 @@ function Layout({ children }) {
 }
 
 const navStyles = {
-  nav: { display: "flex", alignItems: "center", gap: 18, height: NAV_HEIGHT, boxSizing: "border-box", padding: "0 20px", background: GREEN_DARK, color: "#fff", fontFamily: "'Inter', sans-serif", fontSize: 14, position: "fixed", top: 0, left: 0, right: 0, zIndex: 100 },
-  brand: { height: 36, width: 36, borderRadius: 8, marginRight: 8, objectFit: "cover" },
+  nav: { background: GREEN_DARK, color: "#fff", fontFamily: "'Inter', sans-serif", fontSize: 14 },
+  hamburger: { background: "none", border: "none", color: "#fff", cursor: "pointer", padding: 4 },
+  brand: { height: 36, width: 36, borderRadius: 8, objectFit: "cover" },
   link: { color: "#fff", textDecoration: "none", display: "flex", alignItems: "center", gap: 6, opacity: .9 },
   logout: { marginLeft: "auto", background: "none", border: "none", color: "#fff", opacity: .8, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: "inherit", fontSize: 14 },
 };
