@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Egg, Skull, Wheat, Package, TrendingUp, Check, ChevronDown, AlertTriangle, Calendar, Download, Share2, WifiOff, RefreshCw } from "lucide-react";
-import { getFermes, soumettrePointJournalier, declarerBande } from "../api/client";
+import { getFermes, soumettrePointJournalier, declarerBande, getPointJournalier } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, CLAY, formatSacs, formatColis, AGE_REFORME_SEMAINES } from "../theme";
 import { genererPdfPointJournalier, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { ajouterSoumissionEnAttente, listerSoumissionsEnAttente } from "../offline/queue";
@@ -24,11 +25,12 @@ const NOUVELLE_SORTIE_VIDE = { quantite: "", type_sortie: "VENTE", responsable: 
 export default function PointJournalier() {
   const nomChef = localStorage.getItem("vde_nom") || "";
   const photoChef = localStorage.getItem("vde_photo") || "";
+  const [searchParams] = useSearchParams();
   const [fermes, setFermes] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [fermeId, setFermeId] = useState(null);
   const [openFerme, setOpenFerme] = useState(false);
-  const [dateJour, setDateJour] = useState(todayISO());
+  const [dateJour, setDateJour] = useState(() => searchParams.get("date") || todayISO());
   const [form, setForm] = useState(FORM_VIDE);
   const [sorties, setSorties] = useState([]);
   const [nouvelleSortie, setNouvelleSortie] = useState(NOUVELLE_SORTIE_VIDE);
@@ -44,8 +46,10 @@ export default function PointJournalier() {
     const data = await getFermes();
     setFermes(data);
     setChargement(false);
-    setFermeId((id) => id ?? data[0]?.id ?? null);
-  }, []);
+    const fermeParam = Number(searchParams.get("ferme"));
+    const fermeValide = fermeParam && data.some((f) => f.id === fermeParam);
+    setFermeId((id) => id ?? (fermeValide ? fermeParam : data[0]?.id ?? null));
+  }, [searchParams]);
 
   const rafraichirEnAttente = useCallback(async () => {
     const items = await listerSoumissionsEnAttente();
@@ -75,6 +79,42 @@ export default function PointJournalier() {
 
   const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setEnvoye(false); setHorsLigneEnvoi(false); };
   const reset = () => { setForm(FORM_VIDE); setSorties([]); setNouvelleSortie(NOUVELLE_SORTIE_VIDE); };
+
+  // Si une fiche existe déjà pour cette ferme et cette date (ex: on arrive
+  // ici depuis "Modifier" dans Historique), on pré-remplit avec les vraies
+  // valeurs enregistrées plutôt que de laisser le formulaire vide — sinon
+  // valider écraserait la journée avec des champs à zéro.
+  useEffect(() => {
+    if (!fermeId || !dateJour) return;
+    let annule = false;
+    getPointJournalier(fermeId, dateJour)
+      .then((points) => {
+        if (annule) return;
+        const point = points[0];
+        if (point) {
+          setForm({
+            morts: String(point.morts),
+            conso_aliment_sacs: String(point.conso_aliment_sacs),
+            aliment_recu_sacs: String(point.aliment_recu_sacs),
+            traitement: point.traitement,
+            eau_consommee_litres: String(point.eau_consommee_litres),
+            alveole_recu_unites: String(point.alveole_recu_unites),
+            production_oeufs: String(point.production_oeufs),
+            casse: String(point.casse),
+            brise: String(point.brise),
+            observation: point.observation,
+          });
+          setSorties(point.sorties.map((s) => ({ quantite: s.quantite, type_sortie: s.type_sortie, responsable: s.responsable })));
+        } else {
+          setForm(FORM_VIDE);
+          setSorties([]);
+        }
+        setEnvoye(false);
+        setHorsLigneEnvoi(false);
+      })
+      .catch(() => {});
+    return () => { annule = true; };
+  }, [fermeId, dateJour]);
 
   const totalSorties = sorties.reduce((s, x) => s + n(x.quantite), 0);
 
