@@ -41,6 +41,7 @@ export const getPointJournalier = (fermeId, date) =>
   api.get(`/fermes/${fermeId}/points-journaliers/`, { params: { date } }).then((r) => r.data);
 export const corrigerPointJournalier = (id, payload) =>
   api.patch(`/points-journaliers/${id}/`, payload).then((r) => r.data);
+export const getPointsJournaliers = (params) => api.get("/points-journaliers/", { params }).then((r) => r.data);
 export const getDashboard = () => api.get("/dashboard/").then((r) => r.data);
 export const getVentes = (params) => api.get("/ventes/", { params }).then((r) => r.data);
 export const updateSortieOeuf = (id, payload) => api.patch(`/sorties-oeufs/${id}/`, payload).then((r) => r.data);

@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X } from "lucide-react";
+import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History } from "lucide-react";
 import Login from "./pages/Login";
 import PointJournalier from "./pages/PointJournalier";
 import Dashboard from "./pages/Dashboard";
 import Ventes from "./pages/Ventes";
+import Historique from "./pages/Historique";
 import { isAuthenticated, logout, ADMIN_URL } from "./api/client";
 import { GREEN_DARK } from "./theme";
 
@@ -55,6 +56,7 @@ function NavBar() {
       <div className={`nav-links${ouvert ? " open" : ""}`}>
         <Link to="/tableau-de-bord" style={navStyles.link}><LayoutDashboard size={16} /> Tableau de bord</Link>
         <Link to="/point-journalier" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
+        <Link to="/historique" style={navStyles.link}><History size={16} /> Historique</Link>
         {autorise && (
           <>
             <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
@@ -102,6 +104,9 @@ export default function App() {
         } />
         <Route path="/ventes" element={
           <RequireAuth><RequireDirectionOuAdmin><Layout><Ventes /></Layout></RequireDirectionOuAdmin></RequireAuth>
+        } />
+        <Route path="/historique" element={
+          <RequireAuth><Layout><Historique /></Layout></RequireAuth>
         } />
       </Routes>
     </BrowserRouter>
