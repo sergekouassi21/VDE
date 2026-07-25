@@ -37,6 +37,8 @@ export const corrigerPointJournalier = (id, payload) =>
   api.patch(`/points-journaliers/${id}/`, payload).then((r) => r.data);
 export const getDashboard = () => api.get("/dashboard/").then((r) => r.data);
 export const getVentes = (params) => api.get("/ventes/", { params }).then((r) => r.data);
+export const updateSortieOeuf = (id, payload) => api.patch(`/sorties-oeufs/${id}/`, payload).then((r) => r.data);
+export const deleteSortieOeuf = (id) => api.delete(`/sorties-oeufs/${id}/`);
 export const getClients = () => api.get("/clients/").then((r) => r.data);
 export const getFactures = () => api.get("/factures/").then((r) => r.data);
 export const creerFacture = (payload) => api.post("/factures/", payload).then((r) => r.data);

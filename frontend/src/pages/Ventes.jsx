@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Plus, Trash2, Check, Receipt, CreditCard, Wallet, ChevronRight, AlertTriangle, Printer } from "lucide-react";
-import { getFermes, getClients, getFactures, getVentes, creerFacture, encaisserVersement } from "../api/client";
+import { Plus, Trash2, Pencil, Check, X, Receipt, CreditCard, Wallet, ChevronRight, AlertTriangle, Printer } from "lucide-react";
+import { getFermes, getClients, getFactures, getVentes, creerFacture, encaisserVersement, updateSortieOeuf, deleteSortieOeuf } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 
 const fcfa = (v) => (Number(v) || 0).toLocaleString("fr-FR") + " F";
@@ -142,7 +142,7 @@ export default function Ventes() {
         ) : onglet === "creances" ? (
           <Creances factures={factures} onEncaisse={rafraichir} />
         ) : (
-          <Historique factures={factures} ventesManuelles={ventesManuelles} />
+          <Historique factures={factures} ventesManuelles={ventesManuelles} onRafraichir={rafraichir} />
         )}
       </div>
     </div>
@@ -421,7 +421,38 @@ function Creances({ factures, onEncaisse }) {
   );
 }
 
-function Historique({ factures, ventesManuelles }) {
+function Historique({ factures, ventesManuelles, onRafraichir }) {
+  const [edition, setEdition] = useState(null);
+  const [brouillon, setBrouillon] = useState({ quantite: "", responsable: "" });
+  const [envoi, setEnvoi] = useState(false);
+
+  function commencerEdition(v) {
+    setEdition(v.id);
+    setBrouillon({ quantite: String(v.quantite), responsable: v.responsable });
+  }
+
+  async function enregistrerEdition(id) {
+    setEnvoi(true);
+    try {
+      await updateSortieOeuf(id, { quantite: Number(brouillon.quantite) || 0, responsable: brouillon.responsable });
+      setEdition(null);
+      onRafraichir();
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  async function supprimer(v) {
+    if (!window.confirm(`Supprimer la sortie de ${nf(v.quantite)} œufs (${v.ferme}, ${v.responsable}) ?`)) return;
+    setEnvoi(true);
+    try {
+      await deleteSortieOeuf(v.id);
+      onRafraichir();
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
   return (
     <div style={styles.body}>
       <div style={styles.sectionLabel}>Factures</div>
@@ -468,17 +499,44 @@ function Historique({ factures, ventesManuelles }) {
                 <th style={styles.th}>Ferme</th>
                 <th style={{ ...styles.th, textAlign: "right" }}>Quantité</th>
                 <th style={styles.th}>Responsable</th>
+                <th style={{ ...styles.th, textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {ventesManuelles.map((v) => (
-                <tr key={v.id}>
-                  <td style={styles.td}>{new Date(v.date).toLocaleDateString("fr-FR")}</td>
-                  <td style={styles.td}>{v.ferme}</td>
-                  <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>{nf(v.quantite)}</td>
-                  <td style={styles.td}>{v.responsable}</td>
-                </tr>
-              ))}
+              {ventesManuelles.map((v) => {
+                const enEdition = edition === v.id;
+                return (
+                  <tr key={v.id}>
+                    <td style={styles.td}>{new Date(v.date).toLocaleDateString("fr-FR")}</td>
+                    <td style={styles.td}>{v.ferme}</td>
+                    <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>
+                      {enEdition ? (
+                        <input type="number" style={styles.tableInput} value={brouillon.quantite}
+                          onChange={(e) => setBrouillon((b) => ({ ...b, quantite: e.target.value }))} />
+                      ) : nf(v.quantite)}
+                    </td>
+                    <td style={styles.td}>
+                      {enEdition ? (
+                        <input style={styles.tableInput} value={brouillon.responsable}
+                          onChange={(e) => setBrouillon((b) => ({ ...b, responsable: e.target.value }))} />
+                      ) : v.responsable}
+                    </td>
+                    <td style={{ ...styles.td, textAlign: "right" }}>
+                      {enEdition ? (
+                        <div style={styles.actionsRow}>
+                          <button style={styles.actionBtn} disabled={envoi} onClick={() => enregistrerEdition(v.id)}><Check size={14} /></button>
+                          <button style={styles.actionBtn} disabled={envoi} onClick={() => setEdition(null)}><X size={14} /></button>
+                        </div>
+                      ) : (
+                        <div style={styles.actionsRow}>
+                          <button style={styles.actionBtn} disabled={envoi} onClick={() => commencerEdition(v)}><Pencil size={14} /></button>
+                          <button style={{ ...styles.actionBtn, color: "#C6603A" }} disabled={envoi} onClick={() => supprimer(v)}><Trash2 size={14} /></button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -562,4 +620,7 @@ const styles = {
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
   th: { textAlign: "left", padding: "12px 16px", fontSize: 11.5, textTransform: "uppercase", letterSpacing: .5, color: "#8A948D", borderBottom: "1px solid #ECE9DF" },
   td: { padding: "11px 16px", borderBottom: "1px solid #F2F0E8", color: INK },
+  tableInput: { width: "100%", maxWidth: 140, border: "1px solid #DDE2DE", borderRadius: 6, padding: "5px 8px", fontSize: 13, fontFamily: "inherit", color: INK },
+  actionsRow: { display: "flex", gap: 4, justifyContent: "flex-end" },
+  actionBtn: { background: "#F4F1EA", border: "none", color: GREEN_DARK, width: 28, height: 28, borderRadius: 7, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
 };
