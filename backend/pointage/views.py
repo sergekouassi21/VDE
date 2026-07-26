@@ -1,3 +1,4 @@
+import os
 from decimal import Decimal
 from io import BytesIO
 
@@ -25,6 +26,12 @@ from .serializers import (
     PointageSerializer,
     ScanEmployeSerializer,
 )
+
+
+# Police en gras avec un vrai jeu de caractères latins accentués — la police
+# par défaut de Pillow (Aileron) n'a pas les glyphes é/è/à/ô/... nécessaires
+# aux noms français (cf. retour utilisateur, accents illisibles sur le badge).
+POLICE_BADGE = os.path.join(os.path.dirname(__file__), "fonts", "DejaVuSans-Bold.ttf")
 
 
 class EstDirectionOuAdmin(BasePermission):
@@ -70,15 +77,11 @@ class EmployeViewSet(viewsets.ModelViewSet):
         badge.paste(qr_image, (0, 0))
 
         dessin = ImageDraw.Draw(badge)
-        police = ImageFont.load_default(size=24)
+        police = ImageFont.truetype(POLICE_BADGE, 24)
         boite = dessin.textbbox((0, 0), employe.nom, font=police)
         x = max((largeur - (boite[2] - boite[0])) // 2, 0)
         y = hauteur_qr + marge // 2
-        # ImageFont.load_default() n'a pas de variante grasse — on simule le
-        # gras en superposant le texte avec un léger décalage dans chaque
-        # direction (technique classique en l'absence de police en gras).
-        for dx, dy in [(0, 0), (1, 0), (0, 1), (1, 1)]:
-            dessin.text((x + dx, y + dy), employe.nom, fill="black", font=police)
+        dessin.text((x, y), employe.nom, fill="black", font=police)
 
         buffer = BytesIO()
         badge.save(buffer, format="PNG")
