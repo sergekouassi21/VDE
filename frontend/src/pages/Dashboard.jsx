@@ -83,6 +83,45 @@ export default function Dashboard() {
           <Kpi icon={<Package size={16} />} label="Stock œufs total" value={nf(kpi.stockOeuf)} sub="œufs" />
         </div>
 
+        <div style={styles.kpiFermeGrid}>
+          {actives.map((f) => {
+            const t = tauxPonte(f);
+            return (
+              <div key={f.id} style={styles.kpiFermeCard}>
+                <div style={styles.kpiFermeNom}>{f.nom}</div>
+                <div style={styles.kpiFermeStats}>
+                  {f.type === "PONTE" && (
+                    <div style={styles.kpiFermeStat}>
+                      <span style={styles.kpiFermeLabel}>Ponte</span>
+                      <span style={{ ...styles.kpiFermeValeur, color: t < 60 ? "#9E4527" : GREEN_DARK }}>{t.toFixed(0)} %</span>
+                    </div>
+                  )}
+                  {f.type === "PONTE" && (
+                    <div style={styles.kpiFermeStat}>
+                      <span style={styles.kpiFermeLabel}>Production</span>
+                      <span style={styles.kpiFermeValeur}>{nf(f.dernier_point?.production_oeufs || 0)}</span>
+                    </div>
+                  )}
+                  <div style={styles.kpiFermeStat}>
+                    <span style={styles.kpiFermeLabel}>Effectif</span>
+                    <span style={styles.kpiFermeValeur}>{nf(effectifActuel(f))}</span>
+                  </div>
+                  <div style={styles.kpiFermeStat}>
+                    <span style={styles.kpiFermeLabel}>Mortalité</span>
+                    <span style={{ ...styles.kpiFermeValeur, color: (f.dernier_point?.morts || 0) > 5 ? "#9E4527" : INK }}>{nf(f.dernier_point?.morts || 0)}</span>
+                  </div>
+                  {f.type === "PONTE" && (
+                    <div style={styles.kpiFermeStat}>
+                      <span style={styles.kpiFermeLabel}>Stock œuf</span>
+                      <span style={styles.kpiFermeValeur}>{nf(f.bande_active?.stock_oeuf_actuel || 0)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
         <div style={styles.grid}>
           <div style={styles.col}>
             <Card titre="Taux de ponte par ferme">
@@ -192,6 +231,13 @@ const styles = {
   kpiVal: { fontSize: 22, fontWeight: 700 },
   kpiSub: { fontSize: 12, fontWeight: 400, opacity: .7 },
   kpiLabel: { fontSize: 11.5, opacity: .78, marginTop: 2 },
+  kpiFermeGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12, marginBottom: 18 },
+  kpiFermeCard: { background: "#fff", borderRadius: 14, padding: "13px 15px", border: "1px solid #ECE9DF" },
+  kpiFermeNom: { fontSize: 13.5, fontWeight: 700, color: GREEN_DARK, marginBottom: 8 },
+  kpiFermeStats: { display: "flex", flexWrap: "wrap", gap: "6px 14px" },
+  kpiFermeStat: { display: "flex", flexDirection: "column", gap: 1, minWidth: 60 },
+  kpiFermeLabel: { fontSize: 10, color: "#8A948D", textTransform: "uppercase", letterSpacing: .3 },
+  kpiFermeValeur: { fontSize: 15, fontWeight: 700, color: INK },
   grid: { display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 16 },
   col: { display: "flex", flexDirection: "column", gap: 16 },
   card: { background: "#fff", borderRadius: 16, padding: "16px 18px", border: "1px solid #ECE9DF" },
