@@ -56,7 +56,7 @@ export default function PointageScan() {
         <img src="/logo.png" alt="Volailles de l'Est" style={styles.logo} />
         {etat.employe.photo && <img src={etat.employe.photo} alt="" style={styles.photo} />}
         <h1 style={styles.nom}>{etat.employe.nom}</h1>
-        <p style={styles.ferme}>{etat.employe.ferme_nom}</p>
+        <p style={styles.ferme}>{etat.employe.role ? `${etat.employe.role} · ${etat.employe.ferme_nom}` : etat.employe.ferme_nom}</p>
 
         {etat.etat === "NON_COMMENCE" && (
           <>

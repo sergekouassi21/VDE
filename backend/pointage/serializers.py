@@ -58,7 +58,14 @@ class ScanEmployeSerializer(serializers.ModelSerializer):
     (confidentiel, réservé à Direction/Admin)."""
 
     ferme_nom = serializers.CharField(source="ferme.nom", read_only=True)
+    role = serializers.SerializerMethodField()
 
     class Meta:
         model = Employe
-        fields = ["nom", "ferme_nom", "photo"]
+        fields = ["nom", "ferme_nom", "photo", "role"]
+
+    def get_role(self, obj):
+        if not obj.user:
+            return None
+        profil = getattr(obj.user, "profil", None)
+        return profil.get_role_display() if profil else None
