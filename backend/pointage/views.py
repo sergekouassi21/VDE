@@ -54,11 +54,14 @@ class EmployeViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"], url_path="qr")
     def qr(self, request, pk=None):
-        """Image PNG du QR à imprimer sur le badge de l'employé — encode
-        l'URL publique de scan côté frontend."""
+        """Image PNG du QR à imprimer sur le badge de l'employé — encode le
+        nom de l'employé suivi de l'URL publique de scan (sur des lignes
+        séparées), pour que le nom reste lisible par n'importe quel lecteur
+        QR générique, tout en laissant la caméra des téléphones reconnaître
+        et proposer d'ouvrir l'URL."""
         employe = self.get_object()
         url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/{employe.qr_token}"
-        image = qrcode.make(url)
+        image = qrcode.make(f"{employe.nom}\n{url}")
         buffer = BytesIO()
         image.save(buffer, format="PNG")
         return HttpResponse(buffer.getvalue(), content_type="image/png")
