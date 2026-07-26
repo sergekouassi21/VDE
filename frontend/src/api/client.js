@@ -32,6 +32,7 @@ export function isAuthenticated() {
 
 export const getMoi = () => api.get("/moi/").then((r) => r.data);
 
+export const getRechercheGlobale = (q) => api.get("/recherche/", { params: { q } }).then((r) => r.data);
 export const getFermes = () => api.get("/fermes/").then((r) => r.data);
 export const getFerme = (id) => api.get(`/fermes/${id}/`).then((r) => r.data);
 export const declarerBande = (id, payload) => api.post(`/fermes/${id}/declarer-bande/`, payload).then((r) => r.data);
