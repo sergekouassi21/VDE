@@ -5,8 +5,6 @@ import { getInfosPointageScan, validerPointageScan } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, CLAY } from "../theme";
 
 const heure = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-const separeMilliers = (n) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-const fcfa = (v) => `${separeMilliers(Number(v) || 0)} F`;
 
 export default function PointageScan() {
   const { token } = useParams();
@@ -84,8 +82,7 @@ export default function PointageScan() {
             <p style={styles.recapTitre}>Journée terminée</p>
             <div style={styles.recapLigne}><span>Arrivée</span><span>{heure(etat.heure_debut)}</span></div>
             <div style={styles.recapLigne}><span>Départ</span><span>{heure(etat.heure_fin)}</span></div>
-            <div style={styles.recapLigne}><span>Heures travaillées</span><span>{etat.heures_travaillees} h</span></div>
-            <div style={{ ...styles.recapLigne, fontWeight: 700, color: GREEN_DARK }}><span>Montant du jour</span><span>{fcfa(etat.montant_du_jour)}</span></div>
+            <div style={{ ...styles.recapLigne, borderBottom: "none" }}><span>Heures travaillées</span><span>{etat.heures_travaillees} h</span></div>
           </div>
         )}
       </div>
