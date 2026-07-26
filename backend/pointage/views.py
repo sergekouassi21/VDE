@@ -17,13 +17,15 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 
+from exploitation.calculs import prix_moyen_sac_aliment
 from exploitation.models import Ferme, LigneFacture, PointJournalier, RoleUtilisateur
 
 from .models import Absence, BadgeAbsence, BadgeTemporaire, Employe, LignePaie, Pointage, StatutAbsence
 
-# Prix moyen d'un sac d'aliment, pour valoriser la consommation (en sacs) en
-# coût FCFA dans la vue de rentabilité — cf. conversation du 26/07/2026 avec
-# Serge. À ajuster ici si le prix change.
+# Prix moyen de secours si un magasin n'a encore aucune commande d'aliment
+# enregistrée (cf. exploitation.calculs.prix_moyen_sac_aliment, qui utilise
+# sinon le prix réel moyen des commandes du magasin) — cf. conversation du
+# 26/07/2026 avec Serge.
 PRIX_ALIMENT_SAC_FCFA = Decimal("10755")
 from .serializers import (
     AbsenceSerializer,
@@ -478,10 +480,11 @@ def rentabilite(request):
     dernier_jour = calendar.monthrange(debut.year, debut.month)[1]
     fin = min(debut.replace(day=dernier_jour), timezone.localdate())
 
-    fermes = list(Ferme.objects.filter_visibles_par(request.user))
+    fermes = list(Ferme.objects.filter_visibles_par(request.user).select_related("magasin"))
     fermes_ids = {f.id for f in fermes}
+    fermes_par_id = {f.id: f for f in fermes}
     resultats = {
-        f.id: {"ferme_id": f.id, "ferme_nom": f.nom, "revenus": Decimal("0"), "cout_aliment": Decimal("0"), "cout_paie": Decimal("0")}
+        f.id: {"ferme_id": f.id, "ferme_nom": f.nom, "revenus": Decimal("0"), "cout_aliment": Decimal("0"), "cout_paie": Decimal("0"), "prix_sac": None}
         for f in fermes
     }
 
@@ -496,7 +499,10 @@ def rentabilite(request):
         .values("bande__ferme_id").annotate(sacs=Sum("conso_aliment_sacs"))
     ):
         sacs = ligne["sacs"] or Decimal("0")
-        resultats[ligne["bande__ferme_id"]]["cout_aliment"] = sacs * PRIX_ALIMENT_SAC_FCFA
+        magasin = fermes_par_id[ligne["bande__ferme_id"]].magasin
+        prix_sac = prix_moyen_sac_aliment(magasin, jusqua_date=fin, defaut=PRIX_ALIMENT_SAC_FCFA)
+        resultats[ligne["bande__ferme_id"]]["cout_aliment"] = sacs * prix_sac
+        resultats[ligne["bande__ferme_id"]]["prix_sac"] = prix_sac
 
     for employe in Employe.objects.filter(actif=True).prefetch_related("fermes"):
         fermes_employe = [f for f in employe.fermes.all() if f.id in fermes_ids]
@@ -533,11 +539,12 @@ def rentabilite(request):
             "cout_aliment": str(r["cout_aliment"].quantize(Decimal("1"))),
             "cout_paie": str(r["cout_paie"].quantize(Decimal("1"))),
             "marge": str(marge.quantize(Decimal("1"))),
+            "prix_sac": str(r["prix_sac"].quantize(Decimal("1"))) if r["prix_sac"] is not None else None,
         })
     donnees.sort(key=lambda d: d["ferme_nom"])
     return Response({
         "mois": debut.isoformat(),
-        "prix_aliment_sac": str(PRIX_ALIMENT_SAC_FCFA),
+        "prix_aliment_sac_defaut": str(PRIX_ALIMENT_SAC_FCFA),
         "fermes": donnees,
         "total": {k: str(v.quantize(Decimal("1"))) for k, v in total.items()},
     })

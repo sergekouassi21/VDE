@@ -52,6 +52,10 @@ export const getFactures = () => api.get("/factures/").then((r) => r.data);
 export const creerFacture = (payload) => api.post("/factures/", payload).then((r) => r.data);
 export const encaisserVersement = (factureId, payload) =>
   api.post(`/factures/${factureId}/encaisser/`, payload).then((r) => r.data);
+export const getFournisseurs = () => api.get("/fournisseurs/").then((r) => r.data);
+export const getCommandesAliment = (params) => api.get("/commandes-aliment/", { params }).then((r) => r.data);
+export const creerCommandeAliment = (payload) => api.post("/commandes-aliment/", payload).then((r) => r.data);
+export const supprimerCommandeAliment = (id) => api.delete(`/commandes-aliment/${id}/`);
 
 // --- Pointage des employés (heures de travail) ---
 export const getEmployes = (params) => api.get("/pointage/employes/", { params }).then((r) => r.data);

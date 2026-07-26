@@ -39,11 +39,6 @@ export default function Rentabilite() {
             Mois
             <input type="month" style={styles.date} value={mois} onChange={(e) => setMois(e.target.value)} />
           </label>
-          {donnees && (
-            <span style={styles.hint}>
-              Aliment valorisé à {fcfa(donnees.prix_aliment_sac)}/sac
-            </span>
-          )}
         </div>
 
         <section style={styles.card}>
@@ -70,7 +65,10 @@ export default function Rentabilite() {
                       <tr key={f.ferme_id}>
                         <td style={styles.td}>{f.ferme_nom}</td>
                         <td style={{ ...styles.td, textAlign: "right" }}>{fcfa(f.revenus)}</td>
-                        <td style={{ ...styles.td, textAlign: "right", color: CLAY }}>−{fcfa(f.cout_aliment)}</td>
+                        <td style={{ ...styles.td, textAlign: "right", color: CLAY }}>
+                          −{fcfa(f.cout_aliment)}
+                          {f.prix_sac != null && <div style={styles.prixSacHint}>{fcfa(f.prix_sac)}/sac</div>}
+                        </td>
                         <td style={{ ...styles.td, textAlign: "right", color: CLAY }}>−{fcfa(f.cout_paie)}</td>
                         <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: positive ? GREEN_DARK : CLAY, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
                           {positive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
@@ -97,8 +95,9 @@ export default function Rentabilite() {
         </section>
 
         <p style={styles.note}>
-          Revenus : lignes de facture émises sur le mois. Coût paie : pointages + absences justifiées + frais/primes/avances/retenues du mois,
-          réparti à parts égales entre les fermes d'un employé qui en couvre plusieurs.
+          Revenus : lignes de facture émises sur le mois. Coût aliment : valorisé au prix moyen réel des commandes du magasin
+          (cf. page Achats d'aliment), ou {fcfa(donnees?.prix_aliment_sac_defaut)}/sac par défaut si aucune commande n'est encore enregistrée.
+          Coût paie : pointages + absences justifiées + frais/primes/avances/retenues du mois, réparti à parts égales entre les fermes d'un employé qui en couvre plusieurs.
         </p>
       </div>
     </div>
@@ -115,6 +114,7 @@ const styles = {
   dateLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "#7A857F" },
   date: { padding: "8px 10px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
   hint: { fontSize: 12.5, color: "#8A948D" },
+  prixSacHint: { fontSize: 11, color: "#8A948D", fontWeight: 400 },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
   empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
   tableWrap: { overflowX: "auto" },
