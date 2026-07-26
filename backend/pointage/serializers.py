@@ -30,6 +30,16 @@ class PointageSerializer(serializers.ModelSerializer):
         ]
 
 
+class CorrigerPointageSerializer(serializers.Serializer):
+    """Ce que Direction/Admin peut corriger sur un pointage existant — les
+    heures travaillées/montant sont toujours recalculés côté serveur,
+    jamais acceptés en entrée."""
+
+    date = serializers.DateField(required=False)
+    heure_debut = serializers.DateTimeField(required=False, allow_null=True)
+    heure_fin = serializers.DateTimeField(required=False, allow_null=True)
+
+
 class ScanEmployeSerializer(serializers.ModelSerializer):
     """Réponse publique renvoyée à l'écran de scan — uniquement ce qui est
     nécessaire pour identifier visuellement l'employé, jamais le taux

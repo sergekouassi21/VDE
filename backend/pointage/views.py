@@ -1,3 +1,4 @@
+from decimal import Decimal
 from io import BytesIO
 
 import qrcode
@@ -15,7 +16,7 @@ from rest_framework.response import Response
 from exploitation.models import RoleUtilisateur
 
 from .models import Employe, Pointage
-from .serializers import EmployeSerializer, PointageSerializer, ScanEmployeSerializer
+from .serializers import CorrigerPointageSerializer, EmployeSerializer, PointageSerializer, ScanEmployeSerializer
 
 
 class EstDirectionOuAdmin(BasePermission):
@@ -68,13 +69,14 @@ class EmployeViewSet(viewsets.ModelViewSet):
             )
 
 
-class PointageViewSet(viewsets.ReadOnlyModelViewSet):
-    """Historique consultable par Direction/Admin uniquement, filtrable par
-    ferme/employé/période — même schéma de filtrage que l'Historique des
-    points journaliers."""
+class PointageViewSet(viewsets.ModelViewSet):
+    """Historique consultable, corrigeable et supprimable par Direction/
+    Admin uniquement, filtrable par ferme/employé/période — même schéma de
+    filtrage que l'Historique des points journaliers."""
 
     serializer_class = PointageSerializer
     permission_classes = [EstDirectionOuAdmin]
+    http_method_names = ["get", "patch", "delete"]
 
     def get_queryset(self):
         qs = Pointage.objects.select_related("employe__ferme").all()
@@ -96,6 +98,47 @@ class PointageViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(date__lte=date_fin)
 
         return qs.order_by("-date")
+
+    def partial_update(self, request, *args, **kwargs):
+        # Corrige une heure d'arrivée/de départ saisie de travers (oubli de
+        # scan, erreur) — les heures travaillées et le montant sont
+        # recalculés dès que les deux heures sont connues, sinon remis à 0
+        # (ex: on efface l'heure de fin par erreur, ça redevient "en cours").
+        pointage = self.get_object()
+        serializer = CorrigerPointageSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        donnees = serializer.validated_data
+
+        nouvelle_date = donnees.get("date")
+        if nouvelle_date and nouvelle_date != pointage.date:
+            if Pointage.objects.filter(employe=pointage.employe, date=nouvelle_date).exclude(id=pointage.id).exists():
+                return Response(
+                    {"detail": "Un pointage existe déjà à cette date pour cet employé."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            pointage.date = nouvelle_date
+
+        if "heure_debut" in donnees:
+            pointage.heure_debut = donnees["heure_debut"]
+        if "heure_fin" in donnees:
+            pointage.heure_fin = donnees["heure_fin"]
+
+        if pointage.heure_debut and pointage.heure_fin and pointage.heure_fin <= pointage.heure_debut:
+            return Response(
+                {"detail": "Le départ doit être après l'arrivée."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if pointage.heure_debut and pointage.heure_fin:
+            duree = pointage.heure_fin - pointage.heure_debut
+            pointage.heures_travaillees = (Decimal(duree.total_seconds()) / Decimal(3600)).quantize(Decimal("0.01"))
+            pointage.montant_du_jour = (pointage.heures_travaillees * pointage.employe.taux_horaire).quantize(Decimal("0.01"))
+        else:
+            pointage.heures_travaillees = Decimal("0.00")
+            pointage.montant_du_jour = Decimal("0.00")
+
+        pointage.save()
+        return Response(PointageSerializer(pointage).data)
 
 
 def _etat_pointage(request, employe):
