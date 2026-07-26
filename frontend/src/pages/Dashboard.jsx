@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
-import { Egg, TrendingUp, AlertTriangle, Skull, Package, ChevronRight, Activity } from "lucide-react";
+import { Egg, TrendingUp, AlertTriangle, Skull, Package, ChevronRight, Activity, Wheat, Droplet } from "lucide-react";
 import { getDashboard } from "../api/client";
-import { GREEN, GREEN_DARK, INK, formatSacs, formatColis, AGE_REFORME_SEMAINES } from "../theme";
+import { GREEN, GREEN_DARK, INK, formatSacs, formatColis, AGE_REFORME_SEMAINES, KG_PAR_SAC } from "../theme";
 
 const nf = (v) => (v ?? 0).toLocaleString("fr-FR");
 
@@ -24,13 +24,49 @@ export default function Dashboard() {
   const tauxPonte = (f) => (f.dernier_point ? Number(f.dernier_point.taux_ponte) : 0);
   const effectifActuel = (f) => (f.bande_active ? f.bande_active.effectif_actuel : 0);
 
+  // Ratios avicoles standards (par sujet, pas en valeur brute) — le "mois"
+  // est une moyenne journalière sur les jours effectivement saisis ce
+  // mois-ci, pas un cumul (sinon pas comparable au jour).
+  const alimentGrammesJour = (f) => Number(f.dernier_point?.conso_aliment_sacs || 0) * KG_PAR_SAC * 1000;
+  const eauLitresJour = (f) => Number(f.dernier_point?.eau_consommee_litres || 0);
+  const ratioAlimentJour = (f) => { const e = effectifActuel(f); return e > 0 ? alimentGrammesJour(f) / e : 0; };
+  const ratioEauJour = (f) => { const e = effectifActuel(f); return e > 0 ? eauLitresJour(f) / e : 0; };
+  const ratioAlimentMois = (f) => {
+    const e = effectifActuel(f), j = f.mois?.jours || 0;
+    return e > 0 && j > 0 ? (Number(f.mois?.conso_aliment_sacs || 0) * KG_PAR_SAC * 1000) / j / e : 0;
+  };
+  const ratioEauMois = (f) => {
+    const e = effectifActuel(f), j = f.mois?.jours || 0;
+    return e > 0 && j > 0 ? Number(f.mois?.eau_consommee_litres || 0) / j / e : 0;
+  };
+
   const kpi = useMemo(() => {
     const effectif = pondeuses.reduce((s, f) => s + effectifActuel(f), 0);
     const prod = pondeuses.reduce((s, f) => s + (f.dernier_point?.production_oeufs || 0), 0);
+    const prodMois = pondeuses.reduce((s, f) => s + (f.mois?.production_oeufs || 0), 0);
     const morts = actives.reduce((s, f) => s + (f.dernier_point?.morts || 0), 0);
+    const mortsMois = actives.reduce((s, f) => s + (f.mois?.morts || 0), 0);
     const stockOeuf = pondeuses.reduce((s, f) => s + (f.bande_active?.stock_oeuf_actuel || 0), 0);
     const tauxMoyen = effectif > 0 ? (prod / effectif) * 100 : 0;
-    return { effectif, prod, morts, stockOeuf, tauxMoyen };
+
+    const effectifTous = actives.reduce((s, f) => s + effectifActuel(f), 0);
+    const rAlimentJour = effectifTous > 0 ? actives.reduce((s, f) => s + alimentGrammesJour(f), 0) / effectifTous : 0;
+    const rEauJour = effectifTous > 0 ? actives.reduce((s, f) => s + eauLitresJour(f), 0) / effectifTous : 0;
+
+    // Moyenne pondérée par "poule-jours" cumulés (chaque ferme peut avoir
+    // un nombre de jours saisis différent ce mois-ci).
+    let pouleJours = 0, alimentMois = 0, eauMois = 0;
+    actives.forEach((f) => {
+      const e = effectifActuel(f), j = f.mois?.jours || 0;
+      if (!e || !j) return;
+      pouleJours += e * j;
+      alimentMois += Number(f.mois?.conso_aliment_sacs || 0) * KG_PAR_SAC * 1000;
+      eauMois += Number(f.mois?.eau_consommee_litres || 0);
+    });
+    const rAlimentMois = pouleJours > 0 ? alimentMois / pouleJours : 0;
+    const rEauMois = pouleJours > 0 ? eauMois / pouleJours : 0;
+
+    return { effectif, prod, prodMois, morts, mortsMois, stockOeuf, tauxMoyen, rAlimentJour, rAlimentMois, rEauJour, rEauMois };
   }, [actives, pondeuses]);
 
   const alertes = useMemo(() => {
@@ -77,10 +113,12 @@ export default function Dashboard() {
 
         <div style={styles.kpiRow}>
           <Kpi icon={<Activity size={16} />} label="Taux de ponte moyen" value={`${kpi.tauxMoyen.toFixed(1)} %`} accent />
-          <Kpi icon={<Egg size={16} />} label="Production du jour" value={nf(kpi.prod)} sub="œufs" />
+          <Kpi icon={<Egg size={16} />} label="Production" value={nf(kpi.prod)} sub="œufs/jour" mois={`${nf(kpi.prodMois)} œufs ce mois`} />
           <Kpi icon={<TrendingUp size={16} />} label="Effectif pondeuses" value={nf(kpi.effectif)} sub="sujets" />
-          <Kpi icon={<Skull size={16} />} label="Mortalité du jour" value={nf(kpi.morts)} sub="sujets" />
+          <Kpi icon={<Skull size={16} />} label="Mortalité" value={nf(kpi.morts)} sub="sujets/jour" mois={`${nf(kpi.mortsMois)} sujets ce mois`} />
           <Kpi icon={<Package size={16} />} label="Stock œufs total" value={nf(kpi.stockOeuf)} sub="œufs" />
+          <Kpi icon={<Wheat size={16} />} label="Aliment / poule" value={`${nf(Math.round(kpi.rAlimentJour))} g/j`} mois={`${nf(Math.round(kpi.rAlimentMois))} g/j moy. ce mois`} />
+          <Kpi icon={<Droplet size={16} />} label="Eau / poule" value={`${kpi.rEauJour.toFixed(2)} L/j`} mois={`${kpi.rEauMois.toFixed(2)} L/j moy. ce mois`} />
         </div>
 
         <div style={styles.kpiFermeGrid}>
@@ -100,6 +138,7 @@ export default function Dashboard() {
                     <div style={styles.kpiFermeStat}>
                       <span style={styles.kpiFermeLabel}>Production</span>
                       <span style={styles.kpiFermeValeur}>{nf(f.dernier_point?.production_oeufs || 0)}</span>
+                      <span style={styles.kpiFermeMois}>{nf(f.mois?.production_oeufs || 0)} ce mois</span>
                     </div>
                   )}
                   <div style={styles.kpiFermeStat}>
@@ -109,6 +148,7 @@ export default function Dashboard() {
                   <div style={styles.kpiFermeStat}>
                     <span style={styles.kpiFermeLabel}>Mortalité</span>
                     <span style={{ ...styles.kpiFermeValeur, color: (f.dernier_point?.morts || 0) > 5 ? "#9E4527" : INK }}>{nf(f.dernier_point?.morts || 0)}</span>
+                    <span style={styles.kpiFermeMois}>{nf(f.mois?.morts || 0)} ce mois</span>
                   </div>
                   {f.type === "PONTE" && (
                     <div style={styles.kpiFermeStat}>
@@ -116,6 +156,16 @@ export default function Dashboard() {
                       <span style={styles.kpiFermeValeur}>{nf(f.bande_active?.stock_oeuf_actuel || 0)}</span>
                     </div>
                   )}
+                  <div style={styles.kpiFermeStat}>
+                    <span style={styles.kpiFermeLabel}>Aliment/poule</span>
+                    <span style={styles.kpiFermeValeur}>{nf(Math.round(ratioAlimentJour(f)))} g/j</span>
+                    <span style={styles.kpiFermeMois}>{nf(Math.round(ratioAlimentMois(f)))} g/j moy. mois</span>
+                  </div>
+                  <div style={styles.kpiFermeStat}>
+                    <span style={styles.kpiFermeLabel}>Eau/poule</span>
+                    <span style={styles.kpiFermeValeur}>{ratioEauJour(f).toFixed(2)} L/j</span>
+                    <span style={styles.kpiFermeMois}>{ratioEauMois(f).toFixed(2)} L/j moy. mois</span>
+                  </div>
                 </div>
               </div>
             );
@@ -203,12 +253,13 @@ export default function Dashboard() {
   );
 }
 
-function Kpi({ icon, label, value, sub, accent }) {
+function Kpi({ icon, label, value, sub, accent, mois }) {
   return (
     <div style={{ ...styles.kpi, ...(accent ? styles.kpiAccent : {}) }}>
       <div style={{ ...styles.kpiIcon, ...(accent ? { background: "rgba(255,255,255,.2)" } : {}) }}>{icon}</div>
       <div style={styles.kpiVal}>{value} {sub && <span style={styles.kpiSub}>{sub}</span>}</div>
       <div style={styles.kpiLabel}>{label}</div>
+      {mois && <div style={{ ...styles.kpiMois, ...(accent ? { color: "rgba(255,255,255,.75)" } : {}) }}>{mois}</div>}
     </div>
   );
 }
@@ -224,13 +275,14 @@ const styles = {
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 30, fontWeight: 700, margin: 0, letterSpacing: -.5 },
   date: { fontSize: 13, color: "#7A857F", textTransform: "capitalize" },
-  kpiRow: { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 18 },
+  kpiRow: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 18 },
   kpi: { background: "#fff", borderRadius: 14, padding: "14px 16px", border: "1px solid #ECE9DF" },
   kpiAccent: { background: `linear-gradient(150deg, ${GREEN}, ${GREEN_DARK})`, color: "#fff", border: "none" },
   kpiIcon: { width: 30, height: 30, borderRadius: 8, background: "#EAF3EE", display: "flex", alignItems: "center", justifyContent: "center", color: GREEN, marginBottom: 9 },
   kpiVal: { fontSize: 22, fontWeight: 700 },
   kpiSub: { fontSize: 12, fontWeight: 400, opacity: .7 },
   kpiLabel: { fontSize: 11.5, opacity: .78, marginTop: 2 },
+  kpiMois: { fontSize: 10.5, opacity: .65, marginTop: 4, borderTop: "1px solid rgba(0,0,0,.06)", paddingTop: 4 },
   kpiFermeGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12, marginBottom: 18 },
   kpiFermeCard: { background: "#fff", borderRadius: 14, padding: "13px 15px", border: "1px solid #ECE9DF" },
   kpiFermeNom: { fontSize: 13.5, fontWeight: 700, color: GREEN_DARK, marginBottom: 8 },
@@ -238,6 +290,7 @@ const styles = {
   kpiFermeStat: { display: "flex", flexDirection: "column", gap: 1, minWidth: 60 },
   kpiFermeLabel: { fontSize: 10, color: "#8A948D", textTransform: "uppercase", letterSpacing: .3 },
   kpiFermeValeur: { fontSize: 15, fontWeight: 700, color: INK },
+  kpiFermeMois: { fontSize: 9.5, color: "#8A948D" },
   grid: { display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 16 },
   col: { display: "flex", flexDirection: "column", gap: 16 },
   card: { background: "#fff", borderRadius: 16, padding: "16px 18px", border: "1px solid #ECE9DF" },
