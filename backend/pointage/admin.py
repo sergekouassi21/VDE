@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Absence, BadgeTemporaire, Employe, LignePaie, Pointage
+from .models import Absence, BadgeAbsence, BadgeTemporaire, Employe, LignePaie, Pointage
 
 
 @admin.register(Employe)
@@ -20,8 +20,8 @@ class PointageAdmin(admin.ModelAdmin):
 
 @admin.register(Absence)
 class AbsenceAdmin(admin.ModelAdmin):
-    list_display = ["employe", "date", "motif"]
-    list_filter = ["employe__fermes", "date"]
+    list_display = ["employe", "date", "motif", "statut"]
+    list_filter = ["employe__fermes", "date", "statut"]
 
 
 @admin.register(LignePaie)
@@ -32,5 +32,11 @@ class LignePaieAdmin(admin.ModelAdmin):
 
 @admin.register(BadgeTemporaire)
 class BadgeTemporaireAdmin(admin.ModelAdmin):
+    list_display = ["token", "cree_le"]
+    readonly_fields = ["token", "cree_le"]
+
+
+@admin.register(BadgeAbsence)
+class BadgeAbsenceAdmin(admin.ModelAdmin):
     list_display = ["token", "cree_le"]
     readonly_fields = ["token", "cree_le"]

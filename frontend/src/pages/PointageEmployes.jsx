@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { QrCode, Plus, X, Download, UserX, UserCheck, Pencil, Trash2, LifeBuoy } from "lucide-react";
-import { getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye, getQrEmployeBlob, getUtilisateursDisponibles, getQrBadgeTemporaireBlob } from "../api/client";
+import { QrCode, Plus, X, Download, UserX, UserCheck, Pencil, Trash2, LifeBuoy, CalendarX } from "lucide-react";
+import { getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye, getQrEmployeBlob, getUtilisateursDisponibles, getQrBadgeTemporaireBlob, getQrBadgeAbsenceBlob } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 
 const LABEL_ROLE = { CHEF_FERME: "Chef de ferme", SOUS_CHEF_FERME: "Sous-chef de ferme", SUPERVISEUR: "Superviseur", OUVRIER: "Volailler", GARDIEN: "Gardien" };
@@ -117,6 +117,13 @@ export default function PointageEmployes() {
     setQrUrl(url);
   }
 
+  async function voirBadgeAbsence() {
+    setQrOuvert({ nom: "Badge absence", fermes_noms: "Signalement d'absence — tous les employés", absence: true });
+    setQrUrl("");
+    const url = await getQrBadgeAbsenceBlob();
+    setQrUrl(url);
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.wrap}>
@@ -135,6 +142,9 @@ export default function PointageEmployes() {
           </button>
           <button style={styles.secoursBtn} onClick={voirBadgeTemporaire}>
             <LifeBuoy size={16} /> Badge temporaire
+          </button>
+          <button style={styles.secoursBtn} onClick={voirBadgeAbsence}>
+            <CalendarX size={16} /> Badge absence
           </button>
         </div>
 
@@ -233,7 +243,7 @@ export default function PointageEmployes() {
             {qrUrl ? (
               <>
                 <img src={qrUrl} alt="QR code" style={styles.qrImage} />
-                <a href={qrUrl} download={`${qrOuvert.temporaire ? "badge-temporaire" : "qr-" + qrOuvert.nom.replace(/\s+/g, "-")}.png`} style={styles.downloadBtn}>
+                <a href={qrUrl} download={`${qrOuvert.temporaire ? "badge-temporaire" : qrOuvert.absence ? "badge-absence" : "qr-" + qrOuvert.nom.replace(/\s+/g, "-")}.png`} style={styles.downloadBtn}>
                   <Download size={15} /> Télécharger le badge
                 </a>
               </>

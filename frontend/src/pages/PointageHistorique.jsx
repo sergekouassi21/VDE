@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Pencil, Trash2, X, Download, FileText, UserMinus, Wallet } from "lucide-react";
+import { Pencil, Trash2, X, Download, FileText, UserMinus, Wallet, Check, Ban } from "lucide-react";
 import {
   getFermes, getEmployes, getPointages, corrigerPointage, supprimerPointage,
-  getAbsences, declarerAbsence, supprimerAbsence, getLignesPaie, enregistrerLignePaie,
+  getAbsences, declarerAbsence, supprimerAbsence, validerAbsence, rejeterAbsence, getLignesPaie, enregistrerLignePaie,
 } from "../api/client";
 import { genererFichePaie, telechargerPdf } from "../utils/pdf";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
@@ -128,13 +128,17 @@ export default function PointageHistorique() {
     for (const a of absences) {
       const g = parEmploye.get(a.employe);
       if (!g) continue;
-      const montantJour = g.salaireMensuel / 26;
-      g.absencesJustifiees.push({ ...a, montant: montantJour });
-      g.totalMontant += montantJour;
+      if (a.statut === "VALIDEE") {
+        const montantJour = g.salaireMensuel / 26;
+        g.absencesJustifiees.push({ ...a, montant: montantJour });
+        g.totalMontant += montantJour;
+      }
     }
     if (dateDebut && dateFin) {
       const pointagesFaits = new Set(pointages.filter((p) => p.heure_fin).map((p) => `${p.employe}_${p.date}`));
-      const absencesDeclarees = new Set(absences.map((a) => `${a.employe}_${a.date}`));
+      // Une absence rejetée reste une absence non payée : on ne l'exclut PAS
+      // de la détection des trous, pour qu'elle ressorte comme injustifiée.
+      const absencesDeclarees = new Set(absences.filter((a) => a.statut !== "REJETEE").map((a) => `${a.employe}_${a.date}`));
       const debut = parseISO(dateDebut);
       const fin = parseISO(dateFin);
       const aujourdhui = new Date();
@@ -270,6 +274,17 @@ export default function PointageHistorique() {
     rafraichir();
   }
 
+  async function validerAbs(a) {
+    await validerAbsence(a.id);
+    rafraichir();
+  }
+
+  async function rejeterAbs(a) {
+    if (!window.confirm(`Rejeter l'absence signalée de ${a.employe_nom} du ${new Date(a.date).toLocaleDateString("fr-FR")} ? Elle ne sera pas payée.`)) return;
+    await rejeterAbsence(a.id);
+    rafraichir();
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.wrap}>
@@ -385,13 +400,41 @@ export default function PointageHistorique() {
           </section>
         )}
 
-        {absences.length > 0 && (
+        {absences.some((a) => a.statut === "EN_ATTENTE") && (
           <section style={{ ...styles.card, marginBottom: 16 }}>
-            <div style={styles.resumeHead}><span>Absences justifiées déclarées</span></div>
+            <div style={styles.resumeHead}><span>Absences signalées en attente de validation</span></div>
             <div style={styles.tableWrap}>
               <table style={styles.table}>
                 <tbody>
-                  {absences.map((a) => (
+                  {absences.filter((a) => a.statut === "EN_ATTENTE").map((a) => (
+                    <tr key={a.id}>
+                      <td style={styles.td}>{new Date(a.date).toLocaleDateString("fr-FR")}</td>
+                      <td style={styles.td}>{a.employe_nom}</td>
+                      <td style={styles.td}>{a.ferme_nom}</td>
+                      <td style={{ ...styles.td, color: "#6B756E" }}>{a.motif || "—"}</td>
+                      <td style={{ ...styles.td, display: "flex", gap: 8 }}>
+                        <button style={{ ...styles.iconBtn, color: GREEN }} onClick={() => validerAbs(a)} title="Valider (payée)">
+                          <Check size={14} />
+                        </button>
+                        <button style={{ ...styles.iconBtn, color: CLAY }} onClick={() => rejeterAbs(a)} title="Rejeter (non payée)">
+                          <Ban size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {absences.some((a) => a.statut === "VALIDEE") && (
+          <section style={{ ...styles.card, marginBottom: 16 }}>
+            <div style={styles.resumeHead}><span>Absences justifiées (payées)</span></div>
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <tbody>
+                  {absences.filter((a) => a.statut === "VALIDEE").map((a) => (
                     <tr key={a.id}>
                       <td style={styles.td}>{new Date(a.date).toLocaleDateString("fr-FR")}</td>
                       <td style={styles.td}>{a.employe_nom}</td>

@@ -101,17 +101,32 @@ class Pointage(models.Model):
         self.save(update_fields=["heure_fin", "heures_travaillees", "montant_du_jour"])
 
 
+class StatutAbsence(models.TextChoices):
+    EN_ATTENTE = "EN_ATTENTE", "En attente de validation"
+    VALIDEE = "VALIDEE", "Validée (payée)"
+    REJETEE = "REJETEE", "Rejetée (non payée)"
+
+
 class Absence(models.Model):
-    """Une absence déclarée après coup par Direction/Admin — sert
-    uniquement à marquer une absence comme JUSTIFIÉE (payée comme une
-    journée complète, cf. Employe.salaire_journalier). Une journée ouvrée
-    sans Pointage et sans Absence n'a besoin d'aucun enregistrement : elle
-    est automatiquement considérée comme une absence injustifiée (non
-    payée) au moment de générer le résumé/la fiche de paie."""
+    """Une absence pour un employé. Deux façons d'en créer une :
+
+    1. Direction/Admin la déclare directement depuis l'appli — validée
+       (payée) immédiatement, pas de revue nécessaire puisqu'ils sont
+       eux-mêmes l'autorité de validation.
+    2. Un superviseur la signale sur le terrain via le badge dédié (motif
+       obligatoire) — reste EN_ATTENTE jusqu'à ce que Direction/Admin la
+       valide (payée comme une journée complète, cf.
+       Employe.salaire_journalier) ou la rejette (non payée).
+
+    Une journée ouvrée sans Pointage et sans Absence (validée ou en
+    attente) n'a besoin d'aucun enregistrement : elle est automatiquement
+    considérée comme une absence injustifiée (non payée) au moment de
+    générer le résumé/la fiche de paie."""
 
     employe = models.ForeignKey(Employe, on_delete=models.CASCADE, related_name="absences")
     date = models.DateField()
     motif = models.CharField(max_length=255, blank=True)
+    statut = models.CharField(max_length=10, choices=StatutAbsence.choices, default=StatutAbsence.VALIDEE)
 
     class Meta:
         constraints = [
@@ -120,7 +135,7 @@ class Absence(models.Model):
         ordering = ["-date"]
 
     def __str__(self):
-        return f"Absence justifiée — {self.employe.nom} — {self.date}"
+        return f"Absence ({self.get_statut_display()}) — {self.employe.nom} — {self.date}"
 
 
 class ModePaiementPointage(models.TextChoices):
@@ -181,3 +196,16 @@ class BadgeTemporaire(models.Model):
 
     def __str__(self):
         return f"Badge temporaire ({self.token})"
+
+
+class BadgeAbsence(models.Model):
+    """Badge partagé distinct du badge de secours, pour qu'un superviseur
+    signale sur le terrain l'absence d'un employé avec un motif — la
+    déclaration reste EN_ATTENTE jusqu'à validation par Direction/Admin
+    (cf. Absence.statut)."""
+
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    cree_le = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Badge absence ({self.token})"

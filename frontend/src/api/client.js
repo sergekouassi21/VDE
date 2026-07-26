@@ -70,6 +70,10 @@ export const supprimerPointage = (id) => api.delete(`/pointage/historique/${id}/
 export const getAbsences = (params) => api.get("/pointage/absences/", { params }).then((r) => r.data);
 export const declarerAbsence = (payload) => api.post("/pointage/absences/", payload).then((r) => r.data);
 export const supprimerAbsence = (id) => api.delete(`/pointage/absences/${id}/`);
+export const validerAbsence = (id) => api.post(`/pointage/absences/${id}/valider/`).then((r) => r.data);
+export const rejeterAbsence = (id) => api.post(`/pointage/absences/${id}/rejeter/`).then((r) => r.data);
+export const getQrBadgeAbsenceBlob = () =>
+  api.get("/pointage/badge-absence/qr/", { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
 export const getLignesPaie = (params) => api.get("/pointage/lignes-paie/", { params }).then((r) => r.data);
 export const enregistrerLignePaie = (payload) => api.post("/pointage/lignes-paie/", payload).then((r) => r.data);
 export const getQrBadgeTemporaireBlob = () =>
@@ -86,3 +90,9 @@ export const getEmployesBadgeTemporaire = (token, params) =>
   scanApi.get(`/pointage/badge-temporaire/${token}/employes/`, { params }).then((r) => r.data);
 export const validerBadgeTemporaire = (token, employeId) =>
   scanApi.post(`/pointage/badge-temporaire/${token}/employes/${employeId}/valider/`).then((r) => r.data);
+
+// Badge absence (signalement par un superviseur) — public, pas de compte.
+export const getEmployesBadgeAbsence = (token, params) =>
+  scanApi.get(`/pointage/badge-absence/${token}/employes/`, { params }).then((r) => r.data);
+export const declarerBadgeAbsence = (token, payload) =>
+  scanApi.post(`/pointage/badge-absence/${token}/declarer/`, payload).then((r) => r.data);

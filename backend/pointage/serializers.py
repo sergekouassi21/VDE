@@ -81,7 +81,7 @@ class AbsenceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Absence
-        fields = ["id", "employe", "employe_nom", "ferme_nom", "date", "motif"]
+        fields = ["id", "employe", "employe_nom", "ferme_nom", "date", "motif", "statut"]
 
     def get_ferme_nom(self, obj):
         return _noms_fermes(obj.employe)

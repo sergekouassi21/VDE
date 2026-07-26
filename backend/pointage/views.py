@@ -17,7 +17,7 @@ from rest_framework.response import Response
 
 from exploitation.models import RoleUtilisateur
 
-from .models import Absence, BadgeTemporaire, Employe, LignePaie, Pointage
+from .models import Absence, BadgeAbsence, BadgeTemporaire, Employe, LignePaie, Pointage, StatutAbsence
 from .serializers import (
     AbsenceSerializer,
     CorrigerPointageSerializer,
@@ -222,6 +222,24 @@ class AbsenceViewSet(viewsets.ModelViewSet):
             )
         return super().create(request, *args, **kwargs)
 
+    @action(detail=True, methods=["post"], url_path="valider")
+    def valider(self, request, pk=None):
+        """Approuve une absence signalée par un superviseur (badge dédié) —
+        devient payée comme une journée complète."""
+        absence = self.get_object()
+        absence.statut = StatutAbsence.VALIDEE
+        absence.save(update_fields=["statut"])
+        return Response(AbsenceSerializer(absence).data)
+
+    @action(detail=True, methods=["post"], url_path="rejeter")
+    def rejeter(self, request, pk=None):
+        """Rejette une absence signalée par un superviseur — reste non
+        payée, mais gardée en trace (contrairement à une suppression)."""
+        absence = self.get_object()
+        absence.statut = StatutAbsence.REJETEE
+        absence.save(update_fields=["statut"])
+        return Response(AbsenceSerializer(absence).data)
+
 
 class LignePaieViewSet(viewsets.ModelViewSet):
     """Ajustements de paie du mois (frais, primes, avances, retenues,
@@ -375,3 +393,59 @@ def badge_temporaire_valider(request, token, employe_id):
     elif not pointage.heure_fin:
         pointage.valider_fin()
     return Response(_etat_pointage(request, employe))
+
+
+@api_view(["GET"])
+@permission_classes([EstDirectionOuAdmin])
+def badge_absence_qr(request):
+    """Image PNG du badge dédié aux signalements d'absence (distinct du
+    badge de secours pointage) — réservée à Direction/Admin."""
+    badge = BadgeAbsence.objects.first() or BadgeAbsence.objects.create()
+    url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/absence/{badge.token}"
+    return HttpResponse(_composer_badge(url, "Badge absence"), content_type="image/png")
+
+
+@api_view(["GET"])
+@permission_classes([])
+def badge_absence_employes(request, token):
+    """Public — liste des employés actifs pour que le superviseur choisisse
+    qui est absent avant de saisir le motif."""
+    get_object_or_404(BadgeAbsence, token=token)
+    ferme_id = request.query_params.get("ferme")
+    employes = Employe.objects.filter(actif=True).prefetch_related("fermes")
+    if ferme_id:
+        employes = employes.filter(fermes=ferme_id).distinct()
+    return Response([
+        {"id": e.id, "nom": e.nom, "ferme_nom": ", ".join(e.fermes.values_list("nom", flat=True))}
+        for e in employes.order_by("nom")
+    ])
+
+
+@api_view(["POST"])
+@permission_classes([])
+def badge_absence_declarer(request, token):
+    """Public — le superviseur signale l'absence d'un employé avec un
+    motif obligatoire. Reste EN_ATTENTE jusqu'à validation par
+    Direction/Admin (payée si validée, pas payée sinon) — mêmes règles de
+    conflit que la déclaration directe (AbsenceViewSet.create)."""
+    get_object_or_404(BadgeAbsence, token=token)
+    employe_id = request.data.get("employe")
+    date = request.data.get("date")
+    motif = (request.data.get("motif") or "").strip()
+    if not employe_id or not date:
+        return Response({"detail": "Employé et date requis."}, status=status.HTTP_400_BAD_REQUEST)
+    if not motif:
+        return Response({"detail": "Le motif est obligatoire."}, status=status.HTTP_400_BAD_REQUEST)
+    employe = get_object_or_404(Employe, id=employe_id, actif=True)
+    if Pointage.objects.filter(employe=employe, date=date).exists():
+        return Response(
+            {"detail": "Cet employé a déjà un pointage à cette date — ce n'est pas une absence."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if Absence.objects.filter(employe=employe, date=date).exists():
+        return Response(
+            {"detail": "Une absence est déjà déclarée à cette date pour cet employé."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    absence = Absence.objects.create(employe=employe, date=date, motif=motif, statut=StatutAbsence.EN_ATTENTE)
+    return Response(AbsenceSerializer(absence).data, status=status.HTTP_201_CREATED)
