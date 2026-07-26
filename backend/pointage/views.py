@@ -2,6 +2,7 @@ from decimal import Decimal
 from io import BytesIO
 
 import qrcode
+from PIL import Image, ImageDraw, ImageFont
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import ProtectedError
@@ -54,16 +55,28 @@ class EmployeViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"], url_path="qr")
     def qr(self, request, pk=None):
-        """Image PNG du QR à imprimer sur le badge de l'employé — encode le
-        nom de l'employé suivi de l'URL publique de scan (sur des lignes
-        séparées), pour que le nom reste lisible par n'importe quel lecteur
-        QR générique, tout en laissant la caméra des téléphones reconnaître
-        et proposer d'ouvrir l'URL."""
+        """Image PNG du badge de l'employé : le QR encode uniquement l'URL
+        (essentiel pour que la caméra du téléphone l'ouvre directement au
+        scan — un QR mêlant nom + URL empêche l'ouverture automatique sur
+        beaucoup d'appareils), avec le nom écrit en texte lisible sous
+        l'image, comme sur une carte d'identité classique."""
         employe = self.get_object()
         url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/{employe.qr_token}"
-        image = qrcode.make(f"{employe.nom}\n{url}")
+        qr_image = qrcode.make(url).convert("RGB")
+
+        largeur, hauteur_qr = qr_image.size
+        marge, hauteur_texte = 12, 40
+        badge = Image.new("RGB", (largeur, hauteur_qr + marge + hauteur_texte), "white")
+        badge.paste(qr_image, (0, 0))
+
+        dessin = ImageDraw.Draw(badge)
+        police = ImageFont.load_default(size=24)
+        boite = dessin.textbbox((0, 0), employe.nom, font=police)
+        x = max((largeur - (boite[2] - boite[0])) // 2, 0)
+        dessin.text((x, hauteur_qr + marge // 2), employe.nom, fill="black", font=police)
+
         buffer = BytesIO()
-        image.save(buffer, format="PNG")
+        badge.save(buffer, format="PNG")
         return HttpResponse(buffer.getvalue(), content_type="image/png")
 
     def destroy(self, request, *args, **kwargs):
