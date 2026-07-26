@@ -165,3 +165,19 @@ class LignePaie(models.Model):
 
     def __str__(self):
         return f"Paie {self.employe.nom} — {self.mois:%Y-%m}"
+
+
+class BadgeTemporaire(models.Model):
+    """Badge de secours partagé (imprimé une seule fois, gardé par le
+    superviseur/chef de ferme) pour le cas où un employé a oublié ou perdu
+    son badge personnel. Scanner ce badge ouvre une liste de tous les
+    employés actifs, dans laquelle on choisit manuellement la bonne
+    personne au lieu d'identifier directement un seul employé comme pour
+    un badge normal. Le token joue le même rôle de clé d'accès non
+    devinable que Employe.qr_token."""
+
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    cree_le = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Badge temporaire ({self.token})"

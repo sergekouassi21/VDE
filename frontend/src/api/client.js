@@ -72,9 +72,17 @@ export const declarerAbsence = (payload) => api.post("/pointage/absences/", payl
 export const supprimerAbsence = (id) => api.delete(`/pointage/absences/${id}/`);
 export const getLignesPaie = (params) => api.get("/pointage/lignes-paie/", { params }).then((r) => r.data);
 export const enregistrerLignePaie = (payload) => api.post("/pointage/lignes-paie/", payload).then((r) => r.data);
+export const getQrBadgeTemporaireBlob = () =>
+  api.get("/pointage/badge-temporaire/qr/", { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
 
 // Écran de scan public — pas de token d'authentification, le token du QR
 // (dans l'URL) fait office d'identifiant.
 const scanApi = axios.create({ baseURL: API_BASE_URL });
 export const getInfosPointageScan = (token) => scanApi.get(`/pointage/scan/${token}/`).then((r) => r.data);
 export const validerPointageScan = (token) => scanApi.post(`/pointage/scan/${token}/valider/`).then((r) => r.data);
+
+// Badge temporaire (secours) — public lui aussi, pas de compte employé.
+export const getEmployesBadgeTemporaire = (token, params) =>
+  scanApi.get(`/pointage/badge-temporaire/${token}/employes/`, { params }).then((r) => r.data);
+export const validerBadgeTemporaire = (token, employeId) =>
+  scanApi.post(`/pointage/badge-temporaire/${token}/employes/${employeId}/valider/`).then((r) => r.data);

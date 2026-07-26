@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Ventes from "./pages/Ventes";
 import Historique from "./pages/Historique";
 import PointageScan from "./pages/PointageScan";
+import PointageBadgeTemporaire from "./pages/PointageBadgeTemporaire";
 import PointageEmployes from "./pages/PointageEmployes";
 import PointageHistorique from "./pages/PointageHistorique";
 import { isAuthenticated, logout, ADMIN_URL } from "./api/client";
@@ -99,6 +100,7 @@ export default function App() {
       <Routes>
         <Route path="/connexion" element={<Login />} />
         <Route path="/pointage/:token" element={<PointageScan />} />
+        <Route path="/pointage/temporaire/:token" element={<PointageBadgeTemporaire />} />
         <Route path="/" element={
           <RequireAuth><AccueilSelonRole /></RequireAuth>
         } />

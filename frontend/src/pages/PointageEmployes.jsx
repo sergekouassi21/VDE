@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { QrCode, Plus, X, Download, UserX, UserCheck, Pencil, Trash2 } from "lucide-react";
-import { getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye, getQrEmployeBlob, getUtilisateursDisponibles } from "../api/client";
+import { QrCode, Plus, X, Download, UserX, UserCheck, Pencil, Trash2, LifeBuoy } from "lucide-react";
+import { getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye, getQrEmployeBlob, getUtilisateursDisponibles, getQrBadgeTemporaireBlob } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 
 const LABEL_ROLE = { CHEF_FERME: "Chef de ferme", SOUS_CHEF_FERME: "Sous-chef de ferme", SUPERVISEUR: "Superviseur", OUVRIER: "Volailler", GARDIEN: "Gardien" };
@@ -110,6 +110,13 @@ export default function PointageEmployes() {
     setQrUrl(url);
   }
 
+  async function voirBadgeTemporaire() {
+    setQrOuvert({ nom: "Badge temporaire", fermes_noms: "Secours — tous les employés", temporaire: true });
+    setQrUrl("");
+    const url = await getQrBadgeTemporaireBlob();
+    setQrUrl(url);
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.wrap}>
@@ -125,6 +132,9 @@ export default function PointageEmployes() {
           </select>
           <button style={styles.addBtn} onClick={() => (formOuvert ? fermerForm() : setFormOuvert(true))}>
             <Plus size={16} /> Ajouter un employé
+          </button>
+          <button style={styles.secoursBtn} onClick={voirBadgeTemporaire}>
+            <LifeBuoy size={16} /> Badge temporaire
           </button>
         </div>
 
@@ -223,7 +233,7 @@ export default function PointageEmployes() {
             {qrUrl ? (
               <>
                 <img src={qrUrl} alt="QR code" style={styles.qrImage} />
-                <a href={qrUrl} download={`qr-${qrOuvert.nom.replace(/\s+/g, "-")}.png`} style={styles.downloadBtn}>
+                <a href={qrUrl} download={`${qrOuvert.temporaire ? "badge-temporaire" : "qr-" + qrOuvert.nom.replace(/\s+/g, "-")}.png`} style={styles.downloadBtn}>
                   <Download size={15} /> Télécharger le badge
                 </a>
               </>
@@ -246,6 +256,7 @@ const styles = {
   filters: { display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap", justifyContent: "space-between" },
   select: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 13.5, fontFamily: "inherit", color: INK },
   addBtn: { display: "flex", alignItems: "center", gap: 6, background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  secoursBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: CLAY, border: "1.5px solid #E0BBA9", borderRadius: 10, padding: "9px 16px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   formCard: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 18, marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
   input: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK, flex: "1 1 160px" },
   fermesGroup: { display: "flex", flexWrap: "wrap", gap: "8px 14px", alignItems: "center", padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", flex: "1 1 100%" },

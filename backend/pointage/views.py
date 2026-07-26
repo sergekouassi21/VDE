@@ -17,7 +17,7 @@ from rest_framework.response import Response
 
 from exploitation.models import RoleUtilisateur
 
-from .models import Absence, Employe, LignePaie, Pointage
+from .models import Absence, BadgeTemporaire, Employe, LignePaie, Pointage
 from .serializers import (
     AbsenceSerializer,
     CorrigerPointageSerializer,
@@ -32,6 +32,27 @@ from .serializers import (
 # par défaut de Pillow (Aileron) n'a pas les glyphes é/è/à/ô/... nécessaires
 # aux noms français (cf. retour utilisateur, accents illisibles sur le badge).
 POLICE_BADGE = os.path.join(os.path.dirname(__file__), "fonts", "DejaVuSans-Bold.ttf")
+
+
+def _composer_badge(url, texte):
+    """QR (URL seule, pour que la caméra du téléphone l'ouvre directement)
+    + texte lisible en gras sous l'image — utilisé pour le badge d'un
+    employé comme pour le badge temporaire de secours."""
+    qr_image = qrcode.make(url).convert("RGB")
+    largeur, hauteur_qr = qr_image.size
+    marge, hauteur_texte = 12, 40
+    badge = Image.new("RGB", (largeur, hauteur_qr + marge + hauteur_texte), "white")
+    badge.paste(qr_image, (0, 0))
+
+    dessin = ImageDraw.Draw(badge)
+    police = ImageFont.truetype(POLICE_BADGE, 24)
+    boite = dessin.textbbox((0, 0), texte, font=police)
+    x = max((largeur - (boite[2] - boite[0])) // 2, 0)
+    dessin.text((x, hauteur_qr + marge // 2), texte, fill="black", font=police)
+
+    buffer = BytesIO()
+    badge.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 class EstDirectionOuAdmin(BasePermission):
@@ -62,30 +83,13 @@ class EmployeViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"], url_path="qr")
     def qr(self, request, pk=None):
-        """Image PNG du badge de l'employé : le QR encode uniquement l'URL
+        """Image PNG du badge de l'employé — le QR encode uniquement l'URL
         (essentiel pour que la caméra du téléphone l'ouvre directement au
-        scan — un QR mêlant nom + URL empêche l'ouverture automatique sur
-        beaucoup d'appareils), avec le nom écrit en texte lisible sous
-        l'image, comme sur une carte d'identité classique."""
+        scan), avec le nom écrit en texte lisible sous l'image, comme sur
+        une carte d'identité classique."""
         employe = self.get_object()
         url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/{employe.qr_token}"
-        qr_image = qrcode.make(url).convert("RGB")
-
-        largeur, hauteur_qr = qr_image.size
-        marge, hauteur_texte = 12, 40
-        badge = Image.new("RGB", (largeur, hauteur_qr + marge + hauteur_texte), "white")
-        badge.paste(qr_image, (0, 0))
-
-        dessin = ImageDraw.Draw(badge)
-        police = ImageFont.truetype(POLICE_BADGE, 24)
-        boite = dessin.textbbox((0, 0), employe.nom, font=police)
-        x = max((largeur - (boite[2] - boite[0])) // 2, 0)
-        y = hauteur_qr + marge // 2
-        dessin.text((x, y), employe.nom, fill="black", font=police)
-
-        buffer = BytesIO()
-        badge.save(buffer, format="PNG")
-        return HttpResponse(buffer.getvalue(), content_type="image/png")
+        return HttpResponse(_composer_badge(url, employe.nom), content_type="image/png")
 
     def destroy(self, request, *args, **kwargs):
         # Un employé qui a déjà des pointages est protégé (PROTECT) — on
@@ -323,6 +327,47 @@ def scan_valider(request, token):
     calcul heures/montant). Un scan supplémentaire une fois la journée
     terminée ne fait rien (idempotent) plutôt que d'écraser les valeurs."""
     employe = get_object_or_404(Employe, qr_token=token, actif=True)
+    aujourdhui = timezone.localdate()
+    pointage, _ = Pointage.objects.get_or_create(employe=employe, date=aujourdhui)
+    if not pointage.heure_debut:
+        pointage.valider_debut()
+    elif not pointage.heure_fin:
+        pointage.valider_fin()
+    return Response(_etat_pointage(request, employe))
+
+
+@api_view(["GET"])
+@permission_classes([EstDirectionOuAdmin])
+def badge_temporaire_qr(request):
+    """Image PNG du badge de secours (imprimé une seule fois) — réservée à
+    Direction/Admin. Une seule instance de BadgeTemporaire existe en
+    pratique (créée à la demande si absente)."""
+    badge = BadgeTemporaire.objects.first() or BadgeTemporaire.objects.create()
+    url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/temporaire/{badge.token}"
+    return HttpResponse(_composer_badge(url, "Badge temporaire"), content_type="image/png")
+
+
+@api_view(["GET"])
+@permission_classes([])
+def badge_temporaire_employes(request, token):
+    """Public — sert de repli pour un employé qui a oublié/perdu son badge.
+    Liste tous les employés actifs avec leur état du jour, pour que le
+    superviseur choisisse manuellement la bonne personne."""
+    get_object_or_404(BadgeTemporaire, token=token)
+    ferme_id = request.query_params.get("ferme")
+    employes = Employe.objects.filter(actif=True).prefetch_related("fermes")
+    if ferme_id:
+        employes = employes.filter(fermes=ferme_id).distinct()
+    return Response([_etat_pointage(request, e) for e in employes.order_by("nom")])
+
+
+@api_view(["POST"])
+@permission_classes([])
+def badge_temporaire_valider(request, token, employe_id):
+    """Valide l'arrivée/le départ de l'employé choisi manuellement sur
+    l'écran du badge temporaire — même logique idempotente que scan_valider."""
+    get_object_or_404(BadgeTemporaire, token=token)
+    employe = get_object_or_404(Employe, id=employe_id, actif=True)
     aujourdhui = timezone.localdate()
     pointage, _ = Pointage.objects.get_or_create(employe=employe, date=aujourdhui)
     if not pointage.heure_debut:
