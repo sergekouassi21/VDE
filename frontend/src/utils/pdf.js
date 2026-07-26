@@ -299,6 +299,89 @@ export function genererPdfHistoriquePoint(p) {
   return doc;
 }
 
+// Fiche de paie d'un employé pour une période — regroupe ses pointages
+// (déjà groupés côté PointageHistorique) en une liste chronologique avec
+// un total en bas, sur plusieurs pages si le mois est long.
+export function genererFichePaie(employe, periodeLabel, lignes) {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  entete(doc);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(...INK);
+  doc.text("Fiche de paie", 15, 42);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(...GRAY);
+  doc.text(`Employé : ${employe.nom}`, 15, 49);
+  doc.text(`Ferme : ${employe.ferme_nom}`, 15, 55);
+  doc.text(`Période : ${periodeLabel}`, 15, 61);
+
+  const heureTxt = (iso) => (iso ? new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—");
+
+  function entetesColonnes(y) {
+    doc.setFillColor(...GREEN_DARK);
+    doc.rect(15, y - 5.5, 180, 8, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.text("Date", 18, y);
+    doc.text("Arrivée", 75, y);
+    doc.text("Départ", 110, y);
+    doc.text("Heures", 155, y, { align: "right" });
+    doc.text("Montant", 192, y, { align: "right" });
+    return y + 8;
+  }
+
+  let y = entetesColonnes(74);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  let totalHeures = 0;
+  let totalMontant = 0;
+
+  lignes.forEach((l, i) => {
+    if (y > 270) {
+      doc.addPage();
+      entete(doc);
+      y = entetesColonnes(42);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+    }
+    if (i % 2 === 1) {
+      doc.setFillColor(...ROW_ALT);
+      doc.rect(15, y - 5, 180, 7, "F");
+    }
+    doc.setTextColor(...INK);
+    doc.text(new Date(l.date).toLocaleDateString("fr-FR"), 18, y);
+    doc.text(heureTxt(l.heure_debut), 75, y);
+    doc.text(heureTxt(l.heure_fin), 110, y);
+    doc.text(`${l.heures_travaillees} h`, 155, y, { align: "right" });
+    doc.text(fcfa(l.montant_du_jour), 192, y, { align: "right" });
+    totalHeures += Number(l.heures_travaillees) || 0;
+    totalMontant += Number(l.montant_du_jour) || 0;
+    y += 7;
+  });
+
+  y += 3;
+  doc.setDrawColor(...GRAY);
+  doc.line(15, y, 195, y);
+  y += 9;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(...INK);
+  doc.text(`Total : ${totalHeures.toFixed(2)} h`, 15, y);
+  doc.text(fcfa(totalMontant), 192, y, { align: "right" });
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY);
+  doc.text("Volailles de l'Est", 105, 285, { align: "center" });
+
+  return doc;
+}
+
 // Tente le partage natif (mobile/PWA) ; retombe sur un téléchargement classique
 // si l'API Web Share n'est pas disponible ou si le partage échoue.
 export async function partagerPdf(doc, nomFichier) {

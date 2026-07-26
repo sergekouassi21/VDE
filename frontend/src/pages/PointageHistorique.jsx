@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Pencil, Trash2, X } from "lucide-react";
+import { Pencil, Trash2, X, Download, FileText } from "lucide-react";
 import { getFermes, getEmployes, getPointages, corrigerPointage, supprimerPointage } from "../api/client";
+import { genererFichePaie, telechargerPdf } from "../utils/pdf";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 
 const separeMilliers = (n) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 const fcfa = (v) => `${separeMilliers(Number(v) || 0)} F`;
 const heure = (iso) => (iso ? new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—");
+const pad = (n) => String(n).padStart(2, "0");
+const dateISO = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 function versDatetimeLocal(iso) {
   if (!iso) return "";
   const d = new Date(iso);
-  const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
@@ -23,6 +25,7 @@ export default function PointageHistorique() {
   const [employeId, setEmployeId] = useState("");
   const [dateDebut, setDateDebut] = useState("");
   const [dateFin, setDateFin] = useState("");
+  const [mois, setMois] = useState("");
   const [edition, setEdition] = useState(null);
   const [debutEdit, setDebutEdit] = useState("");
   const [finEdit, setFinEdit] = useState("");
@@ -51,6 +54,42 @@ export default function PointageHistorique() {
     heures: pointages.reduce((s, p) => s + Number(p.heures_travaillees || 0), 0),
     montant: pointages.reduce((s, p) => s + Number(p.montant_du_jour || 0), 0),
   }), [pointages]);
+
+  const resumeParEmploye = useMemo(() => {
+    const groupes = new Map();
+    for (const p of pointages) {
+      if (!p.heure_fin) continue; // journée pas terminée, pas encore comptabilisable
+      if (!groupes.has(p.employe)) {
+        groupes.set(p.employe, { employeId: p.employe, nom: p.employe_nom, fermeNom: p.ferme_nom, lignes: [], totalHeures: 0, totalMontant: 0 });
+      }
+      const g = groupes.get(p.employe);
+      g.lignes.push(p);
+      g.totalHeures += Number(p.heures_travaillees || 0);
+      g.totalMontant += Number(p.montant_du_jour || 0);
+    }
+    return [...groupes.values()].sort((a, b) => a.nom.localeCompare(b.nom));
+  }, [pointages]);
+
+  const periodeLabel = useMemo(() => {
+    if (dateDebut && dateFin) return `Du ${new Date(dateDebut).toLocaleDateString("fr-FR")} au ${new Date(dateFin).toLocaleDateString("fr-FR")}`;
+    if (dateDebut) return `Depuis le ${new Date(dateDebut).toLocaleDateString("fr-FR")}`;
+    if (dateFin) return `Jusqu'au ${new Date(dateFin).toLocaleDateString("fr-FR")}`;
+    return "Toute la période";
+  }, [dateDebut, dateFin]);
+
+  function appliquerMois(valeur) {
+    setMois(valeur);
+    if (!valeur) return;
+    const [an, m] = valeur.split("-").map(Number);
+    setDateDebut(dateISO(new Date(an, m - 1, 1)));
+    setDateFin(dateISO(new Date(an, m, 0)));
+  }
+
+  function telechargerFichePaie(groupe) {
+    const lignesTriees = [...groupe.lignes].sort((a, b) => a.date.localeCompare(b.date));
+    const doc = genererFichePaie({ nom: groupe.nom, ferme_nom: groupe.fermeNom }, periodeLabel, lignesTriees);
+    telechargerPdf(doc, `fiche-paie-${groupe.nom.replace(/\s+/g, "-")}-${dateDebut || "periode"}.pdf`);
+  }
 
   function ouvrirEdition(p) {
     setEdition(p);
@@ -105,15 +144,19 @@ export default function PointageHistorique() {
             {employes.map((emp) => <option key={emp.id} value={emp.id}>{emp.nom}</option>)}
           </select>
           <label style={styles.dateLabel}>
+            Mois
+            <input type="month" style={styles.date} value={mois} onChange={(e) => appliquerMois(e.target.value)} />
+          </label>
+          <label style={styles.dateLabel}>
             Du
-            <input type="date" style={styles.date} value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} />
+            <input type="date" style={styles.date} value={dateDebut} onChange={(e) => { setDateDebut(e.target.value); setMois(""); }} />
           </label>
           <label style={styles.dateLabel}>
             Au
-            <input type="date" style={styles.date} value={dateFin} onChange={(e) => setDateFin(e.target.value)} />
+            <input type="date" style={styles.date} value={dateFin} onChange={(e) => { setDateFin(e.target.value); setMois(""); }} />
           </label>
           {(fermeId || employeId || dateDebut || dateFin) && (
-            <button style={styles.clear} onClick={() => { setFermeId(""); setEmployeId(""); setDateDebut(""); setDateFin(""); }}>
+            <button style={styles.clear} onClick={() => { setFermeId(""); setEmployeId(""); setDateDebut(""); setDateFin(""); setMois(""); }}>
               Réinitialiser
             </button>
           )}
@@ -124,6 +167,45 @@ export default function PointageHistorique() {
             <div style={styles.totalItem}><span style={styles.totalLabel}>Total heures</span><span style={styles.totalValeur}>{totaux.heures.toFixed(2)} h</span></div>
             <div style={styles.totalItem}><span style={styles.totalLabel}>Total à payer</span><span style={styles.totalValeur}>{fcfa(totaux.montant)}</span></div>
           </div>
+        )}
+
+        {resumeParEmploye.length > 0 && (
+          <section style={{ ...styles.card, marginBottom: 16 }}>
+            <div style={styles.resumeHead}>
+              <FileText size={15} color={GREEN} />
+              <span>Résumé par employé — {periodeLabel}</span>
+            </div>
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Employé</th>
+                    <th style={styles.th}>Ferme</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Jours</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Heures</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>À payer</th>
+                    <th style={styles.th}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resumeParEmploye.map((g) => (
+                    <tr key={g.employeId}>
+                      <td style={styles.td}>{g.nom}</td>
+                      <td style={styles.td}>{g.fermeNom}</td>
+                      <td style={{ ...styles.td, textAlign: "right" }}>{g.lignes.length}</td>
+                      <td style={{ ...styles.td, textAlign: "right" }}>{g.totalHeures.toFixed(2)} h</td>
+                      <td style={{ ...styles.td, textAlign: "right", fontWeight: 600, color: GREEN_DARK }}>{fcfa(g.totalMontant)}</td>
+                      <td style={styles.td}>
+                        <button style={styles.pdfBtn} onClick={() => telechargerFichePaie(g)}>
+                          <Download size={14} /> Fiche de paie
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         )}
 
         <section style={styles.card}>
@@ -212,6 +294,8 @@ const styles = {
   totalLabel: { fontSize: 11, color: "#8A948D", textTransform: "uppercase", letterSpacing: .5 },
   totalValeur: { fontSize: 18, fontWeight: 700, color: GREEN_DARK },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
+  resumeHead: { display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", fontSize: 13, fontWeight: 600, color: GREEN_DARK, borderBottom: "1px solid #ECE9DF" },
+  pdfBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
   tableWrap: { overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
