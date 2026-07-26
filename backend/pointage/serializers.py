@@ -5,11 +5,17 @@ from .models import Employe, Pointage
 
 class EmployeSerializer(serializers.ModelSerializer):
     ferme_nom = serializers.CharField(source="ferme.nom", read_only=True)
+    user_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = Employe
-        fields = ["id", "nom", "ferme", "ferme_nom", "taux_horaire", "qr_token", "actif", "photo"]
+        fields = ["id", "nom", "ferme", "ferme_nom", "taux_horaire", "qr_token", "actif", "photo", "user", "user_nom"]
         read_only_fields = ["qr_token"]
+
+    def get_user_nom(self, obj):
+        if not obj.user:
+            return None
+        return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
 
 
 class PointageSerializer(serializers.ModelSerializer):

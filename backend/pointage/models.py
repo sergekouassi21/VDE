@@ -1,6 +1,7 @@
 import uuid
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -8,10 +9,12 @@ from exploitation.models import Ferme
 
 
 class Employe(models.Model):
-    """Un ouvrier de ferme rémunéré à l'heure. Le qr_token identifie de
-    façon unique et non-devinable son badge personnel — scanner ce
-    QR (URL /pointage/<token>) permet de pointer sans compte utilisateur
-    ni mot de passe, contrairement aux chefs/sous-chefs/superviseurs."""
+    """Une personne suivie par le pointage horaire — un ouvrier sans compte
+    (identifié uniquement par son badge QR), ou un chef/sous-chef/
+    superviseur qui a par ailleurs un compte de connexion pour l'appli
+    (`user`, optionnel) et qu'on choisit d'aussi payer à l'heure. Le
+    qr_token identifie le badge personnel : scanner ce QR (URL
+    /pointage/<token>) suffit pour pointer, avec ou sans compte."""
 
     nom = models.CharField(max_length=150)
     ferme = models.ForeignKey(Ferme, on_delete=models.PROTECT, related_name="employes")
@@ -19,6 +22,11 @@ class Employe(models.Model):
     qr_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     actif = models.BooleanField(default=True)
     photo = models.ImageField(upload_to="employes/", blank=True, null=True)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="employe_pointage",
+        help_text="Optionnel — si cette personne a aussi un compte de connexion (chef/sous-chef/superviseur).",
+    )
 
     class Meta:
         ordering = ["nom"]

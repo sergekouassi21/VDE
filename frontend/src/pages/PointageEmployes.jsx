@@ -1,14 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
 import { QrCode, Plus, X, Download, UserX, UserCheck } from "lucide-react";
-import { getFermes, getEmployes, creerEmploye, modifierEmploye, getQrEmployeBlob } from "../api/client";
+import { getFermes, getEmployes, creerEmploye, modifierEmploye, getQrEmployeBlob, getUtilisateursDisponibles } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+
+const LABEL_ROLE = { CHEF_FERME: "Chef de ferme", SOUS_CHEF_FERME: "Sous-chef de ferme", SUPERVISEUR: "Superviseur" };
 
 export default function PointageEmployes() {
   const [fermes, setFermes] = useState([]);
   const [employes, setEmployes] = useState([]);
+  const [utilisateurs, setUtilisateurs] = useState([]);
   const [fermeFiltre, setFermeFiltre] = useState("");
   const [chargement, setChargement] = useState(true);
   const [formOuvert, setFormOuvert] = useState(false);
+  const [userId, setUserId] = useState("");
   const [nom, setNom] = useState("");
   const [ferme, setFerme] = useState("");
   const [tauxHoraire, setTauxHoraire] = useState("");
@@ -18,6 +22,18 @@ export default function PointageEmployes() {
   const [qrUrl, setQrUrl] = useState("");
 
   useEffect(() => { getFermes().then(setFermes); }, []);
+  useEffect(() => { if (formOuvert) getUtilisateursDisponibles().then(setUtilisateurs); }, [formOuvert]);
+
+  function choisirUtilisateur(id) {
+    setUserId(id);
+    const utilisateur = utilisateurs.find((u) => String(u.id) === String(id));
+    if (utilisateur) {
+      setNom(utilisateur.nom);
+      if (utilisateur.fermes.length === 1) setFerme(String(utilisateur.fermes[0].id));
+    } else {
+      setNom("");
+    }
+  }
 
   const rafraichir = useCallback(() => {
     setChargement(true);
@@ -34,8 +50,8 @@ export default function PointageEmployes() {
     setEnvoi(true);
     setErreur("");
     try {
-      await creerEmploye({ nom, ferme, taux_horaire: tauxHoraire });
-      setNom(""); setFerme(""); setTauxHoraire(""); setFormOuvert(false);
+      await creerEmploye({ nom, ferme, taux_horaire: tauxHoraire, user: userId || null });
+      setNom(""); setFerme(""); setTauxHoraire(""); setUserId(""); setFormOuvert(false);
       rafraichir();
     } catch {
       setErreur("Impossible d'ajouter l'employé. Vérifie les champs.");
@@ -76,6 +92,12 @@ export default function PointageEmployes() {
 
         {formOuvert && (
           <form style={styles.formCard} onSubmit={ajouter}>
+            <select style={styles.input} value={userId} onChange={(e) => choisirUtilisateur(e.target.value)}>
+              <option value="">— Nouvel ouvrier sans compte —</option>
+              {utilisateurs.map((u) => (
+                <option key={u.id} value={u.id}>{u.nom} ({LABEL_ROLE[u.role] || u.role})</option>
+              ))}
+            </select>
             <input style={styles.input} placeholder="Nom de l'employé" value={nom} onChange={(e) => setNom(e.target.value)} required />
             <select style={styles.input} value={ferme} onChange={(e) => setFerme(e.target.value)} required>
               <option value="">Ferme...</option>
@@ -98,6 +120,7 @@ export default function PointageEmployes() {
                 <thead>
                   <tr>
                     <th style={styles.th}>Nom</th>
+                    <th style={styles.th}>Compte lié</th>
                     <th style={styles.th}>Ferme</th>
                     <th style={{ ...styles.th, textAlign: "right" }}>Taux horaire</th>
                     <th style={styles.th}>Statut</th>
@@ -108,6 +131,7 @@ export default function PointageEmployes() {
                   {employes.map((emp) => (
                     <tr key={emp.id}>
                       <td style={styles.td}>{emp.nom}</td>
+                      <td style={styles.td}>{emp.user_nom ? <span style={{ color: GREEN_DARK }}>{emp.user_nom}</span> : <span style={{ color: "#B5BBB2" }}>—</span>}</td>
                       <td style={styles.td}>{emp.ferme_nom}</td>
                       <td style={{ ...styles.td, textAlign: "right" }}>{emp.taux_horaire} F/h</td>
                       <td style={styles.td}>

@@ -55,6 +55,7 @@ export const encaisserVersement = (factureId, payload) =>
 
 // --- Pointage des employés (heures de travail) ---
 export const getEmployes = (params) => api.get("/pointage/employes/", { params }).then((r) => r.data);
+export const getUtilisateursDisponibles = () => api.get("/pointage/utilisateurs-disponibles/").then((r) => r.data);
 export const creerEmploye = (payload) => api.post("/pointage/employes/", payload).then((r) => r.data);
 export const modifierEmploye = (id, payload) => api.patch(`/pointage/employes/${id}/`, payload).then((r) => r.data);
 export const supprimerEmploye = (id) => api.delete(`/pointage/employes/${id}/`);

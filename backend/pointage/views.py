@@ -2,6 +2,7 @@ from io import BytesIO
 
 import qrcode
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -101,6 +102,33 @@ def _etat_pointage(request, employe):
         "heures_travaillees": pointage.heures_travaillees if pointage else None,
         "montant_du_jour": pointage.montant_du_jour if pointage else None,
     }
+
+
+@api_view(["GET"])
+@permission_classes([EstDirectionOuAdmin])
+def utilisateurs_disponibles(request):
+    """Comptes chef/sous-chef/superviseur pas encore liés à un Employe —
+    sert à pré-remplir le formulaire d'ajout plutôt que de retaper un nom
+    déjà connu du système (cf. retour utilisateur)."""
+    User = get_user_model()
+    deja_lies = Employe.objects.exclude(user=None).values_list("user_id", flat=True)
+    roles = (RoleUtilisateur.CHEF_FERME, RoleUtilisateur.SOUS_CHEF_FERME, RoleUtilisateur.SUPERVISEUR)
+    qs = (
+        User.objects.filter(profil__role__in=roles)
+        .exclude(id__in=deja_lies)
+        .select_related("profil")
+        .prefetch_related("profil__fermes")
+    )
+    resultats = []
+    for user in qs:
+        nom_complet = f"{user.first_name} {user.last_name}".strip() or user.username
+        resultats.append({
+            "id": user.id,
+            "nom": nom_complet,
+            "role": user.profil.role,
+            "fermes": list(user.profil.fermes.values("id", "nom")),
+        })
+    return Response(resultats)
 
 
 @api_view(["GET"])
