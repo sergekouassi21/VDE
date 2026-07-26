@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Egg, Skull, Wheat, Package, TrendingUp, Check, ChevronDown, AlertTriangle, Calendar, Download, Share2, WifiOff, RefreshCw } from "lucide-react";
-import { getFermes, soumettrePointJournalier, declarerBande, getPointJournalier } from "../api/client";
+import { Egg, Skull, Wheat, Package, TrendingUp, Check, ChevronDown, AlertTriangle, Calendar, Download, Share2, WifiOff, RefreshCw, Archive, X } from "lucide-react";
+import { getFermes, soumettrePointJournalier, declarerBande, terminerBande, getBilanBande, getPointJournalier } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, CLAY, formatSacs, formatColis, AGE_REFORME_SEMAINES } from "../theme";
-import { genererPdfPointJournalier, telechargerPdf, partagerPdf } from "../utils/pdf";
+import { genererPdfPointJournalier, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { ajouterSoumissionEnAttente, listerSoumissionsEnAttente } from "../offline/queue";
 import { synchroniserSoumissionsEnAttente } from "../offline/sync";
 
@@ -41,6 +41,10 @@ export default function PointJournalier() {
   const [horsLigneEnvoi, setHorsLigneEnvoi] = useState(false);
   const [enLigne, setEnLigne] = useState(navigator.onLine);
   const [enAttenteCount, setEnAttenteCount] = useState(0);
+  const [cloture, setCloture] = useState(null);
+  const [envoiCloture, setEnvoiCloture] = useState(false);
+  const [erreurCloture, setErreurCloture] = useState("");
+  const [bilan, setBilan] = useState(null);
 
   const chargerFermes = useCallback(async () => {
     const data = await getFermes();
@@ -199,6 +203,33 @@ export default function PointJournalier() {
     await chargerFermes();
   }
 
+  function ouvrirCloture() {
+    setCloture({ motif_fin: "REFORME", date_fin: todayISO(), ferme_destination: "" });
+    setErreurCloture("");
+  }
+
+  async function handleTerminerBande() {
+    if (!cloture?.motif_fin || !cloture?.date_fin) return;
+    if (cloture.motif_fin === "TRANSFERT" && !cloture.ferme_destination) {
+      setErreurCloture("Choisis la ferme de destination du transfert.");
+      return;
+    }
+    setEnvoiCloture(true);
+    setErreurCloture("");
+    try {
+      const bandeId = bande.id;
+      await terminerBande(ferme.id, cloture);
+      const bilanData = await getBilanBande(bandeId);
+      setBilan(bilanData);
+      setCloture(null);
+      await chargerFermes();
+    } catch {
+      setErreurCloture("Impossible de clôturer cette bande.");
+    } finally {
+      setEnvoiCloture(false);
+    }
+  }
+
   if (chargement) return <div style={styles.page}><p style={{ padding: 20 }}>Chargement...</p></div>;
 
   return (
@@ -245,6 +276,11 @@ export default function PointJournalier() {
               </div>
               <span style={styles.ageAuto}>auto · {dateAffiche}</span>
             </div>
+          )}
+          {bande && peutDeclarerBande() && (
+            <button style={styles.clotureBtn} onClick={ouvrirCloture}>
+              <Archive size={14} /> Terminer la bande
+            </button>
           )}
         </header>
 
@@ -410,8 +446,77 @@ export default function PointJournalier() {
         </>}
         <p style={styles.foot}>Volailles de l'Est</p>
       </div>
+
+      {cloture && (
+        <div style={styles.modalOverlay} onClick={() => setCloture(null)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <button type="button" style={styles.modalClose} onClick={() => setCloture(null)}><X size={18} /></button>
+            <h2 style={styles.modalTitre}>Terminer la bande</h2>
+            <p style={styles.modalSousTitre}>{ferme?.nom} — mise en place le {bande && new Date(bande.date_mise_en_place).toLocaleDateString("fr-FR")}</p>
+            <label style={styles.champLabel}>
+              Motif
+              <select style={styles.champInput} value={cloture.motif_fin} onChange={(e) => setCloture({ ...cloture, motif_fin: e.target.value })}>
+                <option value="REFORME">Réforme</option>
+                <option value="TRANSFERT">Transfert vers une autre ferme</option>
+                <option value="MORTALITE_TOTALE">Mortalité totale</option>
+              </select>
+            </label>
+            <label style={styles.champLabel}>
+              Date de fin
+              <input style={styles.champInput} type="date" max={todayISO()} value={cloture.date_fin} onChange={(e) => setCloture({ ...cloture, date_fin: e.target.value })} />
+            </label>
+            {cloture.motif_fin === "TRANSFERT" && (
+              <label style={styles.champLabel}>
+                Ferme de destination
+                <select style={styles.champInput} value={cloture.ferme_destination} onChange={(e) => setCloture({ ...cloture, ferme_destination: e.target.value })}>
+                  <option value="">Sélectionner...</option>
+                  {fermes.filter((f) => f.est_vide && f.id !== ferme.id).map((f) => <option key={f.id} value={f.id}>{f.nom}</option>)}
+                </select>
+              </label>
+            )}
+            {erreurCloture && <p style={styles.erreurEdit}>{erreurCloture}</p>}
+            <button style={styles.submitBtnCloture} onClick={handleTerminerBande} disabled={envoiCloture}>
+              {envoiCloture ? "Clôture en cours..." : "Confirmer la clôture"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {bilan && (
+        <div style={styles.modalOverlay} onClick={() => setBilan(null)}>
+          <div style={{ ...styles.modal, width: 380 }} onClick={(e) => e.stopPropagation()}>
+            <button type="button" style={styles.modalClose} onClick={() => setBilan(null)}><X size={18} /></button>
+            <h2 style={styles.modalTitre}>Bilan de clôture</h2>
+            <p style={styles.modalSousTitre}>{bilan.ferme_nom} — {bilan.duree_jours} jours ({new Date(bilan.date_mise_en_place).toLocaleDateString("fr-FR")} → {new Date(bilan.date_fin).toLocaleDateString("fr-FR")})</p>
+            <div style={styles.bilanGrid}>
+              <BilanItem label="Effectif final" value={`${bilan.effectif_final.toLocaleString("fr-FR")} sujets`} />
+              <BilanItem label="Mortalité" value={`${bilan.total_morts.toLocaleString("fr-FR")} (${bilan.taux_mortalite.toFixed(1)} %)`} />
+              {bilan.type_ferme === "PONTE" ? (
+                <>
+                  <BilanItem label="Production totale" value={`${bilan.total_production_oeufs.toLocaleString("fr-FR")} œufs`} />
+                  <BilanItem label="Ponte moyenne" value={`${bilan.taux_ponte_moyen.toFixed(1)} %`} />
+                </>
+              ) : (
+                <>
+                  <BilanItem label="Poids final" value={bilan.poids_final_grammes ? `${bilan.poids_final_grammes} g` : "—"} />
+                  <BilanItem label="GMQ moyen" value={bilan.gmq_moyen_grammes != null ? `${bilan.gmq_moyen_grammes} g/j` : "—"} />
+                </>
+              )}
+              <BilanItem label="Aliment consommé" value={`${bilan.total_aliment_sacs} sacs`} />
+              <BilanItem label="Coût aliment" value={`${Number(bilan.cout_aliment_total).toLocaleString("fr-FR")} F`} />
+            </div>
+            <button style={{ ...styles.pdfBtn, margin: "16px 0 0", width: "100%" }} onClick={() => telechargerPdf(genererBilanBande(bilan), `bilan-cloture-${bilan.ferme_nom.replace(/\s+/g, "-")}-${bilan.date_fin}.pdf`)}>
+              <Download size={17} /> Télécharger le bilan (PDF)
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function BilanItem({ label, value }) {
+  return (<div style={styles.bilanItem}><span style={styles.bilanLabel}>{label}</span><span style={styles.bilanValeur}>{value}</span></div>);
 }
 
 function Section({ icon, titre, children }) {
@@ -499,4 +604,18 @@ const styles = {
   sortieRemove: { border: "none", background: "none", color: CLAY, cursor: "pointer", fontSize: 14, padding: "0 2px" },
   sortieForm: { display: "flex", flexDirection: "column", gap: 8, padding: "10px 0" },
   sortieAddBtn: { background: GREEN_DARK, color: "#fff", border: "none", borderRadius: 9, padding: "10px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  clotureBtn: { marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: "100%", background: "rgba(255,255,255,.14)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", borderRadius: 11, padding: "10px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  modalOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 50 },
+  modal: { background: "#fff", borderRadius: 18, padding: 26, width: 340, maxWidth: "100%", position: "relative", display: "flex", flexDirection: "column", gap: 10, maxHeight: "90vh", overflowY: "auto" },
+  modalClose: { position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", color: "#8A948D" },
+  modalTitre: { fontSize: 17, fontWeight: 700, margin: "4px 0 0", color: INK },
+  modalSousTitre: { fontSize: 12.5, color: "#8A948D", margin: "0 0 8px" },
+  champLabel: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: "#6B756E" },
+  champInput: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
+  erreurEdit: { color: "#9E4527", fontSize: 12.5, margin: 0 },
+  submitBtnCloture: { background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "11px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginTop: 4 },
+  bilanGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px" },
+  bilanItem: { display: "flex", flexDirection: "column", gap: 2 },
+  bilanLabel: { fontSize: 10.5, color: "#8A948D", textTransform: "uppercase", letterSpacing: .3 },
+  bilanValeur: { fontSize: 14, fontWeight: 700, color: GREEN_DARK },
 };

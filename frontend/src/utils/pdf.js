@@ -299,6 +299,68 @@ export function genererPdfHistoriquePoint(p) {
   return doc;
 }
 
+const LABEL_MOTIF_FIN = {
+  REFORME: "Réforme", TRANSFERT: "Transfert vers une autre ferme", MORTALITE_TOTALE: "Mortalité totale",
+};
+
+// Bilan de clôture d'un cycle de bande — performance zootechnique
+// (mortalité, ponte ou poids/GMQ, indice de consommation) et contexte
+// financier (coût aliment au prix réel, revenus des ventes de la période).
+export function genererBilanBande(bilan) {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  entete(doc);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(...INK);
+  doc.text(`Bilan de clôture — ${bilan.ferme_nom}`, 15, 42);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(...GRAY);
+  doc.text(`Mise en place : ${new Date(bilan.date_mise_en_place).toLocaleDateString("fr-FR")}`, 15, 49);
+  doc.text(`Fin de cycle : ${new Date(bilan.date_fin).toLocaleDateString("fr-FR")} (${bilan.duree_jours} jours)`, 15, 55);
+  if (bilan.motif_fin) doc.text(`Motif : ${LABEL_MOTIF_FIN[bilan.motif_fin] || bilan.motif_fin}`, 15, 61);
+
+  let y = 74;
+  y = bandeauSection(doc, y, "Cheptel");
+  y = ligneCle(doc, y, "Effectif initial", `${nf(bilan.effectif_initial)} sujets`);
+  y = ligneCle(doc, y, "Effectif final", `${nf(bilan.effectif_final)} sujets`);
+  y = ligneCle(doc, y, "Total mortalité", `${nf(bilan.total_morts)} sujets`);
+  y = ligneCle(doc, y, "Taux de mortalité du cycle", `${bilan.taux_mortalite.toFixed(2)} %`);
+  if (Number(bilan.total_sortie_effectif) > 0) y = ligneCle(doc, y, "Sorties d'effectif (ventes/réforme)", `${nf(bilan.total_sortie_effectif)} sujets`);
+
+  if (bilan.type_ferme === "PONTE") {
+    y = bandeauSection(doc, y + 2, "Ponte");
+    y = ligneCle(doc, y, "Production totale", `${nf(bilan.total_production_oeufs)} œufs`);
+    y = ligneCle(doc, y, "Taux de ponte moyen du cycle", `${bilan.taux_ponte_moyen.toFixed(2)} %`);
+    y = ligneCle(doc, y, "Cassé / brisé (total)", `${nf(bilan.total_casse)} / ${nf(bilan.total_brise)} œufs`);
+  } else {
+    y = bandeauSection(doc, y + 2, "Croissance");
+    y = ligneCle(doc, y, "Poids initial (1ère pesée)", bilan.poids_initial_grammes ? `${nf(bilan.poids_initial_grammes)} g` : "—");
+    y = ligneCle(doc, y, "Poids final (dernière pesée)", bilan.poids_final_grammes ? `${nf(bilan.poids_final_grammes)} g` : "—");
+    y = ligneCle(doc, y, "GMQ moyen du cycle", bilan.gmq_moyen_grammes != null ? `${nf(bilan.gmq_moyen_grammes)} g/j` : "—");
+  }
+
+  y = bandeauSection(doc, y + 2, "Aliment");
+  y = ligneCle(doc, y, "Total consommé", `${bilan.total_aliment_sacs} sacs`);
+  y = ligneCle(doc, y, "Prix moyen du sac", fcfa(bilan.prix_sac_moyen));
+  y = ligneCle(doc, y, "Coût aliment total", fcfa(bilan.cout_aliment_total));
+  const ic = bilan.type_ferme === "PONTE" ? bilan.ic_global_g_par_oeuf : bilan.ic_global_kg_par_kg;
+  const icLabel = bilan.type_ferme === "PONTE" ? "Indice de consommation (g/œuf)" : "Indice de consommation (kg aliment/kg vif)";
+  if (ic != null) y = ligneCle(doc, y, icLabel, bilan.type_ferme === "PONTE" ? `${nf(ic)} g` : `${ic}`);
+
+  y = bandeauSection(doc, y + 2, "Financier");
+  y = ligneCle(doc, y, "Revenus des ventes (période du cycle)", fcfa(bilan.revenus_ventes));
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY);
+  doc.text("Volailles de l'Est", 105, 285, { align: "center" });
+
+  return doc;
+}
+
 const LABEL_MODE_PAIEMENT_PDF = {
   WAVE: "Wave", ORANGE_MONEY: "Orange Money", MTN_MONEY: "MTN Money",
   MOOV_MONEY: "Moov Money", ESPECES: "Main en main", VIREMENT: "Virement bancaire",

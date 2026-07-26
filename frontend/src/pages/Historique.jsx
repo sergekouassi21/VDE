@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Download, Share2, Pencil, Trash2 } from "lucide-react";
-import { getFermes, getPointsJournaliers, deletePointJournalier } from "../api/client";
+import { ChevronRight, Download, Share2, Pencil, Trash2, Archive } from "lucide-react";
+import { getFermes, getPointsJournaliers, deletePointJournalier, getBandes, getBilanBande } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY, formatSacs, formatColis } from "../theme";
-import { genererPdfHistoriquePoint, telechargerPdf, partagerPdf } from "../utils/pdf";
+import { genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 
 const nf = (v) => (Number(v) || 0).toLocaleString("fr-FR");
 const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
 const nomFichierPoint = (p) => `point-journalier-${p.ferme_nom.replace(/\s+/g, "-")}-${p.date}.pdf`;
+const LABEL_MOTIF_FIN = { REFORME: "Réforme", TRANSFERT: "Transfert", MORTALITE_TOTALE: "Mortalité totale" };
 
 function peutSupprimer() {
   const role = localStorage.getItem("vde_role");
@@ -17,14 +18,30 @@ function peutSupprimer() {
 export default function Historique() {
   const [fermes, setFermes] = useState([]);
   const [points, setPoints] = useState([]);
+  const [bandesTerminees, setBandesTerminees] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [fermeId, setFermeId] = useState("");
   const [dateDebut, setDateDebut] = useState("");
   const [dateFin, setDateFin] = useState("");
   const [ouvert, setOuvert] = useState(null);
   const [envoi, setEnvoi] = useState(false);
+  const [envoiBilan, setEnvoiBilan] = useState(null);
 
   useEffect(() => { getFermes().then(setFermes); }, []);
+
+  useEffect(() => {
+    getBandes({ statut: "TERMINEE", ...(fermeId ? { ferme: fermeId } : {}) }).then(setBandesTerminees);
+  }, [fermeId]);
+
+  async function telechargerBilan(bande) {
+    setEnvoiBilan(bande.id);
+    try {
+      const bilan = await getBilanBande(bande.id);
+      telechargerPdf(genererBilanBande(bilan), `bilan-cloture-${bande.ferme_nom.replace(/\s+/g, "-")}-${bande.date_fin}.pdf`);
+    } finally {
+      setEnvoiBilan(null);
+    }
+  }
 
   const rafraichir = useCallback(() => {
     setChargement(true);
@@ -75,6 +92,45 @@ export default function Historique() {
             </button>
           )}
         </div>
+
+        {bandesTerminees.length > 0 && (
+          <section style={{ ...styles.card, marginBottom: 16 }}>
+            <div style={styles.resumeHead}><Archive size={15} color={GREEN} /><span>Bandes terminées</span></div>
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Ferme</th>
+                    <th style={styles.th}>Mise en place</th>
+                    <th style={styles.th}>Fin</th>
+                    <th style={styles.th}>Motif</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Effectif initial → final</th>
+                    <th style={styles.th}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bandesTerminees.map((b) => (
+                    <tr key={b.id}>
+                      <td style={styles.td}>{b.ferme_nom}</td>
+                      <td style={styles.td}>{new Date(b.date_mise_en_place).toLocaleDateString("fr-FR")}</td>
+                      <td style={styles.td}>{b.date_fin ? new Date(b.date_fin).toLocaleDateString("fr-FR") : "—"}</td>
+                      <td style={styles.td}>
+                        {LABEL_MOTIF_FIN[b.motif_fin] || b.motif_fin}
+                        {b.motif_fin === "TRANSFERT" && b.ferme_destination_nom ? ` → ${b.ferme_destination_nom}` : ""}
+                      </td>
+                      <td style={{ ...styles.td, textAlign: "right" }}>{nf(b.effectif_initial)} → {nf(b.effectif_actuel)}</td>
+                      <td style={{ ...styles.td, width: 1 }}>
+                        <button style={styles.pdfBtn} disabled={envoiBilan === b.id} onClick={() => telechargerBilan(b)}>
+                          <Download size={14} /> {envoiBilan === b.id ? "..." : "Bilan"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         <section style={styles.card}>
           {chargement ? (
@@ -208,6 +264,7 @@ const styles = {
   date: { padding: "8px 10px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
   clear: { padding: "8px 14px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 12.5, cursor: "pointer", color: "#7A857F", fontFamily: "inherit" },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
+  resumeHead: { display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", fontSize: 13, fontWeight: 600, color: GREEN_DARK, borderBottom: "1px solid #ECE9DF" },
   empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
   tableWrap: { overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },

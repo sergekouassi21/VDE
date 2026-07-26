@@ -35,6 +35,9 @@ export const getMoi = () => api.get("/moi/").then((r) => r.data);
 export const getFermes = () => api.get("/fermes/").then((r) => r.data);
 export const getFerme = (id) => api.get(`/fermes/${id}/`).then((r) => r.data);
 export const declarerBande = (id, payload) => api.post(`/fermes/${id}/declarer-bande/`, payload).then((r) => r.data);
+export const terminerBande = (id, payload) => api.post(`/fermes/${id}/terminer-bande/`, payload).then((r) => r.data);
+export const getBandes = (params) => api.get("/bandes/", { params }).then((r) => r.data);
+export const getBilanBande = (bandeId) => api.get(`/bandes/${bandeId}/bilan/`).then((r) => r.data);
 export const soumettrePointJournalier = (fermeId, payload) =>
   api.post(`/fermes/${fermeId}/points-journaliers/`, payload).then((r) => r.data);
 export const getPointJournalier = (fermeId, date) =>
