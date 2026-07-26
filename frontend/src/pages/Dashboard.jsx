@@ -115,6 +115,9 @@ export default function Dashboard() {
       if (f.type === "PONTE" && f.dernier_point && tauxPonte(f) < 60) {
         a.push({ ferme: f.nom, txt: `Taux de ponte ${tauxPonte(f).toFixed(0)} %`, grav: "haut" });
       }
+      if (f.type === "PONTE" && f.dernier_point && f.taux_ponte_veille != null && tauxPonte(f) - Number(f.taux_ponte_veille) < -10) {
+        a.push({ ferme: f.nom, txt: `Chute brutale du taux de ponte : ${Number(f.taux_ponte_veille).toFixed(0)} % → ${tauxPonte(f).toFixed(0)} %`, grav: "haut" });
+      }
       if (Number(f.magasin.stock_aliment_sacs) <= Number(f.magasin.seuil_alerte_aliment_sacs)) {
         a.push({ ferme: f.nom, txt: `Aliment bas : ${formatSacs(Number(f.magasin.stock_aliment_sacs))}`, grav: "haut" });
       }
