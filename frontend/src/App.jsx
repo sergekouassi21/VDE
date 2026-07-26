@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock } from "lucide-react";
+import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp } from "lucide-react";
 import Login from "./pages/Login";
 import PointJournalier from "./pages/PointJournalier";
 import Dashboard from "./pages/Dashboard";
@@ -11,6 +11,7 @@ import PointageBadgeTemporaire from "./pages/PointageBadgeTemporaire";
 import PointageBadgeAbsence from "./pages/PointageBadgeAbsence";
 import PointageEmployes from "./pages/PointageEmployes";
 import PointageHistorique from "./pages/PointageHistorique";
+import Rentabilite from "./pages/Rentabilite";
 import { isAuthenticated, logout, ADMIN_URL } from "./api/client";
 import { GREEN_DARK } from "./theme";
 
@@ -67,6 +68,7 @@ function NavBar() {
             <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
             <Link to="/employes" style={navStyles.link}><Users size={16} /> Employés</Link>
             <Link to="/heures-travaillees" style={navStyles.link}><Clock size={16} /> Heures travaillées</Link>
+            <Link to="/rentabilite" style={navStyles.link}><TrendingUp size={16} /> Rentabilité</Link>
             <a href={ADMIN_URL} target="_blank" rel="noopener noreferrer" style={navStyles.link}><Shield size={16} /> Admin</a>
           </>
         )}
@@ -123,6 +125,9 @@ export default function App() {
         } />
         <Route path="/heures-travaillees" element={
           <RequireAuth><RequireDirectionOuAdmin><Layout><PointageHistorique /></Layout></RequireDirectionOuAdmin></RequireAuth>
+        } />
+        <Route path="/rentabilite" element={
+          <RequireAuth><RequireDirectionOuAdmin><Layout><Rentabilite /></Layout></RequireDirectionOuAdmin></RequireAuth>
         } />
       </Routes>
     </BrowserRouter>

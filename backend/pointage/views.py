@@ -1,4 +1,6 @@
+import calendar
 import os
+from datetime import date as date_cls
 from decimal import Decimal
 from io import BytesIO
 
@@ -6,7 +8,7 @@ import qrcode
 from PIL import Image, ImageDraw, ImageFont
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db.models import ProtectedError
+from django.db.models import ProtectedError, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -15,9 +17,14 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 
-from exploitation.models import RoleUtilisateur
+from exploitation.models import Ferme, LigneFacture, PointJournalier, RoleUtilisateur
 
 from .models import Absence, BadgeAbsence, BadgeTemporaire, Employe, LignePaie, Pointage, StatutAbsence
+
+# Prix moyen d'un sac d'aliment, pour valoriser la consommation (en sacs) en
+# coût FCFA dans la vue de rentabilité — cf. conversation du 26/07/2026 avec
+# Serge. À ajuster ici si le prix change.
+PRIX_ALIMENT_SAC_FCFA = Decimal("10755")
 from .serializers import (
     AbsenceSerializer,
     CorrigerPointageSerializer,
@@ -453,3 +460,84 @@ def badge_absence_declarer(request, token):
         )
     absence = Absence.objects.create(employe=employe, date=date, motif=motif, statut=StatutAbsence.EN_ATTENTE)
     return Response(AbsenceSerializer(absence).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@permission_classes([EstDirectionOuAdmin])
+def rentabilite(request):
+    """Marge par ferme sur un mois : revenus des ventes moins coût de
+    l'aliment (valorisé à PRIX_ALIMENT_SAC_FCFA) moins coût de la paie.
+
+    Un employé qui couvre plusieurs fermes (ex: un superviseur) voit son
+    coût du mois (pointages + absences validées + ajustements LignePaie)
+    réparti à parts égales entre ses fermes — cf. conversation du
+    26/07/2026 avec Serge."""
+    mois_param = request.query_params.get("mois")
+    debut = date_cls.fromisoformat(mois_param) if mois_param else timezone.localdate().replace(day=1)
+    debut = debut.replace(day=1)
+    dernier_jour = calendar.monthrange(debut.year, debut.month)[1]
+    fin = min(debut.replace(day=dernier_jour), timezone.localdate())
+
+    fermes = list(Ferme.objects.filter_visibles_par(request.user))
+    fermes_ids = {f.id for f in fermes}
+    resultats = {
+        f.id: {"ferme_id": f.id, "ferme_nom": f.nom, "revenus": Decimal("0"), "cout_aliment": Decimal("0"), "cout_paie": Decimal("0")}
+        for f in fermes
+    }
+
+    for ligne in (
+        LigneFacture.objects.filter(ferme_id__in=fermes_ids, facture__date__gte=debut, facture__date__lte=fin)
+        .values("ferme_id").annotate(total=Sum("montant"))
+    ):
+        resultats[ligne["ferme_id"]]["revenus"] = ligne["total"] or Decimal("0")
+
+    for ligne in (
+        PointJournalier.objects.filter(bande__ferme_id__in=fermes_ids, date__gte=debut, date__lte=fin)
+        .values("bande__ferme_id").annotate(sacs=Sum("conso_aliment_sacs"))
+    ):
+        sacs = ligne["sacs"] or Decimal("0")
+        resultats[ligne["bande__ferme_id"]]["cout_aliment"] = sacs * PRIX_ALIMENT_SAC_FCFA
+
+    for employe in Employe.objects.filter(actif=True).prefetch_related("fermes"):
+        fermes_employe = [f for f in employe.fermes.all() if f.id in fermes_ids]
+        if not fermes_employe:
+            continue
+        cout_pointages = Pointage.objects.filter(
+            employe=employe, date__gte=debut, date__lte=fin, heure_fin__isnull=False,
+        ).aggregate(total=Sum("montant_du_jour"))["total"] or Decimal("0")
+        nb_absences_validees = Absence.objects.filter(
+            employe=employe, date__gte=debut, date__lte=fin, statut=StatutAbsence.VALIDEE,
+        ).count()
+        cout_absences = employe.salaire_journalier * nb_absences_validees
+        ligne_paie = LignePaie.objects.filter(employe=employe, mois=debut).first()
+        cout_ajustements = Decimal("0")
+        if ligne_paie:
+            cout_ajustements = (
+                ligne_paie.frais + ligne_paie.primes + ligne_paie.carburant + ligne_paie.appel_internet
+                - ligne_paie.avances - ligne_paie.retenues
+            )
+        part = (cout_pointages + cout_absences + cout_ajustements) / len(fermes_employe)
+        for f in fermes_employe:
+            resultats[f.id]["cout_paie"] += part
+
+    donnees = []
+    total = {"revenus": Decimal("0"), "cout_aliment": Decimal("0"), "cout_paie": Decimal("0"), "marge": Decimal("0")}
+    for r in resultats.values():
+        marge = r["revenus"] - r["cout_aliment"] - r["cout_paie"]
+        for cle in ("revenus", "cout_aliment", "cout_paie"):
+            total[cle] += r[cle]
+        total["marge"] += marge
+        donnees.append({
+            "ferme_id": r["ferme_id"], "ferme_nom": r["ferme_nom"],
+            "revenus": str(r["revenus"].quantize(Decimal("1"))),
+            "cout_aliment": str(r["cout_aliment"].quantize(Decimal("1"))),
+            "cout_paie": str(r["cout_paie"].quantize(Decimal("1"))),
+            "marge": str(marge.quantize(Decimal("1"))),
+        })
+    donnees.sort(key=lambda d: d["ferme_nom"])
+    return Response({
+        "mois": debut.isoformat(),
+        "prix_aliment_sac": str(PRIX_ALIMENT_SAC_FCFA),
+        "fermes": donnees,
+        "total": {k: str(v.quantize(Decimal("1"))) for k, v in total.items()},
+    })
