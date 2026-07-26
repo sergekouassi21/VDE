@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import { Egg, TrendingUp, AlertTriangle, Skull, Package, ChevronRight, Activity, Wheat, Droplet } from "lucide-react";
 import { getDashboard, getEmployes, getAbsences } from "../api/client";
@@ -294,17 +294,45 @@ export default function Dashboard() {
                   );
                   const t = tauxPonte(f);
                   const alerte = t < 60 || Number(f.magasin.stock_aliment_sacs) <= Number(f.magasin.seuil_alerte_aliment_sacs) || f.bande_active.age.valeur >= AGE_REFORME_SEMAINES;
+                  const ouvert = sel === f.id;
                   return (
-                    <button key={f.id} style={styles.fermeRow} onClick={() => setSel(sel === f.id ? null : f.id)}>
-                      <div>
-                        <div style={styles.fermeNom}>{f.nom}</div>
-                        <div style={styles.fermeMeta}>{f.bande_active.age.label} · {nf(effectifActuel(f))} sujets · {formatSacs(Number(f.magasin.stock_aliment_sacs))}</div>
-                      </div>
-                      <div style={styles.fermeRight}>
-                        <span style={{ ...styles.tauxBadge, ...(alerte ? styles.tauxBadgeAlert : {}) }}>{t.toFixed(0)}%</span>
-                        <ChevronRight size={16} color="#B5BBB2" style={{ transform: sel === f.id ? "rotate(90deg)" : "none", transition: ".2s" }} />
-                      </div>
-                    </button>
+                    <Fragment key={f.id}>
+                      <button style={styles.fermeRow} onClick={() => setSel(ouvert ? null : f.id)}>
+                        <div>
+                          <div style={styles.fermeNom}>{f.nom}</div>
+                          <div style={styles.fermeMeta}>{f.bande_active.age.label} · {nf(effectifActuel(f))} sujets · {formatSacs(Number(f.magasin.stock_aliment_sacs))}</div>
+                        </div>
+                        <div style={styles.fermeRight}>
+                          <span style={{ ...styles.tauxBadge, ...(alerte ? styles.tauxBadgeAlert : {}) }}>{t.toFixed(0)}%</span>
+                          <ChevronRight size={16} color="#B5BBB2" style={{ transform: ouvert ? "rotate(90deg)" : "none", transition: ".2s" }} />
+                        </div>
+                      </button>
+                      {ouvert && (
+                        <div style={styles.fermeDetail}>
+                          <div style={styles.fermeDetailGrid}>
+                            <DetailItem label="Mise en place" value={new Date(f.bande_active.date_mise_en_place).toLocaleDateString("fr-FR")} />
+                            <DetailItem label="Mortalité" value={`${nf(f.dernier_point?.morts || 0)} /j · ${nf(f.mois?.morts || 0)} ce mois`} />
+                            {f.type === "PONTE" && (
+                              <DetailItem label="Production" value={`${nf(f.dernier_point?.production_oeufs || 0)} /j · ${nf(f.mois?.production_oeufs || 0)} ce mois`} />
+                            )}
+                            {f.type === "PONTE" && (
+                              <DetailItem label="Stock alvéoles" value={formatColis(f.magasin.stock_alveoles_unites)} />
+                            )}
+                            {f.type === "PONTE" && (
+                              <DetailItem label="Stock œuf" value={`${nf(f.bande_active?.stock_oeuf_actuel || 0)} œufs`} />
+                            )}
+                            <DetailItem label="Aliment / poule" value={`${nf(Math.round(ratioAlimentJour(f)))} g/j`} />
+                            <DetailItem label="Eau / poule" value={`${ratioEauJour(f).toFixed(2)} L/j`} />
+                          </div>
+                          {f.dernier_point?.traitement && (
+                            <p style={styles.fermeObservation}>Traitement : {f.dernier_point.traitement}</p>
+                          )}
+                          {f.dernier_point?.observation && (
+                            <p style={styles.fermeObservation}>« {f.dernier_point.observation} »</p>
+                          )}
+                        </div>
+                      )}
+                    </Fragment>
                   );
                 })}
               </div>
@@ -330,6 +358,14 @@ function Kpi({ icon, label, value, sub, accent, mois }) {
 }
 function Card({ titre, children, danger }) {
   return (<section style={styles.card}><div style={{ ...styles.cardHead, ...(danger ? { color: "#9E4527" } : {}) }}>{titre}</div>{children}</section>);
+}
+function DetailItem({ label, value }) {
+  return (
+    <div style={styles.fermeDetailItem}>
+      <span style={styles.fermeDetailLabel}>{label}</span>
+      <span style={styles.fermeDetailValeur}>{value}</span>
+    </div>
+  );
 }
 
 const tooltipStyle = { background: "#fff", border: "1px solid #ECE9DF", borderRadius: 10, fontSize: 12, boxShadow: "0 6px 20px rgba(0,0,0,.1)" };
@@ -373,5 +409,11 @@ const styles = {
   tauxBadge: { fontSize: 14, fontWeight: 700, color: GREEN_DARK, background: "#EAF3EE", padding: "3px 9px", borderRadius: 8 },
   tauxBadgeAlert: { color: "#9E4527", background: "#F7E4DC" },
   badgeVide: { fontSize: 11, color: "#95A09A", background: "#F2F0E8", padding: "3px 9px", borderRadius: 8 },
+  fermeDetail: { padding: "10px 8px 14px", background: "#FBFAF6", borderRadius: 10, marginBottom: 4 },
+  fermeDetailGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "8px 12px" },
+  fermeDetailItem: { display: "flex", flexDirection: "column", gap: 1 },
+  fermeDetailLabel: { fontSize: 10, color: "#8A948D", textTransform: "uppercase", letterSpacing: .3 },
+  fermeDetailValeur: { fontSize: 13, fontWeight: 600, color: GREEN_DARK },
+  fermeObservation: { fontSize: 12, color: "#6B756E", fontStyle: "italic", margin: "10px 0 0" },
   foot: { textAlign: "center", fontSize: 11, color: "#A8AEA4", marginTop: 22, lineHeight: 1.5 },
 };
