@@ -3,17 +3,24 @@ from rest_framework import serializers
 from .models import Absence, Employe, Pointage
 
 
+def _noms_fermes(employe):
+    return ", ".join(employe.fermes.values_list("nom", flat=True))
+
+
 class EmployeSerializer(serializers.ModelSerializer):
-    ferme_nom = serializers.CharField(source="ferme.nom", read_only=True)
+    fermes_noms = serializers.SerializerMethodField()
     user_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = Employe
         fields = [
-            "id", "nom", "ferme", "ferme_nom", "salaire_mensuel", "taux_horaire",
+            "id", "nom", "fermes", "fermes_noms", "salaire_mensuel", "taux_horaire",
             "jour_repos", "qr_token", "actif", "photo", "user", "user_nom",
         ]
         read_only_fields = ["qr_token", "taux_horaire"]
+
+    def get_fermes_noms(self, obj):
+        return _noms_fermes(obj)
 
     def get_user_nom(self, obj):
         if not obj.user:
@@ -23,7 +30,7 @@ class EmployeSerializer(serializers.ModelSerializer):
 
 class PointageSerializer(serializers.ModelSerializer):
     employe_nom = serializers.CharField(source="employe.nom", read_only=True)
-    ferme_nom = serializers.CharField(source="employe.ferme.nom", read_only=True)
+    ferme_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = Pointage
@@ -31,6 +38,9 @@ class PointageSerializer(serializers.ModelSerializer):
             "id", "employe", "employe_nom", "ferme_nom", "date",
             "heure_debut", "heure_fin", "heures_travaillees", "montant_du_jour",
         ]
+
+    def get_ferme_nom(self, obj):
+        return _noms_fermes(obj.employe)
 
 
 class CorrigerPointageSerializer(serializers.Serializer):
@@ -45,11 +55,14 @@ class CorrigerPointageSerializer(serializers.Serializer):
 
 class AbsenceSerializer(serializers.ModelSerializer):
     employe_nom = serializers.CharField(source="employe.nom", read_only=True)
-    ferme_nom = serializers.CharField(source="employe.ferme.nom", read_only=True)
+    ferme_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = Absence
         fields = ["id", "employe", "employe_nom", "ferme_nom", "date", "motif"]
+
+    def get_ferme_nom(self, obj):
+        return _noms_fermes(obj.employe)
 
 
 class ScanEmployeSerializer(serializers.ModelSerializer):
@@ -57,12 +70,15 @@ class ScanEmployeSerializer(serializers.ModelSerializer):
     nécessaire pour identifier visuellement l'employé, jamais le salaire
     (confidentiel, réservé à Direction/Admin)."""
 
-    ferme_nom = serializers.CharField(source="ferme.nom", read_only=True)
+    ferme_nom = serializers.SerializerMethodField()
     role = serializers.SerializerMethodField()
 
     class Meta:
         model = Employe
         fields = ["nom", "ferme_nom", "photo", "role"]
+
+    def get_ferme_nom(self, obj):
+        return _noms_fermes(obj)
 
     def get_role(self, obj):
         if not obj.user:

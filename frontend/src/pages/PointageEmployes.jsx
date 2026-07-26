@@ -16,7 +16,7 @@ export default function PointageEmployes() {
   const [editionId, setEditionId] = useState(null);
   const [userId, setUserId] = useState("");
   const [nom, setNom] = useState("");
-  const [ferme, setFerme] = useState("");
+  const [fermesSelectionnees, setFermesSelectionnees] = useState([]);
   const [salaireMensuel, setSalaireMensuel] = useState("");
   const [jourRepos, setJourRepos] = useState("");
   const [envoi, setEnvoi] = useState(false);
@@ -32,10 +32,14 @@ export default function PointageEmployes() {
     const utilisateur = utilisateurs.find((u) => String(u.id) === String(id));
     if (utilisateur) {
       setNom(utilisateur.nom);
-      if (utilisateur.fermes.length === 1) setFerme(String(utilisateur.fermes[0].id));
+      setFermesSelectionnees(utilisateur.fermes.map((f) => f.id));
     } else {
       setNom("");
     }
+  }
+
+  function toggleFerme(id) {
+    setFermesSelectionnees((sel) => (sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]));
   }
 
   const rafraichir = useCallback(() => {
@@ -49,13 +53,13 @@ export default function PointageEmployes() {
 
   function fermerForm() {
     setFormOuvert(false); setEditionId(null);
-    setNom(""); setFerme(""); setSalaireMensuel(""); setJourRepos(""); setUserId(""); setErreur("");
+    setNom(""); setFermesSelectionnees([]); setSalaireMensuel(""); setJourRepos(""); setUserId(""); setErreur("");
   }
 
   function commencerEdition(emp) {
     setEditionId(emp.id);
     setNom(emp.nom);
-    setFerme(String(emp.ferme));
+    setFermesSelectionnees(emp.fermes);
     setSalaireMensuel(String(emp.salaire_mensuel));
     setJourRepos(emp.jour_repos === null || emp.jour_repos === undefined ? "" : String(emp.jour_repos));
     setUserId("");
@@ -65,10 +69,10 @@ export default function PointageEmployes() {
 
   async function soumettre(e) {
     e.preventDefault();
-    if (!ferme || !salaireMensuel) return;
+    if (fermesSelectionnees.length === 0 || !salaireMensuel) return;
     setEnvoi(true);
     setErreur("");
-    const payload = { nom, ferme, salaire_mensuel: salaireMensuel, jour_repos: jourRepos === "" ? null : jourRepos };
+    const payload = { nom, fermes: fermesSelectionnees, salaire_mensuel: salaireMensuel, jour_repos: jourRepos === "" ? null : jourRepos };
     try {
       if (editionId) {
         await modifierEmploye(editionId, payload);
@@ -135,10 +139,15 @@ export default function PointageEmployes() {
               </select>
             )}
             <input style={styles.input} placeholder="Nom de l'employé" value={nom} onChange={(e) => setNom(e.target.value)} required />
-            <select style={styles.input} value={ferme} onChange={(e) => setFerme(e.target.value)} required>
-              <option value="">Ferme...</option>
-              {fermes.map((f) => <option key={f.id} value={f.id}>{f.nom}</option>)}
-            </select>
+            <div style={styles.fermesGroup}>
+              <span style={styles.fermesLabel}>Ferme(s) :</span>
+              {fermes.map((f) => (
+                <label key={f.id} style={styles.fermeCheckbox}>
+                  <input type="checkbox" checked={fermesSelectionnees.includes(f.id)} onChange={() => toggleFerme(f.id)} />
+                  {f.nom}
+                </label>
+              ))}
+            </div>
             <input style={styles.input} type="number" min="0" step="1" placeholder="Salaire mensuel (FCFA)" value={salaireMensuel} onChange={(e) => setSalaireMensuel(e.target.value)} required />
             <select style={styles.input} value={jourRepos} onChange={(e) => setJourRepos(e.target.value)}>
               <option value="">Jour de repos...</option>
@@ -175,7 +184,7 @@ export default function PointageEmployes() {
                     <tr key={emp.id}>
                       <td style={styles.td}>{emp.nom}</td>
                       <td style={styles.td}>{emp.user_nom ? <span style={{ color: GREEN_DARK }}>{emp.user_nom}</span> : <span style={{ color: "#B5BBB2" }}>—</span>}</td>
-                      <td style={styles.td}>{emp.ferme_nom}</td>
+                      <td style={styles.td}>{emp.fermes_noms}</td>
                       <td style={{ ...styles.td, textAlign: "right" }}>{emp.salaire_mensuel} F</td>
                       <td style={{ ...styles.td, textAlign: "right", color: "#8A948D" }}>{emp.taux_horaire} F/h</td>
                       <td style={styles.td}>{emp.jour_repos === null || emp.jour_repos === undefined ? "—" : JOURS_SEMAINE[emp.jour_repos]}</td>
@@ -210,7 +219,7 @@ export default function PointageEmployes() {
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <button style={styles.modalClose} onClick={() => setQrOuvert(null)}><X size={18} /></button>
             <h2 style={styles.modalTitre}>{qrOuvert.nom}</h2>
-            <p style={styles.modalSousTitre}>{qrOuvert.ferme_nom}</p>
+            <p style={styles.modalSousTitre}>{qrOuvert.fermes_noms}</p>
             {qrUrl ? (
               <>
                 <img src={qrUrl} alt="QR code" style={styles.qrImage} />
@@ -239,6 +248,9 @@ const styles = {
   addBtn: { display: "flex", alignItems: "center", gap: 6, background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   formCard: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 18, marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
   input: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK, flex: "1 1 160px" },
+  fermesGroup: { display: "flex", flexWrap: "wrap", gap: "8px 14px", alignItems: "center", padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", flex: "1 1 100%" },
+  fermesLabel: { fontSize: 12.5, color: "#7A857F", fontWeight: 600 },
+  fermeCheckbox: { display: "flex", alignItems: "center", gap: 5, fontSize: 13, color: INK, cursor: "pointer" },
   submitBtn: { background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   cancelBtn: { background: "#fff", color: "#7A857F", border: "1px solid #DAD5C7", borderRadius: 10, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   erreur: { color: "#9E4527", fontSize: 12.5, margin: 0, width: "100%" },

@@ -35,7 +35,7 @@ class Employe(models.Model):
     salaire mensuel annoncé."""
 
     nom = models.CharField(max_length=150)
-    ferme = models.ForeignKey(Ferme, on_delete=models.PROTECT, related_name="employes")
+    fermes = models.ManyToManyField(Ferme, related_name="employes", help_text="Plusieurs fermes possibles (ex: un superviseur qui en supervise plusieurs).")
     salaire_mensuel = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="FCFA par mois")
     taux_horaire = models.DecimalField(
         max_digits=10, decimal_places=2, default=0, editable=False,
@@ -55,7 +55,7 @@ class Employe(models.Model):
         ordering = ["nom"]
 
     def __str__(self):
-        return f"{self.nom} ({self.ferme.nom})"
+        return f"{self.nom} ({', '.join(self.fermes.values_list('nom', flat=True))})"
 
     @property
     def salaire_journalier(self):

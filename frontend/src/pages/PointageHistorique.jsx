@@ -79,7 +79,7 @@ export default function PointageHistorique() {
     const parEmploye = new Map();
     for (const emp of employesVises) {
       parEmploye.set(emp.id, {
-        employeId: emp.id, nom: emp.nom, fermeNom: emp.ferme_nom,
+        employeId: emp.id, nom: emp.nom, fermeNom: emp.fermes_noms,
         salaireMensuel: Number(emp.salaire_mensuel) || 0, jourRepos: emp.jour_repos, actif: emp.actif,
         lignesTravaillees: [], absencesJustifiees: [], joursAbsenceInjustifiee: [],
         totalHeures: 0, totalMontant: 0,

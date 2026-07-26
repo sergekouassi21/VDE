@@ -42,14 +42,14 @@ class EstDirectionOuAdmin(BasePermission):
 class EmployeViewSet(viewsets.ModelViewSet):
     serializer_class = EmployeSerializer
     permission_classes = [EstDirectionOuAdmin]
-    queryset = Employe.objects.select_related("ferme").all()
+    queryset = Employe.objects.prefetch_related("fermes").all()
 
     def get_queryset(self):
         qs = super().get_queryset()
         ferme_id = self.request.query_params.get("ferme")
         if ferme_id:
-            qs = qs.filter(ferme_id=ferme_id)
-        return qs
+            qs = qs.filter(fermes=ferme_id)
+        return qs.distinct()
 
     @action(detail=True, methods=["get"], url_path="qr")
     def qr(self, request, pk=None):
@@ -85,11 +85,11 @@ class PointageViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "patch", "delete"]
 
     def get_queryset(self):
-        qs = Pointage.objects.select_related("employe__ferme").all()
+        qs = Pointage.objects.select_related("employe").prefetch_related("employe__fermes").all()
 
         ferme_id = self.request.query_params.get("ferme")
         if ferme_id:
-            qs = qs.filter(employe__ferme_id=ferme_id)
+            qs = qs.filter(employe__fermes=ferme_id)
 
         employe_id = self.request.query_params.get("employe")
         if employe_id:
@@ -158,11 +158,11 @@ class AbsenceViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "delete"]
 
     def get_queryset(self):
-        qs = Absence.objects.select_related("employe__ferme").all()
+        qs = Absence.objects.select_related("employe").prefetch_related("employe__fermes").all()
 
         ferme_id = self.request.query_params.get("ferme")
         if ferme_id:
-            qs = qs.filter(employe__ferme_id=ferme_id)
+            qs = qs.filter(employe__fermes=ferme_id)
 
         employe_id = self.request.query_params.get("employe")
         if employe_id:
