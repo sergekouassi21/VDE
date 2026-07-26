@@ -73,7 +73,12 @@ class EmployeViewSet(viewsets.ModelViewSet):
         police = ImageFont.load_default(size=24)
         boite = dessin.textbbox((0, 0), employe.nom, font=police)
         x = max((largeur - (boite[2] - boite[0])) // 2, 0)
-        dessin.text((x, hauteur_qr + marge // 2), employe.nom, fill="black", font=police)
+        y = hauteur_qr + marge // 2
+        # ImageFont.load_default() n'a pas de variante grasse — on simule le
+        # gras en superposant le texte avec un léger décalage dans chaque
+        # direction (technique classique en l'absence de police en gras).
+        for dx, dy in [(0, 0), (1, 0), (0, 1), (1, 1)]:
+            dessin.text((x + dx, y + dy), employe.nom, fill="black", font=police)
 
         buffer = BytesIO()
         badge.save(buffer, format="PNG")
