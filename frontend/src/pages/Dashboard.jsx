@@ -53,6 +53,26 @@ export default function Dashboard() {
     return e > 0 && j > 0 ? Number(f.mois?.eau_consommee_litres || 0) / j / e : 0;
   };
 
+  // Indice de consommation (IC) : g d'aliment pour produire un œuf — le
+  // ratio de rentabilité standard en aviculture (avec le taux de ponte).
+  // Pas de seuil d'alerte : on n'a pas de valeur de référence validée pour
+  // cet élevage, contrairement à la courbe de ponte par race/âge.
+  const icJour = (f) => {
+    const p = f.dernier_point?.production_oeufs || 0;
+    return p > 0 ? alimentGrammesJour(f) / p : 0;
+  };
+  const icMois = (f) => {
+    const p = f.mois?.production_oeufs || 0;
+    return p > 0 ? (Number(f.mois?.conso_aliment_sacs || 0) * KG_PAR_SAC * 1000) / p : 0;
+  };
+  // Taux de casse/brisure — signal de qualité de manipulation ou de stress
+  // du troupeau, déjà saisi au point journalier mais jamais affiché.
+  const tauxCasseJour = (f) => {
+    const p = f.dernier_point?.production_oeufs || 0;
+    if (!p) return 0;
+    return ((f.dernier_point?.casse || 0) + (f.dernier_point?.brise || 0)) / p * 100;
+  };
+
   const kpi = useMemo(() => {
     const effectif = pondeuses.reduce((s, f) => s + effectifActuel(f), 0);
     const prod = pondeuses.reduce((s, f) => s + (f.dernier_point?.production_oeufs || 0), 0);
@@ -79,7 +99,13 @@ export default function Dashboard() {
     const rAlimentMois = pouleJours > 0 ? alimentMois / pouleJours : 0;
     const rEauMois = pouleJours > 0 ? eauMois / pouleJours : 0;
 
-    return { effectif, prod, prodMois, morts, mortsMois, stockOeuf, tauxMoyen, rAlimentJour, rAlimentMois, rEauJour, rEauMois };
+    // IC global = aliment total (g) / œufs totaux, sur les pondeuses uniquement
+    const alimentGrammesJourPondeuses = pondeuses.reduce((s, f) => s + alimentGrammesJour(f), 0);
+    const alimentGrammesMoisPondeuses = pondeuses.reduce((s, f) => s + Number(f.mois?.conso_aliment_sacs || 0) * KG_PAR_SAC * 1000, 0);
+    const icJourGlobal = prod > 0 ? alimentGrammesJourPondeuses / prod : 0;
+    const icMoisGlobal = prodMois > 0 ? alimentGrammesMoisPondeuses / prodMois : 0;
+
+    return { effectif, prod, prodMois, morts, mortsMois, stockOeuf, tauxMoyen, rAlimentJour, rAlimentMois, rEauJour, rEauMois, icJourGlobal, icMoisGlobal };
   }, [actives, pondeuses]);
 
   const alertes = useMemo(() => {
@@ -100,6 +126,9 @@ export default function Dashboard() {
       }
       if (f.type === "PONTE" && age && age.valeur >= AGE_REFORME_SEMAINES) {
         a.push({ ferme: f.nom, txt: `Bande en âge de réforme (${age.label})`, grav: "moy" });
+      }
+      if (f.type === "PONTE" && f.dernier_point?.production_oeufs > 0 && tauxCasseJour(f) > 5) {
+        a.push({ ferme: f.nom, txt: `Taux de casse/brisure élevé (${tauxCasseJour(f).toFixed(1)} %)`, grav: "moy" });
       }
     });
     if (absencesEnAttente.length > 0) {
@@ -144,6 +173,7 @@ export default function Dashboard() {
           <Kpi icon={<Package size={16} />} label="Stock œufs total" value={nf(kpi.stockOeuf)} sub="œufs" />
           <Kpi icon={<Wheat size={16} />} label="Aliment / poule" value={`${nf(Math.round(kpi.rAlimentJour))} g/j`} mois={`${nf(Math.round(kpi.rAlimentMois))} g/j moy. ce mois`} />
           <Kpi icon={<Droplet size={16} />} label="Eau / poule" value={`${kpi.rEauJour.toFixed(2)} L/j`} mois={`${kpi.rEauMois.toFixed(2)} L/j moy. ce mois`} />
+          <Kpi icon={<Wheat size={16} />} label="Indice de consommation" value={`${nf(Math.round(kpi.icJourGlobal))} g/œuf`} mois={`${nf(Math.round(kpi.icMoisGlobal))} g/œuf ce mois`} />
         </div>
 
         <div style={styles.kpiFermeGrid}>
@@ -191,6 +221,19 @@ export default function Dashboard() {
                     <span style={styles.kpiFermeValeur}>{ratioEauJour(f).toFixed(2)} L/j</span>
                     <span style={styles.kpiFermeMois}>{ratioEauMois(f).toFixed(2)} L/j moy. mois</span>
                   </div>
+                  {f.type === "PONTE" && (
+                    <div style={styles.kpiFermeStat}>
+                      <span style={styles.kpiFermeLabel}>IC (aliment/œuf)</span>
+                      <span style={styles.kpiFermeValeur}>{nf(Math.round(icJour(f)))} g</span>
+                      <span style={styles.kpiFermeMois}>{nf(Math.round(icMois(f)))} g ce mois</span>
+                    </div>
+                  )}
+                  {f.type === "PONTE" && (f.dernier_point?.production_oeufs || 0) > 0 && (
+                    <div style={styles.kpiFermeStat}>
+                      <span style={styles.kpiFermeLabel}>Taux de casse</span>
+                      <span style={{ ...styles.kpiFermeValeur, color: tauxCasseJour(f) > 5 ? "#9E4527" : INK }}>{tauxCasseJour(f).toFixed(1)} %</span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -323,6 +366,12 @@ export default function Dashboard() {
                             )}
                             <DetailItem label="Aliment / poule" value={`${nf(Math.round(ratioAlimentJour(f)))} g/j`} />
                             <DetailItem label="Eau / poule" value={`${ratioEauJour(f).toFixed(2)} L/j`} />
+                            {f.type === "PONTE" && (
+                              <DetailItem label="Indice de consommation" value={`${nf(Math.round(icJour(f)))} g/œuf`} />
+                            )}
+                            {f.type === "PONTE" && (f.dernier_point?.production_oeufs || 0) > 0 && (
+                              <DetailItem label="Taux de casse" value={`${tauxCasseJour(f).toFixed(1)} %`} />
+                            )}
                           </div>
                           {f.dernier_point?.traitement && (
                             <p style={styles.fermeObservation}>Traitement : {f.dernier_point.traitement}</p>
