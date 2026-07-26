@@ -205,6 +205,10 @@ class AbsenceViewSet(viewsets.ModelViewSet):
         if date_fin:
             qs = qs.filter(date__lte=date_fin)
 
+        statut = self.request.query_params.get("statut")
+        if statut:
+            qs = qs.filter(statut=statut)
+
         return qs.order_by("-date")
 
     def create(self, request, *args, **kwargs):

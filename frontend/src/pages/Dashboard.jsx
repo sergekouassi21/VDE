@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import { Egg, TrendingUp, AlertTriangle, Skull, Package, ChevronRight, Activity, Wheat, Droplet } from "lucide-react";
-import { getDashboard } from "../api/client";
+import { getDashboard, getEmployes, getAbsences } from "../api/client";
 import { GREEN, GREEN_DARK, INK, formatSacs, formatColis, AGE_REFORME_SEMAINES, KG_PAR_SAC } from "../theme";
 
 const nf = (v) => (v ?? 0).toLocaleString("fr-FR");
@@ -11,11 +11,24 @@ const COURBE_REF = { 17: 22, 20: 78, 25: 93, 30: 94, 40: 91, 47: 89, 48: 89, 50:
 
 export default function Dashboard() {
   const [fermes, setFermes] = useState([]);
+  const [evolutionMois, setEvolutionMois] = useState([]);
+  const [absencesEnAttente, setAbsencesEnAttente] = useState([]);
+  const [employesSansSalaire, setEmployesSansSalaire] = useState([]);
   const [sel, setSel] = useState(null);
   const [chargement, setChargement] = useState(true);
 
+  // Le pointage/la paie sont confidentiels à Direction/Admin (mêmes règles
+  // que partout ailleurs dans l'appli) — le tableau de bord, lui, est
+  // ouvert à tous les rôles, donc on ne tente ces appels que si autorisé.
+  const role = localStorage.getItem("vde_role");
+  const estDirectionOuAdmin = !role || role === "DIRECTION" || role === "ADMIN";
+
   useEffect(() => {
-    getDashboard().then((data) => { setFermes(data); setChargement(false); });
+    getDashboard().then((data) => { setFermes(data.fermes); setEvolutionMois(data.evolution_mois); setChargement(false); });
+    if (estDirectionOuAdmin) {
+      getAbsences({ statut: "EN_ATTENTE" }).then(setAbsencesEnAttente);
+      getEmployes().then((emps) => setEmployesSansSalaire(emps.filter((e) => e.actif && Number(e.salaire_mensuel) === 0)));
+    }
   }, []);
 
   const actives = fermes.filter((f) => !f.est_vide);
@@ -89,14 +102,26 @@ export default function Dashboard() {
         a.push({ ferme: f.nom, txt: `Bande en âge de réforme (${age.label})`, grav: "moy" });
       }
     });
+    if (absencesEnAttente.length > 0) {
+      a.unshift({ ferme: "Pointage", txt: `${absencesEnAttente.length} absence${absencesEnAttente.length > 1 ? "s" : ""} en attente de validation`, grav: "haut" });
+    }
+    employesSansSalaire.forEach((e) => {
+      a.push({ ferme: "Paie", txt: `${e.nom} n'a pas de salaire mensuel renseigné`, grav: "moy" });
+    });
     return a.sort((x, y) => (x.grav === "haut" ? -1 : 1));
-  }, [actives]);
+  }, [actives, absencesEnAttente, employesSansSalaire]);
 
   const dataPonte = pondeuses.map((f) => ({ nom: f.nom.replace("Ayénou", "Ay."), taux: +tauxPonte(f).toFixed(1) }));
   const dataAge = pondeuses
     .filter((f) => f.bande_active)
     .map((f) => ({ nom: f.nom.replace("Ayénou", "Ay."), age: f.bande_active.age.valeur, ref: COURBE_REF[f.bande_active.age.valeur] || null, reel: +tauxPonte(f).toFixed(1) }))
     .sort((a, b) => a.age - b.age);
+  const dataAliment = actives.map((f) => ({ nom: f.nom.replace("Ayénou", "Ay."), valeur: +ratioAlimentJour(f).toFixed(0) }));
+  const dataEau = actives.map((f) => ({ nom: f.nom.replace("Ayénou", "Ay."), valeur: +ratioEauJour(f).toFixed(2) }));
+  const dataMortalite = evolutionMois.map((e) => ({
+    date: new Date(e.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
+    morts: e.morts,
+  }));
 
   if (chargement) return <div style={styles.page}><p style={{ padding: 20 }}>Chargement...</p></div>;
 
@@ -199,6 +224,46 @@ export default function Dashboard() {
                 </LineChart>
               </ResponsiveContainer>
               <p style={styles.legend}><span style={{ color: GREEN, fontWeight: 600 }}>● Réel VDE</span> &nbsp; <span style={{ color: "#C6A15B", fontWeight: 600 }}>● Référence race</span></p>
+            </Card>
+
+            <Card titre="Mortalité — évolution du mois">
+              {dataMortalite.length === 0 ? (
+                <p style={styles.noAlert}>Pas encore de données ce mois-ci</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={dataMortalite} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#EEEBE2" vertical={false} />
+                    <XAxis dataKey="date" tickLine={false} axisLine={false} />
+                    <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v} sujets`, "Mortalité"]} />
+                    <Line type="monotone" dataKey="morts" stroke="#C6603A" strokeWidth={2.5} dot={{ r: 3, fill: "#C6603A" }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </Card>
+
+            <Card titre="Aliment par ferme (g / poule / jour)">
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={dataAliment} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#EEEBE2" vertical={false} />
+                  <XAxis dataKey="nom" tickLine={false} axisLine={false} />
+                  <YAxis tickLine={false} axisLine={false} />
+                  <Tooltip cursor={{ fill: "#F4F1EA" }} contentStyle={tooltipStyle} formatter={(v) => [`${v} g`, "Aliment"]} />
+                  <Bar dataKey="valeur" radius={[6, 6, 0, 0]} fill="#C6A15B" />
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+
+            <Card titre="Eau par ferme (L / poule / jour)">
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={dataEau} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#EEEBE2" vertical={false} />
+                  <XAxis dataKey="nom" tickLine={false} axisLine={false} />
+                  <YAxis tickLine={false} axisLine={false} />
+                  <Tooltip cursor={{ fill: "#F4F1EA" }} contentStyle={tooltipStyle} formatter={(v) => [`${v} L`, "Eau"]} />
+                  <Bar dataKey="valeur" radius={[6, 6, 0, 0]} fill="#4A90A4" />
+                </BarChart>
+              </ResponsiveContainer>
             </Card>
           </div>
 
