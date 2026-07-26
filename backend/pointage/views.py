@@ -168,7 +168,10 @@ def utilisateurs_disponibles(request):
     déjà connu du système (cf. retour utilisateur)."""
     User = get_user_model()
     deja_lies = Employe.objects.exclude(user=None).values_list("user_id", flat=True)
-    roles = (RoleUtilisateur.CHEF_FERME, RoleUtilisateur.SOUS_CHEF_FERME, RoleUtilisateur.SUPERVISEUR)
+    roles = (
+        RoleUtilisateur.CHEF_FERME, RoleUtilisateur.SOUS_CHEF_FERME, RoleUtilisateur.SUPERVISEUR,
+        RoleUtilisateur.OUVRIER, RoleUtilisateur.GARDIEN,
+    )
     qs = (
         User.objects.filter(profil__role__in=roles)
         .exclude(id__in=deja_lies)
