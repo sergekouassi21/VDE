@@ -67,6 +67,9 @@ export const getQrEmployeBlob = (id) =>
 export const getPointages = (params) => api.get("/pointage/historique/", { params }).then((r) => r.data);
 export const corrigerPointage = (id, payload) => api.patch(`/pointage/historique/${id}/`, payload).then((r) => r.data);
 export const supprimerPointage = (id) => api.delete(`/pointage/historique/${id}/`);
+export const getAbsences = (params) => api.get("/pointage/absences/", { params }).then((r) => r.data);
+export const declarerAbsence = (payload) => api.post("/pointage/absences/", payload).then((r) => r.data);
+export const supprimerAbsence = (id) => api.delete(`/pointage/absences/${id}/`);
 
 // Écran de scan public — pas de token d'authentification, le token du QR
 // (dans l'URL) fait office d'identifiant.

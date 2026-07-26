@@ -4,6 +4,7 @@ import { getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 
 const LABEL_ROLE = { CHEF_FERME: "Chef de ferme", SOUS_CHEF_FERME: "Sous-chef de ferme", SUPERVISEUR: "Superviseur", OUVRIER: "Ouvrier", GARDIEN: "Gardien" };
+const JOURS_SEMAINE = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 
 export default function PointageEmployes() {
   const [fermes, setFermes] = useState([]);
@@ -16,7 +17,8 @@ export default function PointageEmployes() {
   const [userId, setUserId] = useState("");
   const [nom, setNom] = useState("");
   const [ferme, setFerme] = useState("");
-  const [tauxHoraire, setTauxHoraire] = useState("");
+  const [salaireMensuel, setSalaireMensuel] = useState("");
+  const [jourRepos, setJourRepos] = useState("");
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState("");
   const [qrOuvert, setQrOuvert] = useState(null);
@@ -47,14 +49,15 @@ export default function PointageEmployes() {
 
   function fermerForm() {
     setFormOuvert(false); setEditionId(null);
-    setNom(""); setFerme(""); setTauxHoraire(""); setUserId(""); setErreur("");
+    setNom(""); setFerme(""); setSalaireMensuel(""); setJourRepos(""); setUserId(""); setErreur("");
   }
 
   function commencerEdition(emp) {
     setEditionId(emp.id);
     setNom(emp.nom);
     setFerme(String(emp.ferme));
-    setTauxHoraire(String(emp.taux_horaire));
+    setSalaireMensuel(String(emp.salaire_mensuel));
+    setJourRepos(emp.jour_repos === null || emp.jour_repos === undefined ? "" : String(emp.jour_repos));
     setUserId("");
     setErreur("");
     setFormOuvert(true);
@@ -62,14 +65,15 @@ export default function PointageEmployes() {
 
   async function soumettre(e) {
     e.preventDefault();
-    if (!ferme || !tauxHoraire) return;
+    if (!ferme || !salaireMensuel) return;
     setEnvoi(true);
     setErreur("");
+    const payload = { nom, ferme, salaire_mensuel: salaireMensuel, jour_repos: jourRepos === "" ? null : jourRepos };
     try {
       if (editionId) {
-        await modifierEmploye(editionId, { nom, ferme, taux_horaire: tauxHoraire });
+        await modifierEmploye(editionId, payload);
       } else {
-        await creerEmploye({ nom, ferme, taux_horaire: tauxHoraire, user: userId || null });
+        await creerEmploye({ ...payload, user: userId || null });
       }
       fermerForm();
       rafraichir();
@@ -135,7 +139,11 @@ export default function PointageEmployes() {
               <option value="">Ferme...</option>
               {fermes.map((f) => <option key={f.id} value={f.id}>{f.nom}</option>)}
             </select>
-            <input style={styles.input} type="number" min="0" step="1" placeholder="Taux horaire (FCFA/h)" value={tauxHoraire} onChange={(e) => setTauxHoraire(e.target.value)} required />
+            <input style={styles.input} type="number" min="0" step="1" placeholder="Salaire mensuel (FCFA)" value={salaireMensuel} onChange={(e) => setSalaireMensuel(e.target.value)} required />
+            <select style={styles.input} value={jourRepos} onChange={(e) => setJourRepos(e.target.value)}>
+              <option value="">Jour de repos...</option>
+              {JOURS_SEMAINE.map((j, i) => <option key={i} value={i}>{j}</option>)}
+            </select>
             {erreur && <p style={styles.erreur}>{erreur}</p>}
             <button style={styles.submitBtn} type="submit" disabled={envoi}>{envoi ? "Enregistrement..." : editionId ? "Enregistrer les modifications" : "Ajouter"}</button>
             {editionId && <button type="button" style={styles.cancelBtn} onClick={fermerForm}>Annuler</button>}
@@ -155,7 +163,9 @@ export default function PointageEmployes() {
                     <th style={styles.th}>Nom</th>
                     <th style={styles.th}>Compte lié</th>
                     <th style={styles.th}>Ferme</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Salaire mensuel</th>
                     <th style={{ ...styles.th, textAlign: "right" }}>Taux horaire</th>
+                    <th style={styles.th}>Repos</th>
                     <th style={styles.th}>Statut</th>
                     <th style={styles.th}></th>
                   </tr>
@@ -166,7 +176,9 @@ export default function PointageEmployes() {
                       <td style={styles.td}>{emp.nom}</td>
                       <td style={styles.td}>{emp.user_nom ? <span style={{ color: GREEN_DARK }}>{emp.user_nom}</span> : <span style={{ color: "#B5BBB2" }}>—</span>}</td>
                       <td style={styles.td}>{emp.ferme_nom}</td>
-                      <td style={{ ...styles.td, textAlign: "right" }}>{emp.taux_horaire} F/h</td>
+                      <td style={{ ...styles.td, textAlign: "right" }}>{emp.salaire_mensuel} F</td>
+                      <td style={{ ...styles.td, textAlign: "right", color: "#8A948D" }}>{emp.taux_horaire} F/h</td>
+                      <td style={styles.td}>{emp.jour_repos === null || emp.jour_repos === undefined ? "—" : JOURS_SEMAINE[emp.jour_repos]}</td>
                       <td style={styles.td}>
                         <span style={{ color: emp.actif ? GREEN : CLAY, fontWeight: 600 }}>{emp.actif ? "Actif" : "Désactivé"}</span>
                       </td>

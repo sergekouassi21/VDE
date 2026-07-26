@@ -15,8 +15,14 @@ from rest_framework.response import Response
 
 from exploitation.models import RoleUtilisateur
 
-from .models import Employe, Pointage
-from .serializers import CorrigerPointageSerializer, EmployeSerializer, PointageSerializer, ScanEmployeSerializer
+from .models import Absence, Employe, Pointage
+from .serializers import (
+    AbsenceSerializer,
+    CorrigerPointageSerializer,
+    EmployeSerializer,
+    PointageSerializer,
+    ScanEmployeSerializer,
+)
 
 
 class EstDirectionOuAdmin(BasePermission):
@@ -139,6 +145,53 @@ class PointageViewSet(viewsets.ModelViewSet):
 
         pointage.save()
         return Response(PointageSerializer(pointage).data)
+
+
+class AbsenceViewSet(viewsets.ModelViewSet):
+    """Déclaration d'absences justifiées (payées comme une journée complète)
+    — réservée à Direction/Admin. Une absence injustifiée ne nécessite
+    aucune déclaration ici : elle ressort automatiquement du résumé/de la
+    fiche de paie comme un jour ouvré sans Pointage ni Absence."""
+
+    serializer_class = AbsenceSerializer
+    permission_classes = [EstDirectionOuAdmin]
+    http_method_names = ["get", "post", "delete"]
+
+    def get_queryset(self):
+        qs = Absence.objects.select_related("employe__ferme").all()
+
+        ferme_id = self.request.query_params.get("ferme")
+        if ferme_id:
+            qs = qs.filter(employe__ferme_id=ferme_id)
+
+        employe_id = self.request.query_params.get("employe")
+        if employe_id:
+            qs = qs.filter(employe_id=employe_id)
+
+        date_debut = self.request.query_params.get("date_debut")
+        if date_debut:
+            qs = qs.filter(date__gte=date_debut)
+
+        date_fin = self.request.query_params.get("date_fin")
+        if date_fin:
+            qs = qs.filter(date__lte=date_fin)
+
+        return qs.order_by("-date")
+
+    def create(self, request, *args, **kwargs):
+        employe_id = request.data.get("employe")
+        date = request.data.get("date")
+        if Pointage.objects.filter(employe_id=employe_id, date=date).exists():
+            return Response(
+                {"detail": "Cet employé a déjà un pointage à cette date — ce n'est pas une absence."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if Absence.objects.filter(employe_id=employe_id, date=date).exists():
+            return Response(
+                {"detail": "Une absence est déjà déclarée à cette date pour cet employé."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().create(request, *args, **kwargs)
 
 
 def _etat_pointage(request, employe):

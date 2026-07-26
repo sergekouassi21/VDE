@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Employe, Pointage
+from .models import Absence, Employe, Pointage
 
 
 class EmployeSerializer(serializers.ModelSerializer):
@@ -9,8 +9,11 @@ class EmployeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Employe
-        fields = ["id", "nom", "ferme", "ferme_nom", "taux_horaire", "qr_token", "actif", "photo", "user", "user_nom"]
-        read_only_fields = ["qr_token"]
+        fields = [
+            "id", "nom", "ferme", "ferme_nom", "salaire_mensuel", "taux_horaire",
+            "jour_repos", "qr_token", "actif", "photo", "user", "user_nom",
+        ]
+        read_only_fields = ["qr_token", "taux_horaire"]
 
     def get_user_nom(self, obj):
         if not obj.user:
@@ -40,10 +43,19 @@ class CorrigerPointageSerializer(serializers.Serializer):
     heure_fin = serializers.DateTimeField(required=False, allow_null=True)
 
 
+class AbsenceSerializer(serializers.ModelSerializer):
+    employe_nom = serializers.CharField(source="employe.nom", read_only=True)
+    ferme_nom = serializers.CharField(source="employe.ferme.nom", read_only=True)
+
+    class Meta:
+        model = Absence
+        fields = ["id", "employe", "employe_nom", "ferme_nom", "date", "motif"]
+
+
 class ScanEmployeSerializer(serializers.ModelSerializer):
     """Réponse publique renvoyée à l'écran de scan — uniquement ce qui est
-    nécessaire pour identifier visuellement l'employé, jamais le taux
-    horaire (confidentiel, réservé à Direction/Admin)."""
+    nécessaire pour identifier visuellement l'employé, jamais le salaire
+    (confidentiel, réservé à Direction/Admin)."""
 
     ferme_nom = serializers.CharField(source="ferme.nom", read_only=True)
 

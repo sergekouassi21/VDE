@@ -299,10 +299,12 @@ export function genererPdfHistoriquePoint(p) {
   return doc;
 }
 
-// Fiche de paie d'un employé pour une période — regroupe ses pointages
-// (déjà groupés côté PointageHistorique) en une liste chronologique avec
-// un total en bas, sur plusieurs pages si le mois est long.
-export function genererFichePaie(employe, periodeLabel, lignes) {
+// Fiche de paie d'un employé pour une période — fusionne jours travaillés
+// (pointages) et absences justifiées (payées comme une journée complète)
+// en une liste chronologique, puis liste séparément les absences
+// injustifiées (non payées) pour que le calcul reste traçable plutôt
+// qu'un manque à gagner silencieux. Pagine si le mois est long.
+export function genererFichePaie(employe, periodeLabel, lignes, absencesJustifiees = [], joursAbsenceInjustifiee = []) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   entete(doc);
 
@@ -327,12 +329,17 @@ export function genererFichePaie(employe, periodeLabel, lignes) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9.5);
     doc.text("Date", 18, y);
-    doc.text("Arrivée", 75, y);
-    doc.text("Départ", 110, y);
+    doc.text("Arrivée / motif", 75, y);
+    doc.text("Départ", 130, y);
     doc.text("Heures", 155, y, { align: "right" });
     doc.text("Montant", 192, y, { align: "right" });
     return y + 8;
   }
+
+  const lignesFusionnees = [
+    ...lignes.map((l) => ({ type: "travail", date: l.date, arrivee: heureTxt(l.heure_debut), depart: heureTxt(l.heure_fin), heures: Number(l.heures_travaillees) || 0, montant: Number(l.montant_du_jour) || 0 })),
+    ...absencesJustifiees.map((a) => ({ type: "absence", date: a.date, arrivee: `Absence justifiée${a.motif ? " — " + a.motif : ""}`, depart: "", heures: 0, montant: Number(a.montant) || 0 })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
 
   let y = entetesColonnes(74);
   doc.setFont("helvetica", "normal");
@@ -340,7 +347,7 @@ export function genererFichePaie(employe, periodeLabel, lignes) {
   let totalHeures = 0;
   let totalMontant = 0;
 
-  lignes.forEach((l, i) => {
+  lignesFusionnees.forEach((l, i) => {
     if (y > 270) {
       doc.addPage();
       entete(doc);
@@ -354,12 +361,12 @@ export function genererFichePaie(employe, periodeLabel, lignes) {
     }
     doc.setTextColor(...INK);
     doc.text(new Date(l.date).toLocaleDateString("fr-FR"), 18, y);
-    doc.text(heureTxt(l.heure_debut), 75, y);
-    doc.text(heureTxt(l.heure_fin), 110, y);
-    doc.text(`${l.heures_travaillees} h`, 155, y, { align: "right" });
-    doc.text(fcfa(l.montant_du_jour), 192, y, { align: "right" });
-    totalHeures += Number(l.heures_travaillees) || 0;
-    totalMontant += Number(l.montant_du_jour) || 0;
+    doc.text(l.arrivee, 75, y, { maxWidth: l.type === "absence" ? 75 : 50 });
+    if (l.type === "travail") doc.text(l.depart, 130, y);
+    doc.text(l.type === "travail" ? `${l.heures} h` : "—", 155, y, { align: "right" });
+    doc.text(fcfa(l.montant), 192, y, { align: "right" });
+    totalHeures += l.heures;
+    totalMontant += l.montant;
     y += 7;
   });
 
@@ -373,6 +380,17 @@ export function genererFichePaie(employe, periodeLabel, lignes) {
   doc.setTextColor(...INK);
   doc.text(`Total : ${totalHeures.toFixed(2)} h`, 15, y);
   doc.text(fcfa(totalMontant), 192, y, { align: "right" });
+  y += 12;
+
+  if (joursAbsenceInjustifiee.length > 0) {
+    if (y > 260) { doc.addPage(); entete(doc); y = 42; }
+    y = bandeauSection(doc, y, "Absences injustifiées (non payées)");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(...CLAY);
+    const texte = joursAbsenceInjustifiee.map((d) => new Date(d).toLocaleDateString("fr-FR")).join("   ·   ");
+    doc.text(texte, 18, y, { maxWidth: 174 });
+  }
 
   doc.setFont("helvetica", "italic");
   doc.setFontSize(9);

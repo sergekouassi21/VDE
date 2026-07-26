@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Pencil, Trash2, X, Download, FileText } from "lucide-react";
-import { getFermes, getEmployes, getPointages, corrigerPointage, supprimerPointage } from "../api/client";
+import { Pencil, Trash2, X, Download, FileText, UserMinus } from "lucide-react";
+import { getFermes, getEmployes, getPointages, corrigerPointage, supprimerPointage, getAbsences, declarerAbsence, supprimerAbsence } from "../api/client";
 import { genererFichePaie, telechargerPdf } from "../utils/pdf";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 
@@ -9,6 +9,11 @@ const fcfa = (v) => `${separeMilliers(Number(v) || 0)} F`;
 const heure = (iso) => (iso ? new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—");
 const pad = (n) => String(n).padStart(2, "0");
 const dateISO = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+// Convertit un "YYYY-MM-DD" en Date locale à minuit — évite le piège de
+// new Date("YYYY-MM-DD") qui parse en UTC (décalage possible hors CI/UTC+0).
+const parseISO = (s) => { const [a, m, j] = s.split("-").map(Number); return new Date(a, m - 1, j); };
+// Convertit JS getDay() (0=dimanche) vers notre convention (0=lundi...6=dimanche).
+const jourSemaineISO = (d) => (d.getDay() + 6) % 7;
 
 function versDatetimeLocal(iso) {
   if (!iso) return "";
@@ -20,6 +25,7 @@ export default function PointageHistorique() {
   const [fermes, setFermes] = useState([]);
   const [employes, setEmployes] = useState([]);
   const [pointages, setPointages] = useState([]);
+  const [absences, setAbsences] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [fermeId, setFermeId] = useState("");
   const [employeId, setEmployeId] = useState("");
@@ -31,6 +37,12 @@ export default function PointageHistorique() {
   const [finEdit, setFinEdit] = useState("");
   const [erreurEdit, setErreurEdit] = useState("");
   const [envoi, setEnvoi] = useState(false);
+
+  const [formAbsenceOuvert, setFormAbsenceOuvert] = useState(false);
+  const [absEmploye, setAbsEmploye] = useState("");
+  const [absDate, setAbsDate] = useState("");
+  const [absMotif, setAbsMotif] = useState("");
+  const [erreurAbsence, setErreurAbsence] = useState("");
 
   useEffect(() => { getFermes().then(setFermes); }, []);
   useEffect(() => {
@@ -45,7 +57,9 @@ export default function PointageHistorique() {
     if (employeId) params.employe = employeId;
     if (dateDebut) params.date_debut = dateDebut;
     if (dateFin) params.date_fin = dateFin;
-    getPointages(params).then((data) => { setPointages(data); setChargement(false); });
+    Promise.all([getPointages(params), getAbsences(params)]).then(([pts, abs]) => {
+      setPointages(pts); setAbsences(abs); setChargement(false);
+    });
   }, [fermeId, employeId, dateDebut, dateFin]);
 
   useEffect(() => { rafraichir(); }, [rafraichir]);
@@ -55,20 +69,58 @@ export default function PointageHistorique() {
     montant: pointages.reduce((s, p) => s + Number(p.montant_du_jour || 0), 0),
   }), [pointages]);
 
+  // Regroupe par employé : jours travaillés (pointages), absences justifiées
+  // (payées comme une journée complète) et — seulement si une période
+  // complète est sélectionnée — les jours ouvrés sans pointage ni absence
+  // déclarée, listés comme absences injustifiées (non payées) pour que ça
+  // reste visible/traçable plutôt qu'un simple manque à gagner silencieux.
   const resumeParEmploye = useMemo(() => {
-    const groupes = new Map();
+    const employesVises = employeId ? employes.filter((e) => String(e.id) === String(employeId)) : employes;
+    const parEmploye = new Map();
+    for (const emp of employesVises) {
+      parEmploye.set(emp.id, {
+        employeId: emp.id, nom: emp.nom, fermeNom: emp.ferme_nom,
+        salaireMensuel: Number(emp.salaire_mensuel) || 0, jourRepos: emp.jour_repos, actif: emp.actif,
+        lignesTravaillees: [], absencesJustifiees: [], joursAbsenceInjustifiee: [],
+        totalHeures: 0, totalMontant: 0,
+      });
+    }
     for (const p of pointages) {
-      if (!p.heure_fin) continue; // journée pas terminée, pas encore comptabilisable
-      if (!groupes.has(p.employe)) {
-        groupes.set(p.employe, { employeId: p.employe, nom: p.employe_nom, fermeNom: p.ferme_nom, lignes: [], totalHeures: 0, totalMontant: 0 });
-      }
-      const g = groupes.get(p.employe);
-      g.lignes.push(p);
+      const g = parEmploye.get(p.employe);
+      if (!g || !p.heure_fin) continue;
+      g.lignesTravaillees.push(p);
       g.totalHeures += Number(p.heures_travaillees || 0);
       g.totalMontant += Number(p.montant_du_jour || 0);
     }
-    return [...groupes.values()].sort((a, b) => a.nom.localeCompare(b.nom));
-  }, [pointages]);
+    for (const a of absences) {
+      const g = parEmploye.get(a.employe);
+      if (!g) continue;
+      const montantJour = g.salaireMensuel / 26;
+      g.absencesJustifiees.push({ ...a, montant: montantJour });
+      g.totalMontant += montantJour;
+    }
+    if (dateDebut && dateFin) {
+      const pointagesFaits = new Set(pointages.filter((p) => p.heure_fin).map((p) => `${p.employe}_${p.date}`));
+      const absencesDeclarees = new Set(absences.map((a) => `${a.employe}_${a.date}`));
+      const debut = parseISO(dateDebut);
+      const fin = parseISO(dateFin);
+      const aujourdhui = new Date();
+      for (const g of parEmploye.values()) {
+        if (!g.actif) continue;
+        for (let d = new Date(debut); d <= fin; d.setDate(d.getDate() + 1)) {
+          if (d > aujourdhui) break;
+          if (jourSemaineISO(d) === g.jourRepos) continue;
+          const iso = dateISO(d);
+          const cle = `${g.employeId}_${iso}`;
+          if (pointagesFaits.has(cle) || absencesDeclarees.has(cle)) continue;
+          g.joursAbsenceInjustifiee.push(iso);
+        }
+      }
+    }
+    return [...parEmploye.values()]
+      .filter((g) => g.lignesTravaillees.length > 0 || g.absencesJustifiees.length > 0 || g.joursAbsenceInjustifiee.length > 0)
+      .sort((a, b) => a.nom.localeCompare(b.nom));
+  }, [pointages, absences, employes, employeId, dateDebut, dateFin]);
 
   const periodeLabel = useMemo(() => {
     if (dateDebut && dateFin) return `Du ${new Date(dateDebut).toLocaleDateString("fr-FR")} au ${new Date(dateFin).toLocaleDateString("fr-FR")}`;
@@ -86,8 +138,15 @@ export default function PointageHistorique() {
   }
 
   function telechargerFichePaie(groupe) {
-    const lignesTriees = [...groupe.lignes].sort((a, b) => a.date.localeCompare(b.date));
-    const doc = genererFichePaie({ nom: groupe.nom, ferme_nom: groupe.fermeNom }, periodeLabel, lignesTriees);
+    const lignesTriees = [...groupe.lignesTravaillees].sort((a, b) => a.date.localeCompare(b.date));
+    const absencesTriees = [...groupe.absencesJustifiees].sort((a, b) => a.date.localeCompare(b.date));
+    const doc = genererFichePaie(
+      { nom: groupe.nom, ferme_nom: groupe.fermeNom },
+      periodeLabel,
+      lignesTriees,
+      absencesTriees,
+      groupe.joursAbsenceInjustifiee,
+    );
     telechargerPdf(doc, `fiche-paie-${groupe.nom.replace(/\s+/g, "-")}-${dateDebut || "periode"}.pdf`);
   }
 
@@ -126,6 +185,25 @@ export default function PointageHistorique() {
     }
   }
 
+  async function soumettreAbsence(e) {
+    e.preventDefault();
+    if (!absEmploye || !absDate) return;
+    setErreurAbsence("");
+    try {
+      await declarerAbsence({ employe: absEmploye, date: absDate, motif: absMotif });
+      setAbsEmploye(""); setAbsDate(""); setAbsMotif(""); setFormAbsenceOuvert(false);
+      rafraichir();
+    } catch (err) {
+      setErreurAbsence(err?.response?.data?.detail || "Impossible de déclarer cette absence.");
+    }
+  }
+
+  async function supprimerAbs(a) {
+    if (!window.confirm(`Annuler l'absence justifiée de ${a.employe_nom} du ${new Date(a.date).toLocaleDateString("fr-FR")} ?`)) return;
+    await supprimerAbsence(a.id);
+    rafraichir();
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.wrap}>
@@ -160,7 +238,23 @@ export default function PointageHistorique() {
               Réinitialiser
             </button>
           )}
+          <button style={styles.addBtn} onClick={() => setFormAbsenceOuvert((o) => !o)}>
+            <UserMinus size={15} /> Déclarer une absence
+          </button>
         </div>
+
+        {formAbsenceOuvert && (
+          <form style={styles.formCard} onSubmit={soumettreAbsence}>
+            <select style={styles.input} value={absEmploye} onChange={(e) => setAbsEmploye(e.target.value)} required>
+              <option value="">Employé...</option>
+              {employes.map((emp) => <option key={emp.id} value={emp.id}>{emp.nom}</option>)}
+            </select>
+            <input style={styles.input} type="date" value={absDate} onChange={(e) => setAbsDate(e.target.value)} required />
+            <input style={styles.input} placeholder="Motif (optionnel)" value={absMotif} onChange={(e) => setAbsMotif(e.target.value)} />
+            {erreurAbsence && <p style={styles.erreur}>{erreurAbsence}</p>}
+            <button style={styles.submitBtn} type="submit">Déclarer (justifiée, payée)</button>
+          </form>
+        )}
 
         {pointages.length > 0 && (
           <div style={styles.totaux}>
@@ -181,8 +275,9 @@ export default function PointageHistorique() {
                   <tr>
                     <th style={styles.th}>Employé</th>
                     <th style={styles.th}>Ferme</th>
-                    <th style={{ ...styles.th, textAlign: "right" }}>Jours</th>
-                    <th style={{ ...styles.th, textAlign: "right" }}>Heures</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Jours travaillés</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Absences justifiées</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Absences injustifiées</th>
                     <th style={{ ...styles.th, textAlign: "right" }}>À payer</th>
                     <th style={styles.th}></th>
                   </tr>
@@ -192,12 +287,38 @@ export default function PointageHistorique() {
                     <tr key={g.employeId}>
                       <td style={styles.td}>{g.nom}</td>
                       <td style={styles.td}>{g.fermeNom}</td>
-                      <td style={{ ...styles.td, textAlign: "right" }}>{g.lignes.length}</td>
-                      <td style={{ ...styles.td, textAlign: "right" }}>{g.totalHeures.toFixed(2)} h</td>
+                      <td style={{ ...styles.td, textAlign: "right" }}>{g.lignesTravaillees.length}</td>
+                      <td style={{ ...styles.td, textAlign: "right" }}>{g.absencesJustifiees.length}</td>
+                      <td style={{ ...styles.td, textAlign: "right", color: g.joursAbsenceInjustifiee.length > 0 ? CLAY : "inherit" }}>{g.joursAbsenceInjustifiee.length}</td>
                       <td style={{ ...styles.td, textAlign: "right", fontWeight: 600, color: GREEN_DARK }}>{fcfa(g.totalMontant)}</td>
                       <td style={styles.td}>
                         <button style={styles.pdfBtn} onClick={() => telechargerFichePaie(g)}>
                           <Download size={14} /> Fiche de paie
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {absences.length > 0 && (
+          <section style={{ ...styles.card, marginBottom: 16 }}>
+            <div style={styles.resumeHead}><span>Absences justifiées déclarées</span></div>
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <tbody>
+                  {absences.map((a) => (
+                    <tr key={a.id}>
+                      <td style={styles.td}>{new Date(a.date).toLocaleDateString("fr-FR")}</td>
+                      <td style={styles.td}>{a.employe_nom}</td>
+                      <td style={styles.td}>{a.ferme_nom}</td>
+                      <td style={{ ...styles.td, color: "#6B756E" }}>{a.motif || "—"}</td>
+                      <td style={{ ...styles.td, width: 1 }}>
+                        <button style={{ ...styles.iconBtn, color: CLAY }} onClick={() => supprimerAbs(a)} title="Annuler cette absence">
+                          <Trash2 size={14} />
                         </button>
                       </td>
                     </tr>
@@ -280,7 +401,7 @@ export default function PointageHistorique() {
 
 const styles = {
   page: { minHeight: "100vh", background: "#F1EEE6", fontFamily: "'Inter', sans-serif", color: INK, padding: "0 0 30px" },
-  wrap: { maxWidth: 1000, margin: "0 auto", padding: "24px 20px" },
+  wrap: { maxWidth: 1100, margin: "0 auto", padding: "24px 20px" },
   head: { marginBottom: 20 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
@@ -289,6 +410,11 @@ const styles = {
   dateLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "#7A857F" },
   date: { padding: "8px 10px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
   clear: { padding: "8px 14px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 12.5, cursor: "pointer", color: "#7A857F", fontFamily: "inherit" },
+  addBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: CLAY, border: "1.5px solid #E0BBA9", borderRadius: 10, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginLeft: "auto" },
+  formCard: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 18, marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
+  input: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK, flex: "1 1 160px" },
+  submitBtn: { background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  erreur: { color: "#9E4527", fontSize: 12.5, margin: 0, width: "100%" },
   totaux: { display: "flex", gap: 12, marginBottom: 16 },
   totalItem: { background: "#fff", borderRadius: 14, border: "1px solid #ECE9DF", padding: "12px 18px", display: "flex", flexDirection: "column", gap: 2 },
   totalLabel: { fontSize: 11, color: "#8A948D", textTransform: "uppercase", letterSpacing: .5 },
@@ -310,5 +436,4 @@ const styles = {
   champLabel: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: "#6B756E" },
   champInput: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
   erreurEdit: { color: "#9E4527", fontSize: 12.5, margin: 0 },
-  submitBtn: { background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "11px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginTop: 6 },
 };
