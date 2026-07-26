@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Absence, Employe, Pointage
+from .models import Absence, Employe, LignePaie, Pointage
 
 
 @admin.register(Employe)
@@ -22,3 +22,9 @@ class PointageAdmin(admin.ModelAdmin):
 class AbsenceAdmin(admin.ModelAdmin):
     list_display = ["employe", "date", "motif"]
     list_filter = ["employe__fermes", "date"]
+
+
+@admin.register(LignePaie)
+class LignePaieAdmin(admin.ModelAdmin):
+    list_display = ["employe", "mois", "frais", "primes", "avances", "retenues", "carburant", "appel_internet", "statut"]
+    list_filter = ["employe__fermes", "mois", "statut", "mode_paiement"]

@@ -70,6 +70,8 @@ export const supprimerPointage = (id) => api.delete(`/pointage/historique/${id}/
 export const getAbsences = (params) => api.get("/pointage/absences/", { params }).then((r) => r.data);
 export const declarerAbsence = (payload) => api.post("/pointage/absences/", payload).then((r) => r.data);
 export const supprimerAbsence = (id) => api.delete(`/pointage/absences/${id}/`);
+export const getLignesPaie = (params) => api.get("/pointage/lignes-paie/", { params }).then((r) => r.data);
+export const enregistrerLignePaie = (payload) => api.post("/pointage/lignes-paie/", payload).then((r) => r.data);
 
 // Écran de scan public — pas de token d'authentification, le token du QR
 // (dans l'URL) fait office d'identifiant.

@@ -1,8 +1,20 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Pencil, Trash2, X, Download, FileText, UserMinus } from "lucide-react";
-import { getFermes, getEmployes, getPointages, corrigerPointage, supprimerPointage, getAbsences, declarerAbsence, supprimerAbsence } from "../api/client";
+import { Pencil, Trash2, X, Download, FileText, UserMinus, Wallet } from "lucide-react";
+import {
+  getFermes, getEmployes, getPointages, corrigerPointage, supprimerPointage,
+  getAbsences, declarerAbsence, supprimerAbsence, getLignesPaie, enregistrerLignePaie,
+} from "../api/client";
 import { genererFichePaie, telechargerPdf } from "../utils/pdf";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+
+const LABEL_MODE_PAIEMENT = {
+  WAVE: "Wave", ORANGE_MONEY: "Orange Money", MTN_MONEY: "MTN Money",
+  MOOV_MONEY: "Moov Money", ESPECES: "Main en main", VIREMENT: "Virement bancaire",
+};
+const LIGNE_PAIE_VIDE = {
+  frais: "0", primes: "0", avances: "0", retenues: "0", carburant: "0", appel_internet: "0",
+  mode_paiement: "", reference_transaction: "", date_paiement: "", statut: "A_PAYER",
+};
 
 const separeMilliers = (n) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 const fcfa = (v) => `${separeMilliers(Number(v) || 0)} F`;
@@ -26,6 +38,7 @@ export default function PointageHistorique() {
   const [employes, setEmployes] = useState([]);
   const [pointages, setPointages] = useState([]);
   const [absences, setAbsences] = useState([]);
+  const [lignesPaie, setLignesPaie] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [fermeId, setFermeId] = useState("");
   const [employeId, setEmployeId] = useState("");
@@ -44,6 +57,13 @@ export default function PointageHistorique() {
   const [absMotif, setAbsMotif] = useState("");
   const [erreurAbsence, setErreurAbsence] = useState("");
 
+  const [editionPaie, setEditionPaie] = useState(null);
+  const [formPaie, setFormPaie] = useState(LIGNE_PAIE_VIDE);
+  const [erreurPaie, setErreurPaie] = useState("");
+  const [envoiPaie, setEnvoiPaie] = useState(false);
+
+  const moisPremierJour = mois ? `${mois}-01` : "";
+
   useEffect(() => { getFermes().then(setFermes); }, []);
   useEffect(() => {
     getEmployes(fermeId ? { ferme: fermeId } : {}).then(setEmployes);
@@ -57,10 +77,16 @@ export default function PointageHistorique() {
     if (employeId) params.employe = employeId;
     if (dateDebut) params.date_debut = dateDebut;
     if (dateFin) params.date_fin = dateFin;
-    Promise.all([getPointages(params), getAbsences(params)]).then(([pts, abs]) => {
-      setPointages(pts); setAbsences(abs); setChargement(false);
+    const paieParams = { ...params };
+    if (moisPremierJour) paieParams.mois = moisPremierJour;
+    Promise.all([
+      getPointages(params),
+      getAbsences(params),
+      moisPremierJour ? getLignesPaie(paieParams) : Promise.resolve([]),
+    ]).then(([pts, abs, paie]) => {
+      setPointages(pts); setAbsences(abs); setLignesPaie(paie); setChargement(false);
     });
-  }, [fermeId, employeId, dateDebut, dateFin]);
+  }, [fermeId, employeId, dateDebut, dateFin, moisPremierJour]);
 
   useEffect(() => { rafraichir(); }, [rafraichir]);
 
@@ -79,11 +105,18 @@ export default function PointageHistorique() {
     const parEmploye = new Map();
     for (const emp of employesVises) {
       parEmploye.set(emp.id, {
-        employeId: emp.id, nom: emp.nom, fermeNom: emp.fermes_noms,
+        employeId: emp.id, nom: emp.nom, fermeNom: emp.fermes_noms, role: emp.role, telephone: emp.telephone,
         salaireMensuel: Number(emp.salaire_mensuel) || 0, jourRepos: emp.jour_repos, actif: emp.actif,
         lignesTravaillees: [], absencesJustifiees: [], joursAbsenceInjustifiee: [],
-        totalHeures: 0, totalMontant: 0,
+        totalHeures: 0, totalMontant: 0, lignePaie: null,
       });
+    }
+    for (const lp of lignesPaie) {
+      const g = parEmploye.get(lp.employe);
+      if (!g) continue;
+      g.lignePaie = lp;
+      g.totalMontant += Number(lp.frais) + Number(lp.primes) + Number(lp.carburant) + Number(lp.appel_internet)
+        - Number(lp.avances) - Number(lp.retenues);
     }
     for (const p of pointages) {
       const g = parEmploye.get(p.employe);
@@ -118,9 +151,9 @@ export default function PointageHistorique() {
       }
     }
     return [...parEmploye.values()]
-      .filter((g) => g.lignesTravaillees.length > 0 || g.absencesJustifiees.length > 0 || g.joursAbsenceInjustifiee.length > 0)
+      .filter((g) => g.lignesTravaillees.length > 0 || g.absencesJustifiees.length > 0 || g.joursAbsenceInjustifiee.length > 0 || g.lignePaie)
       .sort((a, b) => a.nom.localeCompare(b.nom));
-  }, [pointages, absences, employes, employeId, dateDebut, dateFin]);
+  }, [pointages, absences, lignesPaie, employes, employeId, dateDebut, dateFin]);
 
   const periodeLabel = useMemo(() => {
     if (dateDebut && dateFin) return `Du ${new Date(dateDebut).toLocaleDateString("fr-FR")} au ${new Date(dateFin).toLocaleDateString("fr-FR")}`;
@@ -141,13 +174,46 @@ export default function PointageHistorique() {
     const lignesTriees = [...groupe.lignesTravaillees].sort((a, b) => a.date.localeCompare(b.date));
     const absencesTriees = [...groupe.absencesJustifiees].sort((a, b) => a.date.localeCompare(b.date));
     const doc = genererFichePaie(
-      { nom: groupe.nom, ferme_nom: groupe.fermeNom },
+      { nom: groupe.nom, ferme_nom: groupe.fermeNom, role: groupe.role, telephone: groupe.telephone },
       periodeLabel,
       lignesTriees,
       absencesTriees,
       groupe.joursAbsenceInjustifiee,
+      groupe.lignePaie,
     );
     telechargerPdf(doc, `fiche-paie-${groupe.nom.replace(/\s+/g, "-")}-${dateDebut || "periode"}.pdf`);
+  }
+
+  function ouvrirEditionPaie(groupe) {
+    setEditionPaie(groupe);
+    const lp = groupe.lignePaie;
+    setFormPaie(lp ? {
+      frais: String(lp.frais), primes: String(lp.primes), avances: String(lp.avances),
+      retenues: String(lp.retenues), carburant: String(lp.carburant), appel_internet: String(lp.appel_internet),
+      mode_paiement: lp.mode_paiement, reference_transaction: lp.reference_transaction,
+      date_paiement: lp.date_paiement || "", statut: lp.statut,
+    } : LIGNE_PAIE_VIDE);
+    setErreurPaie("");
+  }
+
+  async function enregistrerLigne(e) {
+    e.preventDefault();
+    setEnvoiPaie(true);
+    setErreurPaie("");
+    try {
+      await enregistrerLignePaie({
+        employe: editionPaie.employeId,
+        mois: moisPremierJour,
+        ...formPaie,
+        date_paiement: formPaie.date_paiement || null,
+      });
+      setEditionPaie(null);
+      rafraichir();
+    } catch {
+      setErreurPaie("Impossible d'enregistrer ces informations de paie.");
+    } finally {
+      setEnvoiPaie(false);
+    }
   }
 
   function ouvrirEdition(p) {
@@ -278,7 +344,8 @@ export default function PointageHistorique() {
                     <th style={{ ...styles.th, textAlign: "right" }}>Jours travaillés</th>
                     <th style={{ ...styles.th, textAlign: "right" }}>Absences justifiées</th>
                     <th style={{ ...styles.th, textAlign: "right" }}>Absences injustifiées</th>
-                    <th style={{ ...styles.th, textAlign: "right" }}>À payer</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Net à payer</th>
+                    {moisPremierJour && <th style={styles.th}>Statut</th>}
                     <th style={styles.th}></th>
                   </tr>
                 </thead>
@@ -291,10 +358,24 @@ export default function PointageHistorique() {
                       <td style={{ ...styles.td, textAlign: "right" }}>{g.absencesJustifiees.length}</td>
                       <td style={{ ...styles.td, textAlign: "right", color: g.joursAbsenceInjustifiee.length > 0 ? CLAY : "inherit" }}>{g.joursAbsenceInjustifiee.length}</td>
                       <td style={{ ...styles.td, textAlign: "right", fontWeight: 600, color: GREEN_DARK }}>{fcfa(g.totalMontant)}</td>
-                      <td style={styles.td}>
+                      {moisPremierJour && (
+                        <td style={styles.td}>
+                          {g.lignePaie ? (
+                            <span style={{ color: g.lignePaie.statut === "PAYE" ? GREEN : CLAY, fontWeight: 600 }}>
+                              {g.lignePaie.statut === "PAYE" ? "Payé" : "À payer"}
+                            </span>
+                          ) : <span style={{ color: "#B5BBB2" }}>—</span>}
+                        </td>
+                      )}
+                      <td style={{ ...styles.td, display: "flex", gap: 8 }}>
                         <button style={styles.pdfBtn} onClick={() => telechargerFichePaie(g)}>
                           <Download size={14} /> Fiche de paie
                         </button>
+                        {moisPremierJour && (
+                          <button style={styles.pdfBtn} onClick={() => ouvrirEditionPaie(g)}>
+                            <Wallet size={14} /> Frais / primes...
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -395,6 +476,56 @@ export default function PointageHistorique() {
           </form>
         </div>
       )}
+
+      {editionPaie && (
+        <div style={styles.modalOverlay} onClick={() => setEditionPaie(null)}>
+          <form style={{ ...styles.modal, width: 380 }} onClick={(e) => e.stopPropagation()} onSubmit={enregistrerLigne}>
+            <button type="button" style={styles.modalClose} onClick={() => setEditionPaie(null)}><X size={18} /></button>
+            <h2 style={styles.modalTitre}>{editionPaie.nom}</h2>
+            <p style={styles.modalSousTitre}>{mois} · {editionPaie.fermeNom}</p>
+            <div style={styles.grillePaie}>
+              <label style={styles.champLabel}>Frais
+                <input style={styles.champInput} type="number" min="0" value={formPaie.frais} onChange={(e) => setFormPaie({ ...formPaie, frais: e.target.value })} />
+              </label>
+              <label style={styles.champLabel}>Primes
+                <input style={styles.champInput} type="number" min="0" value={formPaie.primes} onChange={(e) => setFormPaie({ ...formPaie, primes: e.target.value })} />
+              </label>
+              <label style={styles.champLabel}>Avances
+                <input style={styles.champInput} type="number" min="0" value={formPaie.avances} onChange={(e) => setFormPaie({ ...formPaie, avances: e.target.value })} />
+              </label>
+              <label style={styles.champLabel}>Retenues
+                <input style={styles.champInput} type="number" min="0" value={formPaie.retenues} onChange={(e) => setFormPaie({ ...formPaie, retenues: e.target.value })} />
+              </label>
+              <label style={styles.champLabel}>Carburant
+                <input style={styles.champInput} type="number" min="0" value={formPaie.carburant} onChange={(e) => setFormPaie({ ...formPaie, carburant: e.target.value })} />
+              </label>
+              <label style={styles.champLabel}>Appel/internet
+                <input style={styles.champInput} type="number" min="0" value={formPaie.appel_internet} onChange={(e) => setFormPaie({ ...formPaie, appel_internet: e.target.value })} />
+              </label>
+            </div>
+            <label style={styles.champLabel}>Mode de paiement
+              <select style={styles.champInput} value={formPaie.mode_paiement} onChange={(e) => setFormPaie({ ...formPaie, mode_paiement: e.target.value })}>
+                <option value="">—</option>
+                {Object.entries(LABEL_MODE_PAIEMENT).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </label>
+            <label style={styles.champLabel}>Référence transaction
+              <input style={styles.champInput} value={formPaie.reference_transaction} onChange={(e) => setFormPaie({ ...formPaie, reference_transaction: e.target.value })} />
+            </label>
+            <label style={styles.champLabel}>Date de paiement
+              <input style={styles.champInput} type="date" value={formPaie.date_paiement} onChange={(e) => setFormPaie({ ...formPaie, date_paiement: e.target.value })} />
+            </label>
+            <label style={styles.champLabel}>Statut
+              <select style={styles.champInput} value={formPaie.statut} onChange={(e) => setFormPaie({ ...formPaie, statut: e.target.value })}>
+                <option value="A_PAYER">À payer</option>
+                <option value="PAYE">Payé</option>
+              </select>
+            </label>
+            {erreurPaie && <p style={styles.erreurEdit}>{erreurPaie}</p>}
+            <button style={styles.submitBtn} type="submit" disabled={envoiPaie}>{envoiPaie ? "Enregistrement..." : "Enregistrer"}</button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
@@ -434,6 +565,7 @@ const styles = {
   modalTitre: { fontSize: 17, fontWeight: 700, margin: "4px 0 0" },
   modalSousTitre: { fontSize: 12.5, color: "#8A948D", margin: "0 0 8px" },
   champLabel: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: "#6B756E" },
+  grillePaie: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
   champInput: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
   erreurEdit: { color: "#9E4527", fontSize: 12.5, margin: 0 },
 };

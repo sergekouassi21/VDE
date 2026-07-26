@@ -121,3 +121,47 @@ class Absence(models.Model):
 
     def __str__(self):
         return f"Absence justifiée — {self.employe.nom} — {self.date}"
+
+
+class ModePaiementPointage(models.TextChoices):
+    WAVE = "WAVE", "Wave"
+    ORANGE_MONEY = "ORANGE_MONEY", "Orange Money"
+    MTN_MONEY = "MTN_MONEY", "MTN Money"
+    MOOV_MONEY = "MOOV_MONEY", "Moov Money"
+    ESPECES = "ESPECES", "Main en main"
+    VIREMENT = "VIREMENT", "Virement bancaire"
+
+
+class StatutPaiement(models.TextChoices):
+    A_PAYER = "A_PAYER", "À payer"
+    PAYE = "PAYE", "Payé"
+
+
+class LignePaie(models.Model):
+    """Les ajustements de paie du mois pour un employé, en plus du montant
+    calculé automatiquement à partir du pointage (heures travaillées +
+    absences justifiées) — reprend les colonnes du tableau de paie papier
+    (frais, primes, avances, retenues, carburant, appel/internet, mode et
+    statut de paiement). Une seule ligne par employé et par mois."""
+
+    employe = models.ForeignKey(Employe, on_delete=models.CASCADE, related_name="lignes_paie")
+    mois = models.DateField(help_text="Premier jour du mois concerné (ex: 2026-06-01 pour juin 2026)")
+    frais = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    primes = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    avances = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    retenues = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    carburant = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    appel_internet = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    mode_paiement = models.CharField(max_length=15, choices=ModePaiementPointage.choices, blank=True)
+    reference_transaction = models.CharField(max_length=100, blank=True)
+    date_paiement = models.DateField(null=True, blank=True)
+    statut = models.CharField(max_length=10, choices=StatutPaiement.choices, default=StatutPaiement.A_PAYER)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["employe", "mois"], name="une_ligne_paie_par_employe_et_par_mois")
+        ]
+        ordering = ["-mois"]
+
+    def __str__(self):
+        return f"Paie {self.employe.nom} — {self.mois:%Y-%m}"

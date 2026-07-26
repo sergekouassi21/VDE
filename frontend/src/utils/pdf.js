@@ -299,12 +299,19 @@ export function genererPdfHistoriquePoint(p) {
   return doc;
 }
 
+const LABEL_MODE_PAIEMENT_PDF = {
+  WAVE: "Wave", ORANGE_MONEY: "Orange Money", MTN_MONEY: "MTN Money",
+  MOOV_MONEY: "Moov Money", ESPECES: "Main en main", VIREMENT: "Virement bancaire",
+};
+
 // Fiche de paie d'un employé pour une période — fusionne jours travaillés
 // (pointages) et absences justifiées (payées comme une journée complète)
-// en une liste chronologique, puis liste séparément les absences
+// en une liste chronologique, ajoute les ajustements du mois (frais,
+// primes, avances, retenues, carburant, appel/internet) et le suivi du
+// paiement (mode, référence, statut), puis liste séparément les absences
 // injustifiées (non payées) pour que le calcul reste traçable plutôt
 // qu'un manque à gagner silencieux. Pagine si le mois est long.
-export function genererFichePaie(employe, periodeLabel, lignes, absencesJustifiees = [], joursAbsenceInjustifiee = []) {
+export function genererFichePaie(employe, periodeLabel, lignes, absencesJustifiees = [], joursAbsenceInjustifiee = [], lignePaie = null) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   entete(doc);
 
@@ -316,9 +323,10 @@ export function genererFichePaie(employe, periodeLabel, lignes, absencesJustifie
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);
   doc.setTextColor(...GRAY);
-  doc.text(`Employé : ${employe.nom}`, 15, 49);
+  doc.text(`Employé : ${employe.nom}${employe.role ? " — " + employe.role : ""}`, 15, 49);
   doc.text(`Ferme : ${employe.ferme_nom}`, 15, 55);
   doc.text(`Période : ${periodeLabel}`, 15, 61);
+  if (employe.telephone) doc.text(`Téléphone : ${employe.telephone}`, 15, 67);
 
   const heureTxt = (iso) => (iso ? new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—");
 
@@ -341,7 +349,7 @@ export function genererFichePaie(employe, periodeLabel, lignes, absencesJustifie
     ...absencesJustifiees.map((a) => ({ type: "absence", date: a.date, arrivee: `Absence justifiée${a.motif ? " — " + a.motif : ""}`, depart: "", heures: 0, montant: Number(a.montant) || 0 })),
   ].sort((a, b) => a.date.localeCompare(b.date));
 
-  let y = entetesColonnes(74);
+  let y = entetesColonnes(employe.telephone ? 80 : 74);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   let totalHeures = 0;
@@ -376,11 +384,63 @@ export function genererFichePaie(employe, periodeLabel, lignes, absencesJustifie
   y += 9;
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
+  doc.setFontSize(12);
   doc.setTextColor(...INK);
-  doc.text(`Total : ${totalHeures.toFixed(2)} h`, 15, y);
+  doc.text(`Sous-total pointage : ${totalHeures.toFixed(2)} h`, 15, y);
   doc.text(fcfa(totalMontant), 192, y, { align: "right" });
-  y += 12;
+  y += 10;
+
+  let netAPayer = totalMontant;
+  if (lignePaie) {
+    if (y > 250) { doc.addPage(); entete(doc); y = 42; }
+    y = bandeauSection(doc, y, "Ajustements du mois");
+    const frais = Number(lignePaie.frais) || 0;
+    const primes = Number(lignePaie.primes) || 0;
+    const avances = Number(lignePaie.avances) || 0;
+    const retenues = Number(lignePaie.retenues) || 0;
+    const carburant = Number(lignePaie.carburant) || 0;
+    const appelInternet = Number(lignePaie.appel_internet) || 0;
+    if (frais) y = ligneCle(doc, y, "Frais", fcfa(frais));
+    if (primes) y = ligneCle(doc, y, "Primes", fcfa(primes));
+    if (carburant) y = ligneCle(doc, y, "Carburant", fcfa(carburant));
+    if (appelInternet) y = ligneCle(doc, y, "Appel / internet", fcfa(appelInternet));
+    if (avances) y = ligneCle(doc, y, "Avances", `- ${fcfa(avances)}`);
+    if (retenues) y = ligneCle(doc, y, "Retenues", `- ${fcfa(retenues)}`);
+    netAPayer += frais + primes + carburant + appelInternet - avances - retenues;
+
+    y += 2;
+    doc.setDrawColor(...GRAY);
+    doc.line(15, y, 195, y);
+    y += 9;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(...INK);
+    doc.text("Net à payer", 15, y);
+    doc.text(fcfa(netAPayer), 192, y, { align: "right" });
+    y += 10;
+
+    const resteAPayer = lignePaie.statut === "PAYE" ? 0 : netAPayer;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10.5);
+    doc.setTextColor(...GRAY);
+    if (lignePaie.mode_paiement) y = ligneCle(doc, y, "Mode de paiement", LABEL_MODE_PAIEMENT_PDF[lignePaie.mode_paiement] || lignePaie.mode_paiement);
+    if (lignePaie.reference_transaction) y = ligneCle(doc, y, "Référence transaction", lignePaie.reference_transaction);
+    if (lignePaie.date_paiement) y = ligneCle(doc, y, "Date de paiement", new Date(lignePaie.date_paiement).toLocaleDateString("fr-FR"));
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(...(lignePaie.statut === "PAYE" ? GREEN_DARK : CLAY));
+    doc.text(lignePaie.statut === "PAYE" ? "PAYÉ" : "À PAYER", 15, y);
+    if (resteAPayer > 0) doc.text(`Reste à payer : ${fcfa(resteAPayer)}`, 192, y, { align: "right" });
+    y += 10;
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(...INK);
+    doc.text("Net à payer", 15, y);
+    doc.text(fcfa(netAPayer), 192, y, { align: "right" });
+    y += 10;
+  }
 
   if (joursAbsenceInjustifiee.length > 0) {
     if (y > 260) { doc.addPage(); entete(doc); y = 42; }

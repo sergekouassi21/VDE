@@ -15,11 +15,12 @@ from rest_framework.response import Response
 
 from exploitation.models import RoleUtilisateur
 
-from .models import Absence, Employe, Pointage
+from .models import Absence, Employe, LignePaie, Pointage
 from .serializers import (
     AbsenceSerializer,
     CorrigerPointageSerializer,
     EmployeSerializer,
+    LignePaieSerializer,
     PointageSerializer,
     ScanEmployeSerializer,
 )
@@ -192,6 +193,45 @@ class AbsenceViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return super().create(request, *args, **kwargs)
+
+
+class LignePaieViewSet(viewsets.ModelViewSet):
+    """Ajustements de paie du mois (frais, primes, avances, retenues,
+    carburant, appel/internet, mode et statut de paiement) — réservé à
+    Direction/Admin. Une seule ligne par employé et par mois : POST fait un
+    upsert (crée ou met à jour) pour que le frontend n'ait pas à suivre
+    l'existence préalable d'un enregistrement."""
+
+    serializer_class = LignePaieSerializer
+    permission_classes = [EstDirectionOuAdmin]
+    http_method_names = ["get", "post", "delete"]
+
+    def get_queryset(self):
+        qs = LignePaie.objects.select_related("employe").prefetch_related("employe__fermes").all()
+
+        ferme_id = self.request.query_params.get("ferme")
+        if ferme_id:
+            qs = qs.filter(employe__fermes=ferme_id)
+
+        employe_id = self.request.query_params.get("employe")
+        if employe_id:
+            qs = qs.filter(employe_id=employe_id)
+
+        mois = self.request.query_params.get("mois")
+        if mois:
+            qs = qs.filter(mois=mois)
+
+        return qs.order_by("-mois")
+
+    def create(self, request, *args, **kwargs):
+        instance = LignePaie.objects.filter(
+            employe_id=request.data.get("employe"), mois=request.data.get("mois")
+        ).first()
+        serializer = self.get_serializer(instance, data=request.data, partial=bool(instance))
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        code = status.HTTP_200_OK if instance else status.HTTP_201_CREATED
+        return Response(serializer.data, status=code)
 
 
 def _etat_pointage(request, employe):

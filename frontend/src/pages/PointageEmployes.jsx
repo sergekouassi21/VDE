@@ -3,7 +3,7 @@ import { QrCode, Plus, X, Download, UserX, UserCheck, Pencil, Trash2 } from "luc
 import { getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye, getQrEmployeBlob, getUtilisateursDisponibles } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 
-const LABEL_ROLE = { CHEF_FERME: "Chef de ferme", SOUS_CHEF_FERME: "Sous-chef de ferme", SUPERVISEUR: "Superviseur", OUVRIER: "Ouvrier", GARDIEN: "Gardien" };
+const LABEL_ROLE = { CHEF_FERME: "Chef de ferme", SOUS_CHEF_FERME: "Sous-chef de ferme", SUPERVISEUR: "Superviseur", OUVRIER: "Volailler", GARDIEN: "Gardien" };
 const JOURS_SEMAINE = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 
 export default function PointageEmployes() {
