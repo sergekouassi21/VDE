@@ -173,6 +173,26 @@ CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get('DJANGO_CSRF_TRUSTED_O
 # du frontend Netlify).
 FRONTEND_URL = os.environ.get('DJANGO_FRONTEND_URL', 'http://localhost:5173')
 
+# Alertes proactives (stock bas, mortalité, ponte, croissance...) envoyées
+# par email via Brevo (relais SMTP, gratuit jusqu'à 300 emails/jour) — cf.
+# management command exploitation/verifier_alertes et conversation du
+# 26/07/2026 avec Serge. En local (pas de clé Brevo), les emails partent
+# simplement dans la console au lieu d'échouer.
+BREVO_SMTP_LOGIN = os.environ.get('BREVO_SMTP_LOGIN', '')
+BREVO_SMTP_KEY = os.environ.get('BREVO_SMTP_KEY', '')
+if BREVO_SMTP_LOGIN and BREVO_SMTP_KEY:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = 'smtp-relay.brevo.com'
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
+    EMAIL_HOST_USER = BREVO_SMTP_LOGIN
+    EMAIL_HOST_PASSWORD = BREVO_SMTP_KEY
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+DEFAULT_FROM_EMAIL = os.environ.get('DJANGO_DEFAULT_FROM_EMAIL', 'alertes@volailles-de-lest.local')
+ALERTES_EMAILS_DESTINATAIRES = [e.strip() for e in os.environ.get('DJANGO_ALERTES_EMAILS', '').split(',') if e.strip()]
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
