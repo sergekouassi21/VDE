@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, Fragment } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import { Egg, TrendingUp, AlertTriangle, Skull, Package, ChevronRight, Activity, Wheat, Droplet } from "lucide-react";
-import { getDashboard, getEmployes, getAbsences } from "../api/client";
+import { getDashboard, getEmployes, getAbsences, getEvenementsSante } from "../api/client";
 import { GREEN, GREEN_DARK, INK, formatSacs, formatColis, AGE_REFORME_SEMAINES, KG_PAR_SAC } from "../theme";
 
 const nf = (v) => (v ?? 0).toLocaleString("fr-FR");
@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [evolutionMois, setEvolutionMois] = useState([]);
   const [absencesEnAttente, setAbsencesEnAttente] = useState([]);
   const [employesSansSalaire, setEmployesSansSalaire] = useState([]);
+  const [evenementsSanteEnRetard, setEvenementsSanteEnRetard] = useState([]);
   const [sel, setSel] = useState(null);
   const [chargement, setChargement] = useState(true);
 
@@ -25,6 +26,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     getDashboard().then((data) => { setFermes(data.fermes); setEvolutionMois(data.evolution_mois); setChargement(false); });
+    getEvenementsSante({ non_faits: "true" }).then((evts) => setEvenementsSanteEnRetard(evts.filter((e) => e.statut === "EN_RETARD")));
     if (estDirectionOuAdmin) {
       getAbsences({ statut: "EN_ATTENTE" }).then(setAbsencesEnAttente);
       getEmployes().then((emps) => setEmployesSansSalaire(emps.filter((e) => e.actif && Number(e.salaire_mensuel) === 0)));
@@ -146,8 +148,11 @@ export default function Dashboard() {
     employesSansSalaire.forEach((e) => {
       a.push({ ferme: "Paie", txt: `${e.nom} n'a pas de salaire mensuel renseigné`, grav: "moy" });
     });
+    evenementsSanteEnRetard.forEach((e) => {
+      a.push({ ferme: e.ferme_nom, txt: `${e.type === "VACCIN" ? "Vaccin" : "Traitement"} en retard : ${e.nom} (prévu le ${new Date(e.date_prevue).toLocaleDateString("fr-FR")})`, grav: "haut" });
+    });
     return a.sort((x, y) => (x.grav === "haut" ? -1 : 1));
-  }, [actives, absencesEnAttente, employesSansSalaire]);
+  }, [actives, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard]);
 
   const dataPonte = pondeuses.map((f) => ({ nom: f.nom.replace("Ayénou", "Ay."), taux: +tauxPonte(f).toFixed(1) }));
   const dataAge = pondeuses

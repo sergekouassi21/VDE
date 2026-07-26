@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp, Wheat } from "lucide-react";
+import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp, Wheat, Syringe } from "lucide-react";
 import Login from "./pages/Login";
 import PointJournalier from "./pages/PointJournalier";
 import Dashboard from "./pages/Dashboard";
@@ -13,6 +13,7 @@ import PointageEmployes from "./pages/PointageEmployes";
 import PointageHistorique from "./pages/PointageHistorique";
 import Rentabilite from "./pages/Rentabilite";
 import AchatsAliment from "./pages/AchatsAliment";
+import Vaccinations from "./pages/Vaccinations";
 import { isAuthenticated, logout, ADMIN_URL } from "./api/client";
 import { GREEN_DARK } from "./theme";
 
@@ -64,6 +65,7 @@ function NavBar() {
         <Link to="/tableau-de-bord" style={navStyles.link}><LayoutDashboard size={16} /> Tableau de bord</Link>
         <Link to="/point-journalier" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
         <Link to="/historique" style={navStyles.link}><History size={16} /> Historique</Link>
+        <Link to="/vaccinations" style={navStyles.link}><Syringe size={16} /> Vaccins & traitements</Link>
         {autorise && (
           <>
             <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
@@ -121,6 +123,9 @@ export default function App() {
         } />
         <Route path="/historique" element={
           <RequireAuth><Layout><Historique /></Layout></RequireAuth>
+        } />
+        <Route path="/vaccinations" element={
+          <RequireAuth><Layout><Vaccinations /></Layout></RequireAuth>
         } />
         <Route path="/employes" element={
           <RequireAuth><RequireDirectionOuAdmin><Layout><PointageEmployes /></Layout></RequireDirectionOuAdmin></RequireAuth>

@@ -38,6 +38,11 @@ export const declarerBande = (id, payload) => api.post(`/fermes/${id}/declarer-b
 export const terminerBande = (id, payload) => api.post(`/fermes/${id}/terminer-bande/`, payload).then((r) => r.data);
 export const getBandes = (params) => api.get("/bandes/", { params }).then((r) => r.data);
 export const getBilanBande = (bandeId) => api.get(`/bandes/${bandeId}/bilan/`).then((r) => r.data);
+export const getEvenementsSante = (params) => api.get("/evenements-sante/", { params }).then((r) => r.data);
+export const creerEvenementSante = (payload) => api.post("/evenements-sante/", payload).then((r) => r.data);
+export const modifierEvenementSante = (id, payload) => api.patch(`/evenements-sante/${id}/`, payload).then((r) => r.data);
+export const supprimerEvenementSante = (id) => api.delete(`/evenements-sante/${id}/`);
+export const marquerFaitEvenementSante = (id, payload) => api.post(`/evenements-sante/${id}/marquer-fait/`, payload || {}).then((r) => r.data);
 export const soumettrePointJournalier = (fermeId, payload) =>
   api.post(`/fermes/${fermeId}/points-journaliers/`, payload).then((r) => r.data);
 export const getPointJournalier = (fermeId, date) =>
