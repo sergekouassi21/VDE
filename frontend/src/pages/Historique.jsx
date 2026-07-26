@@ -128,6 +128,17 @@ export default function Historique() {
                                 <DetailItem label="Sorties d'œufs" value={`${nf(p.sortie_oeuf)} œufs`} />
                                 <DetailItem label="Sorties d'effectif" value={`${nf(p.sortie_effectif)} sujets`} />
                                 {Number(p.eau_consommee_litres) > 0 && <DetailItem label="Eau consommée" value={`${p.eau_consommee_litres} litres`} />}
+                                {p.poids_moyen_grammes != null && (
+                                  <DetailItem label="Poids moyen (pesée)" value={`${nf(p.poids_moyen_grammes)} g`} />
+                                )}
+                                {p.gmq_grammes != null && <DetailItem label="GMQ" value={`${p.gmq_grammes} g/j`} />}
+                                {p.poids_cible_grammes != null && (
+                                  <DetailItem
+                                    label="Poids cible (Cobb 500)"
+                                    value={`${nf(p.poids_cible_grammes)} g`}
+                                    danger={p.poids_moyen_grammes != null && Number(p.poids_moyen_grammes) < p.poids_cible_grammes}
+                                  />
+                                )}
                                 {p.traitement && <DetailItem label="Traitement" value={p.traitement} />}
                               </div>
                               {p.sorties.length > 0 && (
@@ -176,11 +187,11 @@ export default function Historique() {
   );
 }
 
-function DetailItem({ label, value }) {
+function DetailItem({ label, value, danger }) {
   return (
     <div style={styles.detailItem}>
       <span style={styles.detailLabel}>{label}</span>
-      <span style={styles.detailValue}>{value}</span>
+      <span style={{ ...styles.detailValue, ...(danger ? { color: CLAY } : {}) }}>{value}</span>
     </div>
   );
 }

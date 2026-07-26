@@ -130,6 +130,12 @@ export default function Dashboard() {
       if (f.type === "PONTE" && f.dernier_point?.production_oeufs > 0 && tauxCasseJour(f) > 5) {
         a.push({ ferme: f.nom, txt: `Taux de casse/brisure élevé (${tauxCasseJour(f).toFixed(1)} %)`, grav: "moy" });
       }
+      if (
+        f.type === "CHAIR" && f.dernier_point?.poids_moyen_grammes != null && f.dernier_point.poids_cible_grammes != null
+        && Number(f.dernier_point.poids_moyen_grammes) < f.dernier_point.poids_cible_grammes * 0.9
+      ) {
+        a.push({ ferme: f.nom, txt: `Retard de croissance : ${nf(Math.round(f.dernier_point.poids_moyen_grammes))} g pour ${nf(f.dernier_point.poids_cible_grammes)} g attendus`, grav: "moy" });
+      }
     });
     if (absencesEnAttente.length > 0) {
       a.unshift({ ferme: "Pointage", txt: `${absencesEnAttente.length} absence${absencesEnAttente.length > 1 ? "s" : ""} en attente de validation`, grav: "haut" });
@@ -232,6 +238,28 @@ export default function Dashboard() {
                     <div style={styles.kpiFermeStat}>
                       <span style={styles.kpiFermeLabel}>Taux de casse</span>
                       <span style={{ ...styles.kpiFermeValeur, color: tauxCasseJour(f) > 5 ? "#9E4527" : INK }}>{tauxCasseJour(f).toFixed(1)} %</span>
+                    </div>
+                  )}
+                  {f.type === "CHAIR" && f.dernier_point?.poids_moyen_grammes != null && (
+                    <div style={styles.kpiFermeStat}>
+                      <span style={styles.kpiFermeLabel}>Poids vif</span>
+                      <span
+                        style={{
+                          ...styles.kpiFermeValeur,
+                          color: f.dernier_point.poids_cible_grammes != null && Number(f.dernier_point.poids_moyen_grammes) < f.dernier_point.poids_cible_grammes ? "#9E4527" : GREEN_DARK,
+                        }}
+                      >
+                        {nf(Math.round(f.dernier_point.poids_moyen_grammes))} g
+                      </span>
+                      {f.dernier_point.poids_cible_grammes != null && (
+                        <span style={styles.kpiFermeMois}>cible {nf(f.dernier_point.poids_cible_grammes)} g</span>
+                      )}
+                    </div>
+                  )}
+                  {f.type === "CHAIR" && f.dernier_point?.gmq_grammes != null && (
+                    <div style={styles.kpiFermeStat}>
+                      <span style={styles.kpiFermeLabel}>GMQ</span>
+                      <span style={styles.kpiFermeValeur}>{nf(f.dernier_point.gmq_grammes)} g/j</span>
                     </div>
                   )}
                 </div>
@@ -371,6 +399,15 @@ export default function Dashboard() {
                             )}
                             {f.type === "PONTE" && (f.dernier_point?.production_oeufs || 0) > 0 && (
                               <DetailItem label="Taux de casse" value={`${tauxCasseJour(f).toFixed(1)} %`} />
+                            )}
+                            {f.type === "CHAIR" && f.dernier_point?.poids_moyen_grammes != null && (
+                              <DetailItem
+                                label="Poids vif (dernière pesée)"
+                                value={`${nf(Math.round(f.dernier_point.poids_moyen_grammes))} g${f.dernier_point.poids_cible_grammes != null ? ` (cible ${nf(f.dernier_point.poids_cible_grammes)} g)` : ""}`}
+                              />
+                            )}
+                            {f.type === "CHAIR" && f.dernier_point?.gmq_grammes != null && (
+                              <DetailItem label="GMQ" value={`${nf(f.dernier_point.gmq_grammes)} g/j`} />
                             )}
                           </div>
                           {f.dernier_point?.traitement && (

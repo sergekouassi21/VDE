@@ -18,7 +18,7 @@ const n = (v) => (v === "" || v === null || v === undefined || isNaN(v) ? 0 : Nu
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const FORM_VIDE = {
   morts: "", conso_aliment_sacs: "", aliment_recu_sacs: "", traitement: "", eau_consommee_litres: "",
-  alveole_recu_unites: "", production_oeufs: "", casse: "", brise: "", observation: "",
+  alveole_recu_unites: "", production_oeufs: "", casse: "", brise: "", poids_moyen_grammes: "", observation: "",
 };
 const NOUVELLE_SORTIE_VIDE = { quantite: "", type_sortie: "VENTE", responsable: "" };
 
@@ -102,6 +102,7 @@ export default function PointJournalier() {
             production_oeufs: String(point.production_oeufs),
             casse: String(point.casse),
             brise: String(point.brise),
+            poids_moyen_grammes: point.poids_moyen_grammes ? String(point.poids_moyen_grammes) : "",
             observation: point.observation,
           });
           setSorties(point.sorties.map((s) => ({ quantite: s.quantite, type_sortie: s.type_sortie, responsable: s.responsable })));
@@ -158,6 +159,7 @@ export default function PointJournalier() {
       eau_consommee_litres: n(form.eau_consommee_litres),
       alveole_recu_unites: n(form.alveole_recu_unites), production_oeufs: n(form.production_oeufs),
       casse: n(form.casse), brise: n(form.brise), sorties,
+      poids_moyen_grammes: form.poids_moyen_grammes === "" ? null : n(form.poids_moyen_grammes),
       observation: form.observation,
     };
 
@@ -283,6 +285,13 @@ export default function PointJournalier() {
             <FieldCalc label="Reste (effectif)" value={calc.resteEffectif.toLocaleString("fr-FR")} unit="sujets" hint="report veille − morts" />
             {mortsAlerte && <Alerte txt="Mortalité élevée — vérifier la cause" />}
           </Section>
+
+          {ferme.type === "CHAIR" && (
+            <Section icon={<TrendingUp size={15} />} titre="Croissance">
+              <FieldNum label="Poids moyen (échantillon)" value={form.poids_moyen_grammes} onChange={(v) => set("poids_moyen_grammes", v)} unit="g" step="1" />
+              <p style={styles.magasinNote}>Laisser vide les jours sans pesée — le GMQ se calcule automatiquement entre deux pesées.</p>
+            </Section>
+          )}
 
           <Section icon={<Wheat size={15} />} titre="Aliment & traitement">
             {ferme.magasin.nom !== `Magasin ${ferme.nom}` && (
