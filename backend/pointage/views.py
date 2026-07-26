@@ -3,10 +3,11 @@ from io import BytesIO
 import qrcode
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db.models import ProtectedError
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
@@ -53,6 +54,18 @@ class EmployeViewSet(viewsets.ModelViewSet):
         buffer = BytesIO()
         image.save(buffer, format="PNG")
         return HttpResponse(buffer.getvalue(), content_type="image/png")
+
+    def destroy(self, request, *args, **kwargs):
+        # Un employé qui a déjà des pointages est protégé (PROTECT) — on
+        # renvoie un message clair plutôt qu'un 500 (cf. modifierEmploye
+        # pour désactiver un employé au lieu de le supprimer dans ce cas).
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "Impossible de supprimer : cet employé a déjà des pointages enregistrés. Désactive-le plutôt."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class PointageViewSet(viewsets.ReadOnlyModelViewSet):

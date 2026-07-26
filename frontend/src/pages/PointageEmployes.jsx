@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { QrCode, Plus, X, Download, UserX, UserCheck } from "lucide-react";
-import { getFermes, getEmployes, creerEmploye, modifierEmploye, getQrEmployeBlob, getUtilisateursDisponibles } from "../api/client";
+import { QrCode, Plus, X, Download, UserX, UserCheck, Pencil, Trash2 } from "lucide-react";
+import { getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye, getQrEmployeBlob, getUtilisateursDisponibles } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 
 const LABEL_ROLE = { CHEF_FERME: "Chef de ferme", SOUS_CHEF_FERME: "Sous-chef de ferme", SUPERVISEUR: "Superviseur" };
@@ -12,6 +12,7 @@ export default function PointageEmployes() {
   const [fermeFiltre, setFermeFiltre] = useState("");
   const [chargement, setChargement] = useState(true);
   const [formOuvert, setFormOuvert] = useState(false);
+  const [editionId, setEditionId] = useState(null);
   const [userId, setUserId] = useState("");
   const [nom, setNom] = useState("");
   const [ferme, setFerme] = useState("");
@@ -44,17 +45,36 @@ export default function PointageEmployes() {
 
   useEffect(() => { rafraichir(); }, [rafraichir]);
 
-  async function ajouter(e) {
+  function fermerForm() {
+    setFormOuvert(false); setEditionId(null);
+    setNom(""); setFerme(""); setTauxHoraire(""); setUserId(""); setErreur("");
+  }
+
+  function commencerEdition(emp) {
+    setEditionId(emp.id);
+    setNom(emp.nom);
+    setFerme(String(emp.ferme));
+    setTauxHoraire(String(emp.taux_horaire));
+    setUserId("");
+    setErreur("");
+    setFormOuvert(true);
+  }
+
+  async function soumettre(e) {
     e.preventDefault();
     if (!ferme || !tauxHoraire) return;
     setEnvoi(true);
     setErreur("");
     try {
-      await creerEmploye({ nom, ferme, taux_horaire: tauxHoraire, user: userId || null });
-      setNom(""); setFerme(""); setTauxHoraire(""); setUserId(""); setFormOuvert(false);
+      if (editionId) {
+        await modifierEmploye(editionId, { nom, ferme, taux_horaire: tauxHoraire });
+      } else {
+        await creerEmploye({ nom, ferme, taux_horaire: tauxHoraire, user: userId || null });
+      }
+      fermerForm();
       rafraichir();
     } catch {
-      setErreur("Impossible d'ajouter l'employé. Vérifie les champs.");
+      setErreur(editionId ? "Impossible d'enregistrer les modifications." : "Impossible d'ajouter l'employé. Vérifie les champs.");
     } finally {
       setEnvoi(false);
     }
@@ -63,6 +83,16 @@ export default function PointageEmployes() {
   async function basculerActif(emp) {
     await modifierEmploye(emp.id, { actif: !emp.actif });
     rafraichir();
+  }
+
+  async function supprimer(emp) {
+    if (!window.confirm(`Supprimer définitivement le badge de ${emp.nom} ?`)) return;
+    try {
+      await supprimerEmploye(emp.id);
+      rafraichir();
+    } catch (err) {
+      window.alert(err?.response?.data?.detail || "Impossible de supprimer cet employé.");
+    }
   }
 
   async function voirQr(emp) {
@@ -85,19 +115,21 @@ export default function PointageEmployes() {
             <option value="">Toutes les fermes</option>
             {fermes.map((f) => <option key={f.id} value={f.id}>{f.nom}</option>)}
           </select>
-          <button style={styles.addBtn} onClick={() => setFormOuvert((o) => !o)}>
+          <button style={styles.addBtn} onClick={() => (formOuvert ? fermerForm() : setFormOuvert(true))}>
             <Plus size={16} /> Ajouter un employé
           </button>
         </div>
 
         {formOuvert && (
-          <form style={styles.formCard} onSubmit={ajouter}>
-            <select style={styles.input} value={userId} onChange={(e) => choisirUtilisateur(e.target.value)}>
-              <option value="">— Nouvel ouvrier sans compte —</option>
-              {utilisateurs.map((u) => (
-                <option key={u.id} value={u.id}>{u.nom} ({LABEL_ROLE[u.role] || u.role})</option>
-              ))}
-            </select>
+          <form style={styles.formCard} onSubmit={soumettre}>
+            {!editionId && (
+              <select style={styles.input} value={userId} onChange={(e) => choisirUtilisateur(e.target.value)}>
+                <option value="">— Nouvel ouvrier sans compte —</option>
+                {utilisateurs.map((u) => (
+                  <option key={u.id} value={u.id}>{u.nom} ({LABEL_ROLE[u.role] || u.role})</option>
+                ))}
+              </select>
+            )}
             <input style={styles.input} placeholder="Nom de l'employé" value={nom} onChange={(e) => setNom(e.target.value)} required />
             <select style={styles.input} value={ferme} onChange={(e) => setFerme(e.target.value)} required>
               <option value="">Ferme...</option>
@@ -105,7 +137,8 @@ export default function PointageEmployes() {
             </select>
             <input style={styles.input} type="number" min="0" step="1" placeholder="Taux horaire (FCFA/h)" value={tauxHoraire} onChange={(e) => setTauxHoraire(e.target.value)} required />
             {erreur && <p style={styles.erreur}>{erreur}</p>}
-            <button style={styles.submitBtn} type="submit" disabled={envoi}>{envoi ? "Ajout..." : "Ajouter"}</button>
+            <button style={styles.submitBtn} type="submit" disabled={envoi}>{envoi ? "Enregistrement..." : editionId ? "Enregistrer les modifications" : "Ajouter"}</button>
+            {editionId && <button type="button" style={styles.cancelBtn} onClick={fermerForm}>Annuler</button>}
           </form>
         )}
 
@@ -143,6 +176,12 @@ export default function PointageEmployes() {
                         </button>
                         <button style={styles.iconBtn} onClick={() => basculerActif(emp)} title={emp.actif ? "Désactiver" : "Réactiver"}>
                           {emp.actif ? <UserX size={16} /> : <UserCheck size={16} />}
+                        </button>
+                        <button style={styles.iconBtn} onClick={() => commencerEdition(emp)} title="Modifier (ex: changer de ferme)">
+                          <Pencil size={16} />
+                        </button>
+                        <button style={{ ...styles.iconBtn, color: CLAY }} onClick={() => supprimer(emp)} title="Supprimer le badge">
+                          <Trash2 size={16} />
                         </button>
                       </td>
                     </tr>
@@ -189,6 +228,7 @@ const styles = {
   formCard: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 18, marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
   input: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK, flex: "1 1 160px" },
   submitBtn: { background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  cancelBtn: { background: "#fff", color: "#7A857F", border: "1px solid #DAD5C7", borderRadius: 10, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   erreur: { color: "#9E4527", fontSize: 12.5, margin: 0, width: "100%" },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
   empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
