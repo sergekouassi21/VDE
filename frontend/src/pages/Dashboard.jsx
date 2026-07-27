@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo, Fragment } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import { Egg, TrendingUp, AlertTriangle, Skull, Package, ChevronRight, Activity, Wheat, Droplet } from "lucide-react";
-import { getDashboard, getEmployes, getAbsences, getEvenementsSante } from "../api/client";
+import { getDashboard, getEmployes, getAbsences, getEvenementsSante, getFactures } from "../api/client";
 import { GREEN, GREEN_DARK, INK, formatSacs, formatColis, AGE_REFORME_SEMAINES, KG_PAR_SAC } from "../theme";
 
 const nf = (v) => (v ?? 0).toLocaleString("fr-FR");
+const JOURS_CREANCE_RETARD = 15; // cf. conversation du 27/07/2026 avec Serge
+const joursDepuis = (iso) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 
 // Courbe de ponte de référence par âge (race Isa Brown, %), pour comparaison
 const COURBE_REF = { 17: 22, 20: 78, 25: 93, 30: 94, 40: 91, 47: 89, 48: 89, 50: 87, 60: 83, 70: 78, 77: 75, 80: 72, 93: 64 };
@@ -15,6 +17,7 @@ export default function Dashboard() {
   const [absencesEnAttente, setAbsencesEnAttente] = useState([]);
   const [employesSansSalaire, setEmployesSansSalaire] = useState([]);
   const [evenementsSanteEnRetard, setEvenementsSanteEnRetard] = useState([]);
+  const [creancesEnRetard, setCreancesEnRetard] = useState([]);
   const [sel, setSel] = useState(null);
   const [chargement, setChargement] = useState(true);
 
@@ -30,6 +33,9 @@ export default function Dashboard() {
     if (estDirectionOuAdmin) {
       getAbsences({ statut: "EN_ATTENTE" }).then(setAbsencesEnAttente);
       getEmployes().then((emps) => setEmployesSansSalaire(emps.filter((e) => e.actif && Number(e.salaire_mensuel) === 0)));
+      getFactures().then((factures) => setCreancesEnRetard(
+        factures.filter((f) => Number(f.reste_du) > 0 && joursDepuis(f.date) > JOURS_CREANCE_RETARD)
+      ));
     }
   }, []);
 
@@ -151,8 +157,11 @@ export default function Dashboard() {
     evenementsSanteEnRetard.forEach((e) => {
       a.push({ ferme: e.ferme_nom, txt: `${e.type === "VACCIN" ? "Vaccin" : "Traitement"} en retard : ${e.nom} (prévu le ${new Date(e.date_prevue).toLocaleDateString("fr-FR")})`, grav: "haut" });
     });
+    creancesEnRetard.forEach((f) => {
+      a.push({ ferme: "Créances", txt: `${f.client.nom} doit ${nf(Math.round(f.reste_du))} F depuis ${joursDepuis(f.date)} jours (facture n°${String(f.numero).padStart(7, "0")})`, grav: "moy" });
+    });
     return a.sort((x, y) => (x.grav === "haut" ? -1 : 1));
-  }, [actives, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard]);
+  }, [actives, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard, creancesEnRetard]);
 
   const dataPonte = pondeuses.map((f) => ({ nom: f.nom.replace("Ayénou", "Ay."), taux: +tauxPonte(f).toFixed(1) }));
   const dataAge = pondeuses

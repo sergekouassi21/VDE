@@ -12,6 +12,8 @@ const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
 const fcfa = (v) => (Number(v) || 0).toLocaleString("fr-FR") + " F";
 const nf = (v) => (Number(v) || 0).toLocaleString("fr-FR");
 const today = () => new Date().toISOString().slice(0, 10);
+const JOURS_CREANCE_RETARD = 15; // cf. conversation du 27/07/2026 avec Serge
+const joursDepuis = (iso) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 
 // Catalogue produits — pour les œufs, le prix se saisit AU PLATEAU (= 1 alvéole
 // = 30 œufs). 1 carton = 14 plateaux, donc montant = qte × 14 × prix du plateau.
@@ -341,8 +343,10 @@ function Creances({ factures, onEncaisse }) {
   const [montant, setMontant] = useState("");
   const [envoi, setEnvoi] = useState(false);
 
-  const creances = factures.filter((f) => Number(f.reste_du) > 0);
+  const creances = factures.filter((f) => Number(f.reste_du) > 0)
+    .sort((a, b) => joursDepuis(b.date) - joursDepuis(a.date));
   const total = creances.reduce((s, f) => s + Number(f.reste_du), 0);
+  const nbEnRetard = creances.filter((f) => joursDepuis(f.date) > JOURS_CREANCE_RETARD).length;
 
   async function encaisser(facture) {
     const m = Number(montant) || 0;
@@ -364,15 +368,23 @@ function Creances({ factures, onEncaisse }) {
         <span style={styles.creanceTotal}>{fcfa(total)}</span>
       </div>
       <div style={styles.sectionLabel}>Clients qui doivent ({creances.length})</div>
+      {nbEnRetard > 0 && (
+        <p style={styles.retardWarn}><AlertTriangle size={13} /> {nbEnRetard} créance{nbEnRetard > 1 ? "s" : ""} en retard depuis plus de {JOURS_CREANCE_RETARD} jours</p>
+      )}
       {creances.length === 0 && <p style={styles.noAlert}>Aucune créance en cours — tout est soldé ✓</p>}
       {creances.map((f) => {
         const ouvert = ouverte === f.id;
+        const jours = joursDepuis(f.date);
+        const enRetard = jours > JOURS_CREANCE_RETARD;
         return (
           <div key={f.id} style={styles.creanceCard}>
             <button style={styles.creanceRowBtn} onClick={() => { setOuverte(ouvert ? null : f.id); setMontant(""); }}>
               <div>
                 <div style={styles.creanceClient}>{f.client.nom}</div>
-                <div style={styles.creanceMeta}>Facture {String(f.numero).padStart(7, "0")} · {new Date(f.date).toLocaleDateString("fr-FR")}</div>
+                <div style={styles.creanceMeta}>
+                  Facture {String(f.numero).padStart(7, "0")} · {new Date(f.date).toLocaleDateString("fr-FR")}
+                  {enRetard && <span style={styles.retardBadge}>en retard · {jours} j</span>}
+                </div>
               </div>
               <div style={styles.creanceRight}>
                 <span style={styles.creanceMontant}>{fcfa(f.reste_du)}</span>
@@ -601,6 +613,8 @@ const styles = {
   soldeBtn: { background: "#EAF3EE", border: `1px solid ${GREEN}`, color: GREEN_DARK, borderRadius: 8, padding: "0 14px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" },
   encaisseBtn: { width: "100%", marginTop: 10, background: GREEN, color: "#fff", border: "none", borderRadius: 11, padding: "13px", fontSize: 15, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 },
   noAlert: { fontSize: 13, color: GREEN, background: "#EAF3EE", borderRadius: 10, padding: "14px", textAlign: "center", margin: "0 0 8px" },
+  retardWarn: { display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: "#9E4527", background: "#FDEEE8", borderRadius: 10, padding: "9px 13px", margin: "0 0 10px", fontWeight: 500 },
+  retardBadge: { marginLeft: 8, fontSize: 10.5, fontWeight: 700, color: "#9E4527", background: "#FDEEE8", borderRadius: 6, padding: "1px 6px", textTransform: "uppercase", letterSpacing: .3 },
   creanceClient: { fontSize: 15, fontWeight: 600, color: INK },
   creanceMeta: { fontSize: 11.5, color: "#8A948D", marginTop: 3 },
   creanceRight: { display: "flex", alignItems: "center", gap: 8 },
