@@ -155,7 +155,12 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
     const montant = qte * facteur * prix;
     const oeufs = produit.oeufsParUnite ? qte * produit.oeufsParUnite : 0;
     const effectifVendu = produit.effectif ? qte : 0;
-    const ferme = fermes.find((f) => String(f.id) === String(l.ferme));
+    // Seule la chair au kilo garde une ferme choisie à la main (pas de
+    // notion de stock/effectif à répartir) — les autres produits sont
+    // regroupés et répartis automatiquement entre les fermes (FIFO, bande
+    // la plus ancienne d'abord) côté serveur, cf. conversation du
+    // 27/07/2026 avec Serge.
+    const ferme = l.type_produit === "CHAIR_KG" ? fermes.find((f) => String(f.id) === String(l.ferme)) : null;
     return { ...l, produit, qte, prix, montant, oeufs, effectifVendu, ferme };
   }), [lignes, fermes]);
 
@@ -165,24 +170,35 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
   const oeufsBrouillon = detail.reduce((s, d) => s + d.oeufs, 0);
   const totalAffiche = totalVentesOeufs - oeufsBrouillon;
 
+  // Disponible total agrégé sur toutes les fermes éligibles à chaque
+  // produit groupé — remplace l'ancien contrôle "par ferme sélectionnée"
+  // puisque la ferme n'est plus choisie à la main pour ces produits.
+  const stockOeufDispoTotal = useMemo(
+    () => fermes.filter((f) => f.type === "PONTE").reduce((s, f) => s + (f.bande_active?.stock_oeuf_actuel ?? 0), 0),
+    [fermes],
+  );
+  const effectifChairDispoTotal = useMemo(
+    () => fermes.filter((f) => f.type === "CHAIR").reduce((s, f) => s + (f.bande_active?.effectif_actuel ?? 0), 0),
+    [fermes],
+  );
+  const effectifPonteDispoTotal = useMemo(
+    () => fermes.filter((f) => f.type === "PONTE").reduce((s, f) => s + (f.bande_active?.effectif_actuel ?? 0), 0),
+    [fermes],
+  );
+
   const avertissements = useMemo(() => {
-    const parFerme = {};
-    detail.forEach((d) => {
-      if (!d.ferme) return;
-      const id = d.ferme.id;
-      if (!parFerme[id]) parFerme[id] = { ferme: d.ferme, oeufs: 0, effectif: 0 };
-      parFerme[id].oeufs += d.oeufs;
-      parFerme[id].effectif += d.effectifVendu;
-    });
+    const oeufsDemandes = detail.filter((d) => d.produit.oeufsParUnite).reduce((s, d) => s + d.oeufs, 0);
+    const chairDemandee = detail.filter((d) => d.type_produit === "CHAIR_UNITE").reduce((s, d) => s + d.effectifVendu, 0);
+    const reformeDemandee = detail.filter((d) => d.type_produit === "REFORME").reduce((s, d) => s + d.effectifVendu, 0);
     const alertes = [];
-    Object.values(parFerme).forEach((b) => {
-      const stockDispo = b.ferme.bande_active?.stock_oeuf_actuel ?? 0;
-      const effectifDispo = b.ferme.bande_active?.effectif_actuel ?? 0;
-      if (b.oeufs > stockDispo) alertes.push(`${b.ferme.nom} : stock d'œufs insuffisant (${nf(b.oeufs)} demandés, ${nf(stockDispo)} disponibles)`);
-      if (b.effectif > effectifDispo) alertes.push(`${b.ferme.nom} : effectif insuffisant (${nf(b.effectif)} demandés, ${nf(effectifDispo)} disponibles)`);
+    if (oeufsDemandes > stockOeufDispoTotal) alertes.push(`Stock d'œufs insuffisant, toutes fermes confondues (${nf(oeufsDemandes)} demandés, ${nf(stockOeufDispoTotal)} disponibles)`);
+    if (chairDemandee > effectifChairDispoTotal) alertes.push(`Effectif chair insuffisant, toutes fermes confondues (${nf(chairDemandee)} demandés, ${nf(effectifChairDispoTotal)} disponibles)`);
+    if (reformeDemandee > effectifPonteDispoTotal) alertes.push(`Effectif réforme insuffisant, toutes fermes confondues (${nf(reformeDemandee)} demandés, ${nf(effectifPonteDispoTotal)} disponibles)`);
+    detail.filter((d) => d.type_produit === "CHAIR_KG" && !d.ferme && d.qte > 0).forEach(() => {
+      alertes.push("Chair au kilo : choisis la ferme d'origine.");
     });
     return alertes;
-  }, [detail]);
+  }, [detail, stockOeufDispoTotal, effectifChairDispoTotal, effectifPonteDispoTotal]);
 
   const clientTrouve = useMemo(
     () => clients.find((c) => c.nom.trim().toLowerCase() === clientNom.trim().toLowerCase()),
@@ -196,7 +212,9 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
     return () => { annule = true; };
   }, [clientTrouve]);
 
-  const pretAEnvoyer = clientNom.trim() && date && lignes.every((l) => l.ferme && Number(l.quantite) > 0) && total > 0;
+  const pretAEnvoyer = clientNom.trim() && date
+    && lignes.every((l) => Number(l.quantite) > 0 && (l.type_produit !== "CHAIR_KG" || l.ferme))
+    && total > 0;
 
   async function valider() {
     setEnvoi(true); setErreur("");
@@ -208,7 +226,7 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
         mode_paiement: paiement,
         avance_initiale: paiement === "PARTIEL" ? (Number(avance) || 0) : 0,
         lignes: lignes.map((l) => ({
-          ferme: Number(l.ferme), type_produit: l.type_produit,
+          ferme: l.type_produit === "CHAIR_KG" ? Number(l.ferme) : null, type_produit: l.type_produit,
           quantite: Number(l.quantite) || 0, prix_unitaire: Number(l.prix_unitaire) || 0,
         })),
       });
@@ -280,21 +298,17 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
       {detail.map((d, i) => (
         <div key={i} style={styles.ligne}>
           <div style={styles.ligneTop}>
-            <select style={styles.select} value={d.ferme} onChange={(e) => setLigne(i, "ferme", e.target.value)}>
-              <option value="">— Ferme —</option>
-              {fermes.map((f) => <option key={f.id} value={f.id}>{f.nom}</option>)}
-            </select>
             <select style={styles.select} value={d.type_produit} onChange={(e) => setLigne(i, "type_produit", e.target.value)}>
               {CATALOGUE.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
             </select>
+            {d.type_produit === "CHAIR_KG" && (
+              <select style={styles.select} value={d.ferme?.id ?? ""} onChange={(e) => setLigne(i, "ferme", e.target.value)}>
+                <option value="">— Ferme —</option>
+                {fermes.map((f) => <option key={f.id} value={f.id}>{f.nom}</option>)}
+              </select>
+            )}
             {lignes.length > 1 && <button style={styles.delBtn} onClick={() => delLigne(i)}><Trash2 size={15} /></button>}
           </div>
-          {d.ferme && (
-            <div style={styles.dispoNote}>
-              Stock œufs disponible : <strong>{nf(d.ferme.bande_active?.stock_oeuf_actuel ?? 0)}</strong>
-              {" · "}Effectif disponible : <strong>{nf(d.ferme.bande_active?.effectif_actuel ?? 0)}</strong>
-            </div>
-          )}
           <div style={styles.ligneGrid}>
             <label style={styles.miniField}>
               <span style={styles.miniLabel}>Quantité ({d.produit.unite}{d.qte > 1 && d.produit.unite !== "kg" ? "s" : ""})</span>
@@ -311,8 +325,8 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
             </span>
             <span style={styles.ligneTotal}>{fcfa(d.montant)}</span>
           </div>
-          {d.oeufs > 0 && <div style={styles.note}>— déduit {nf(d.oeufs)} œufs du stock de {d.ferme?.nom || "…"}</div>}
-          {d.effectifVendu > 0 && <div style={styles.note}>— déduit {nf(d.effectifVendu)} sujets de l'effectif de {d.ferme?.nom || "…"}</div>}
+          {d.oeufs > 0 && <div style={styles.note}>— déduit {nf(d.oeufs)} œufs, réparti automatiquement entre les fermes</div>}
+          {d.effectifVendu > 0 && <div style={styles.note}>— déduit {nf(d.effectifVendu)} sujets, réparti automatiquement entre les fermes</div>}
         </div>
       ))}
       <button style={styles.addBtn} onClick={addLigne}><Plus size={16} /> Ajouter un article</button>
@@ -619,7 +633,6 @@ const styles = {
   calcExpr: { fontSize: 12, color: "#8A948D" },
   ligneTotal: { fontWeight: 700, fontSize: 16, color: GREEN_DARK },
   note: { fontSize: 11, color: "#A0A89F", marginTop: 8, fontStyle: "italic" },
-  dispoNote: { fontSize: 11.5, color: GREEN_DARK, background: "#EAF3EE", padding: "6px 10px", borderRadius: 8, marginBottom: 10 },
   addBtn: { width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#EAF3EE", border: `1px dashed ${GREEN}`, color: GREEN_DARK, padding: "11px", borderRadius: 10, fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer", marginTop: 4 },
   payRow: { display: "flex", gap: 7 },
   payBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, background: "#fff", border: "1px solid #ECE9DF", color: "#5A655F", padding: "11px 6px", borderRadius: 11, fontSize: 12.5, fontFamily: "inherit", cursor: "pointer", fontWeight: 500 },

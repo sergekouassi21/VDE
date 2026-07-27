@@ -61,6 +61,25 @@ function bandeauSection(doc, y, titre) {
   return y + 9;
 }
 
+// Une vente groupée (œufs, chair à l'unité, réforme) peut être répartie par
+// le serveur entre plusieurs fermes (FIFO) — le client ne s'intéresse pas à
+// cette répartition interne, donc la facture imprimée recompose une seule
+// ligne par produit/prix (cf. conversation du 27/07/2026 avec Serge).
+function consoliderLignesFacture(lignes) {
+  const parCle = new Map();
+  lignes.forEach((l) => {
+    const cle = `${l.type_produit}|${l.prix_unitaire}`;
+    const existante = parCle.get(cle);
+    if (existante) {
+      existante.quantite = Number(existante.quantite) + Number(l.quantite);
+      existante.montant = Number(existante.montant) + Number(l.montant);
+    } else {
+      parCle.set(cle, { ...l });
+    }
+  });
+  return Array.from(parCle.values());
+}
+
 function ligneCle(doc, y, label, valeur) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);
@@ -88,6 +107,8 @@ export function genererPdfFacture(facture) {
   doc.text(`Client : ${facture.client.nom}`, 15, 55);
   if (facture.client.telephone) doc.text(`Téléphone : ${facture.client.telephone}`, 15, 61);
 
+  const lignesConsolidees = consoliderLignesFacture(facture.lignes);
+
   let y = 74;
   doc.setFillColor(...GREEN_DARK);
   doc.rect(15, y - 5.5, 180, 8, "F");
@@ -95,14 +116,13 @@ export function genererPdfFacture(facture) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.5);
   doc.text("Désignation", 18, y);
-  doc.text("Ferme", 100, y);
   doc.text("P.U.", 150, y, { align: "right" });
   doc.text("Total", 192, y, { align: "right" });
   y += 8;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  facture.lignes.forEach((l, i) => {
+  lignesConsolidees.forEach((l, i) => {
     if (i % 2 === 1) {
       doc.setFillColor(...ROW_ALT);
       doc.rect(15, y - 5, 180, 7, "F");
@@ -111,8 +131,7 @@ export function genererPdfFacture(facture) {
     const qte = Number(l.quantite);
     const desig = `${nf(qte)} ${unite}${qte > 1 && unite !== "kg" ? "s" : ""} — ${LABEL_PRODUIT[l.type_produit]}`;
     doc.setTextColor(...INK);
-    doc.text(desig, 18, y, { maxWidth: 78 });
-    doc.text(l.ferme_nom, 100, y, { maxWidth: 46 });
+    doc.text(desig, 18, y, { maxWidth: 124 });
     doc.text(`${fcfa(l.prix_unitaire)}/${PRIX_UNITE_PRODUIT[l.type_produit]}`, 150, y, { align: "right" });
     doc.text(fcfa(l.montant), 192, y, { align: "right" });
     y += 7;
