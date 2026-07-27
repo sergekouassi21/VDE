@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Plus, Trash2, Pencil, Check, X, Receipt, CreditCard, Wallet, ChevronRight, AlertTriangle, Download, Share2, WifiOff } from "lucide-react";
 import { getFermes, getClients, getFactures, getVentes, creerFacture, encaisserVersement, updateSortieOeuf, deleteSortieOeuf, getHistoriquePrixClient } from "../api/client";
-import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+import { GREEN, GREEN_DARK, INK, CLAY, formatCartons } from "../theme";
 import { genererPdfFacture, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { mettreEnCache, lireCache } from "../offline/cache";
 
@@ -191,7 +191,7 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
     const chairDemandee = detail.filter((d) => d.type_produit === "CHAIR_UNITE").reduce((s, d) => s + d.effectifVendu, 0);
     const reformeDemandee = detail.filter((d) => d.type_produit === "REFORME").reduce((s, d) => s + d.effectifVendu, 0);
     const alertes = [];
-    if (oeufsDemandes > stockOeufDispoTotal) alertes.push(`Stock d'œufs insuffisant, toutes fermes confondues (${nf(oeufsDemandes)} demandés, ${nf(stockOeufDispoTotal)} disponibles)`);
+    if (oeufsDemandes > stockOeufDispoTotal) alertes.push(`Stock d'œufs insuffisant, toutes fermes confondues (${formatCartons(oeufsDemandes)} demandés, ${formatCartons(stockOeufDispoTotal)} disponibles)`);
     if (chairDemandee > effectifChairDispoTotal) alertes.push(`Effectif chair insuffisant, toutes fermes confondues (${nf(chairDemandee)} demandés, ${nf(effectifChairDispoTotal)} disponibles)`);
     if (reformeDemandee > effectifPonteDispoTotal) alertes.push(`Effectif réforme insuffisant, toutes fermes confondues (${nf(reformeDemandee)} demandés, ${nf(effectifPonteDispoTotal)} disponibles)`);
     detail.filter((d) => d.type_produit === "CHAIR_KG" && !d.ferme && d.qte > 0).forEach(() => {
@@ -253,7 +253,7 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
     <div style={styles.body}>
       <div style={styles.stockGlobal}>
         <span style={styles.stockGlobalLabel}>Œufs restants à facturer (Point Journalier − Factures{oeufsBrouillon > 0 ? " − en cours" : ""})</span>
-        <span style={styles.stockGlobalVal}>{nf(totalAffiche)} œufs</span>
+        <span style={styles.stockGlobalVal}>{formatCartons(totalAffiche)}</span>
       </div>
 
       <div style={styles.card}>
