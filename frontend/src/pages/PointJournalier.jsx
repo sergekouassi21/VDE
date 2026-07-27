@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Egg, Skull, Wheat, Package, TrendingUp, Check, ChevronDown, AlertTriangle, Calendar, Download, Share2, WifiOff, RefreshCw, Archive, X } from "lucide-react";
 import { getFermes, soumettrePointJournalier, declarerBande, terminerBande, getBilanBande, getPointJournalier } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, CLAY, formatSacs, formatColis, AGE_REFORME_SEMAINES } from "../theme";
-import { genererPdfPointJournalier, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
+import { genererPdfPointJournalier, genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { ajouterSoumissionEnAttente, listerSoumissionsEnAttente } from "../offline/queue";
 import { synchroniserSoumissionsEnAttente } from "../offline/sync";
 
@@ -35,6 +35,12 @@ export default function PointJournalier() {
   const [sorties, setSorties] = useState([]);
   const [nouvelleSortie, setNouvelleSortie] = useState(NOUVELLE_SORTIE_VIDE);
   const [envoye, setEnvoye] = useState(false);
+  // Point tel qu'enregistré côté serveur (calcul faisant foi) — l'aperçu
+  // local (calc) suffit pour la saisie en cours, mais est incorrect si on
+  // recorrige le jour le plus récent déjà enregistré (il utiliserait alors
+  // ce même jour comme "veille" de lui-même). Le PDF post-envoi doit donc
+  // toujours refléter la réponse du serveur, pas l'aperçu.
+  const [pointEnregistre, setPointEnregistre] = useState(null);
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
   const [erreur, setErreur] = useState("");
   const [declaration, setDeclaration] = useState({ date_mise_en_place: todayISO(), effectif_initial: "" });
@@ -81,7 +87,7 @@ export default function PointJournalier() {
   const bande = ferme?.bande_active;
   const magasin = ferme?.magasin;
 
-  const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setEnvoye(false); setHorsLigneEnvoi(false); };
+  const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setEnvoye(false); setHorsLigneEnvoi(false); setPointEnregistre(null); };
   const reset = () => { setForm(FORM_VIDE); setSorties([]); setNouvelleSortie(NOUVELLE_SORTIE_VIDE); };
 
   // Si une fiche existe déjà pour cette ferme et cette date (ex: on arrive
@@ -116,6 +122,7 @@ export default function PointJournalier() {
         }
         setEnvoye(false);
         setHorsLigneEnvoi(false);
+        setPointEnregistre(null);
       })
       .catch(() => {});
     return () => { annule = true; };
@@ -127,11 +134,11 @@ export default function PointJournalier() {
     if (!n(nouvelleSortie.quantite) || !nouvelleSortie.responsable.trim()) return;
     setSorties((s) => [...s, { ...nouvelleSortie, quantite: n(nouvelleSortie.quantite) }]);
     setNouvelleSortie(NOUVELLE_SORTIE_VIDE);
-    setEnvoye(false); setHorsLigneEnvoi(false);
+    setEnvoye(false); setHorsLigneEnvoi(false); setPointEnregistre(null);
   }
   function retirerSortie(index) {
     setSorties((s) => s.filter((_, i) => i !== index));
-    setEnvoye(false); setHorsLigneEnvoi(false);
+    setEnvoye(false); setHorsLigneEnvoi(false); setPointEnregistre(null);
   }
 
   const calc = useMemo(() => {
@@ -167,6 +174,8 @@ export default function PointJournalier() {
       observation: form.observation,
     };
 
+    setPointEnregistre(null);
+
     if (!navigator.onLine) {
       await ajouterSoumissionEnAttente(ferme.id, ferme.nom, payload);
       await rafraichirEnAttente();
@@ -177,7 +186,8 @@ export default function PointJournalier() {
     }
 
     try {
-      await soumettrePointJournalier(ferme.id, payload);
+      const point = await soumettrePointJournalier(ferme.id, payload);
+      setPointEnregistre(point);
       setHorsLigneEnvoi(false);
       setEnvoye(true);
       await chargerFermes();
@@ -230,6 +240,14 @@ export default function PointJournalier() {
     }
   }
 
+  // Le calcul faisant foi est celui du serveur (pointEnregistre) — l'aperçu
+  // local (calc) ne sert que de repli hors-ligne, où aucune réponse serveur
+  // n'existe encore (la fiche sera synchronisée plus tard, cf. offline/sync.js).
+  function genererPdfFinal() {
+    if (pointEnregistre) return genererPdfHistoriquePoint(pointEnregistre);
+    return genererPdfPointJournalier({ ferme, bande, dateJour, form, calc, sorties, totalSorties });
+  }
+
   if (chargement) return <div style={styles.page}><p style={{ padding: 20 }}>Chargement...</p></div>;
 
   return (
@@ -240,7 +258,7 @@ export default function PointJournalier() {
             <img src="/logo.png" alt="Volailles de l'Est" style={styles.logo} />
             <label style={styles.datePick}>
               <Calendar size={14} />
-              <input type="date" value={dateJour} max={todayISO()} onChange={(e) => { setDateJour(e.target.value); setEnvoye(false); setHorsLigneEnvoi(false); }} style={styles.dateInput} />
+              <input type="date" value={dateJour} max={todayISO()} onChange={(e) => { setDateJour(e.target.value); setEnvoye(false); setHorsLigneEnvoi(false); setPointEnregistre(null); }} style={styles.dateInput} />
             </label>
           </div>
           <h1 style={styles.title}>Point Journalier</h1>
@@ -260,7 +278,7 @@ export default function PointJournalier() {
               <div style={styles.dropdown}>
                 {fermes.map((f) => (
                   <button key={f.id} style={{ ...styles.option, ...(f.id === fermeId ? styles.optionActive : {}) }}
-                    onClick={() => { setFermeId(f.id); setOpenFerme(false); reset(); setEnvoye(false); setHorsLigneEnvoi(false); }}>
+                    onClick={() => { setFermeId(f.id); setOpenFerme(false); reset(); setEnvoye(false); setHorsLigneEnvoi(false); setPointEnregistre(null); }}>
                     <span>{f.nom}</span>
                     <span style={styles.optionMeta}>{f.est_vide ? "vide" : `${f.nombre_chambres} ch.`}</span>
                   </button>
@@ -428,14 +446,14 @@ export default function PointJournalier() {
                   : `Données ${ferme.nom} · ${dateAffiche} synchronisées avec le tableau de bord central`}
               </p>
               <button style={styles.pdfBtn} onClick={() => telechargerPdf(
-                genererPdfPointJournalier({ ferme, bande, dateJour, form, calc, sorties, totalSorties }),
+                genererPdfFinal(),
                 `point-journalier-${ferme.nom.replace(/\s+/g, "-")}-${dateJour}.pdf`
               )}>
                 <Download size={17} /> Télécharger le PDF
               </button>
               {partageDisponible && (
                 <button style={styles.pdfBtn} onClick={() => partagerPdf(
-                  genererPdfPointJournalier({ ferme, bande, dateJour, form, calc, sorties, totalSorties }),
+                  genererPdfFinal(),
                   `point-journalier-${ferme.nom.replace(/\s+/g, "-")}-${dateJour}.pdf`
                 )}>
                   <Share2 size={17} /> Partager
