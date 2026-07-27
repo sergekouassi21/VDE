@@ -109,6 +109,7 @@ export default function PointageHistorique() {
         salaireMensuel: Number(emp.salaire_mensuel) || 0, jourRepos: emp.jour_repos, actif: emp.actif,
         lignesTravaillees: [], absencesJustifiees: [], joursAbsenceInjustifiee: [],
         totalHeures: 0, totalMontant: 0, lignePaie: null,
+        joursReposDus: 0, joursReposTravailles: [],
       });
     }
     for (const lp of lignesPaie) {
@@ -146,9 +147,13 @@ export default function PointageHistorique() {
         if (!g.actif) continue;
         for (let d = new Date(debut); d <= fin; d.setDate(d.getDate() + 1)) {
           if (d > aujourdhui) break;
-          if (jourSemaineISO(d) === g.jourRepos) continue;
           const iso = dateISO(d);
           const cle = `${g.employeId}_${iso}`;
+          if (g.jourRepos != null && jourSemaineISO(d) === g.jourRepos) {
+            g.joursReposDus += 1;
+            if (pointagesFaits.has(cle)) g.joursReposTravailles.push(iso);
+            continue;
+          }
           if (pointagesFaits.has(cle) || absencesDeclarees.has(cle)) continue;
           g.joursAbsenceInjustifiee.push(iso);
         }
@@ -359,6 +364,7 @@ export default function PointageHistorique() {
                     <th style={{ ...styles.th, textAlign: "right" }}>Jours travaillés</th>
                     <th style={{ ...styles.th, textAlign: "right" }}>Absences justifiées</th>
                     <th style={{ ...styles.th, textAlign: "right" }}>Absences injustifiées</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Repos pris / dus</th>
                     <th style={{ ...styles.th, textAlign: "right" }}>Net à payer</th>
                     {moisPremierJour && <th style={styles.th}>Statut</th>}
                     <th style={styles.th}></th>
@@ -372,6 +378,9 @@ export default function PointageHistorique() {
                       <td style={{ ...styles.td, textAlign: "right" }}>{g.lignesTravaillees.length}</td>
                       <td style={{ ...styles.td, textAlign: "right" }}>{g.absencesJustifiees.length}</td>
                       <td style={{ ...styles.td, textAlign: "right", color: g.joursAbsenceInjustifiee.length > 0 ? CLAY : "inherit" }}>{g.joursAbsenceInjustifiee.length}</td>
+                      <td style={{ ...styles.td, textAlign: "right", color: g.joursReposTravailles.length > 0 ? CLAY : "inherit" }}>
+                        {g.jourRepos != null ? `${g.joursReposDus - g.joursReposTravailles.length} / ${g.joursReposDus}` : "—"}
+                      </td>
                       <td style={{ ...styles.td, textAlign: "right", fontWeight: 600, color: GREEN_DARK }}>{fcfa(g.totalMontant)}</td>
                       {moisPremierJour && (
                         <td style={styles.td}>
