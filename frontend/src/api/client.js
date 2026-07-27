@@ -13,10 +13,11 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-export async function login(username, password) {
-  const { data } = await axios.post(`${API_BASE_URL}/auth/login/`, { username, password });
+export async function login(username, password, code) {
+  const { data } = await axios.post(`${API_BASE_URL}/auth/login/`, { username, password, code });
+  if (data.besoin_2fa) return { besoin2fa: true };
   localStorage.setItem("vde_token", data.token);
-  return data.token;
+  return { token: data.token };
 }
 
 export function logout() {
@@ -31,6 +32,11 @@ export function isAuthenticated() {
 }
 
 export const getMoi = () => api.get("/moi/").then((r) => r.data);
+export const getStatut2FA = () => api.get("/auth/2fa/statut/").then((r) => r.data);
+export const getQrConfigurer2FA = () =>
+  api.post("/auth/2fa/configurer/", {}, { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
+export const confirmer2FA = (code) => api.post("/auth/2fa/confirmer/", { code }).then((r) => r.data);
+export const desactiver2FA = () => api.post("/auth/2fa/desactiver/").then((r) => r.data);
 
 export const getRechercheGlobale = (q) => api.get("/recherche/", { params: { q } }).then((r) => r.data);
 export const getJournalAudit = (params) => api.get("/journal-audit/", { params }).then((r) => r.data);

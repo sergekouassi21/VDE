@@ -18,11 +18,22 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
-from rest_framework.authtoken.views import obtain_auth_token
+
+from exploitation.deux_facteurs import (
+    connexion,
+    deux_facteurs_confirmer,
+    deux_facteurs_configurer,
+    deux_facteurs_desactiver,
+    deux_facteurs_statut,
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/auth/login/', obtain_auth_token, name='api-login'),
+    path('api/auth/login/', connexion, name='api-login'),
+    path('api/auth/2fa/statut/', deux_facteurs_statut, name='api-2fa-statut'),
+    path('api/auth/2fa/configurer/', deux_facteurs_configurer, name='api-2fa-configurer'),
+    path('api/auth/2fa/confirmer/', deux_facteurs_confirmer, name='api-2fa-confirmer'),
+    path('api/auth/2fa/desactiver/', deux_facteurs_desactiver, name='api-2fa-desactiver'),
     path('api/', include('exploitation.urls')),
     path('api/pointage/', include('pointage.urls')),
 ]

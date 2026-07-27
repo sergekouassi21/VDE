@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp, Wheat, Syringe, Search, ScrollText } from "lucide-react";
+import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp, Wheat, Syringe, Search, ScrollText, Lock } from "lucide-react";
 import Login from "./pages/Login";
 import PointJournalier from "./pages/PointJournalier";
 import Dashboard from "./pages/Dashboard";
@@ -15,6 +15,7 @@ import Rentabilite from "./pages/Rentabilite";
 import AchatsAliment from "./pages/AchatsAliment";
 import Vaccinations from "./pages/Vaccinations";
 import JournalAudit from "./pages/JournalAudit";
+import Securite from "./pages/Securite";
 import { isAuthenticated, logout, ADMIN_URL, getRechercheGlobale, getDashboard, getEvenementsSante, getAbsences, getEmployes, getFactures } from "./api/client";
 import { GREEN_DARK } from "./theme";
 import { calculerAlertes, signatureAlertes, joursDepuis, JOURS_CREANCE_RETARD } from "./alertes";
@@ -263,6 +264,7 @@ function NavBar() {
             <Link to="/rentabilite" style={navStyles.link}><TrendingUp size={16} /> Rentabilité</Link>
             <Link to="/achats-aliment" style={navStyles.link}><Wheat size={16} /> Achats d'aliment</Link>
             <Link to="/journal-audit" style={navStyles.link}><ScrollText size={16} /> Journal d'audit</Link>
+            <Link to="/securite" style={navStyles.link}><Lock size={16} /> Sécurité</Link>
             <a href={ADMIN_URL} target="_blank" rel="noopener noreferrer" style={navStyles.link}><Shield size={16} /> Admin</a>
           </>
         )}
@@ -356,6 +358,9 @@ export default function App() {
         } />
         <Route path="/journal-audit" element={
           <RequireAuth><RequireDirectionOuAdmin><Layout><JournalAudit /></Layout></RequireDirectionOuAdmin></RequireAuth>
+        } />
+        <Route path="/securite" element={
+          <RequireAuth><RequireDirectionOuAdmin><Layout><Securite /></Layout></RequireDirectionOuAdmin></RequireAuth>
         } />
       </Routes>
     </BrowserRouter>
