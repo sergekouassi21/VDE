@@ -17,8 +17,9 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 
+from exploitation.audit import AuditMixin, journaliser, journaliser_objet
 from exploitation.calculs import prix_moyen_sac_aliment
-from exploitation.models import Ferme, LigneFacture, PointJournalier, RoleUtilisateur
+from exploitation.models import ActionAudit, Ferme, LigneFacture, PointJournalier, RoleUtilisateur
 
 from .models import Absence, BadgeAbsence, BadgeTemporaire, Employe, LignePaie, Pointage, StatutAbsence
 
@@ -78,7 +79,7 @@ class EstDirectionOuAdmin(BasePermission):
         return not profil or profil.role in (RoleUtilisateur.DIRECTION, RoleUtilisateur.ADMIN)
 
 
-class EmployeViewSet(viewsets.ModelViewSet):
+class EmployeViewSet(AuditMixin, viewsets.ModelViewSet):
     serializer_class = EmployeSerializer
     permission_classes = [EstDirectionOuAdmin]
     queryset = Employe.objects.prefetch_related("fermes").all()
@@ -113,7 +114,7 @@ class EmployeViewSet(viewsets.ModelViewSet):
             )
 
 
-class PointageViewSet(viewsets.ModelViewSet):
+class PointageViewSet(AuditMixin, viewsets.ModelViewSet):
     """Historique consultable, corrigeable et supprimable par Direction/
     Admin uniquement, filtrable par ferme/employé/période — même schéma de
     filtrage que l'Historique des points journaliers."""
@@ -182,10 +183,11 @@ class PointageViewSet(viewsets.ModelViewSet):
             pointage.montant_du_jour = Decimal("0.00")
 
         pointage.save()
+        journaliser_objet(request.user, ActionAudit.MODIFICATION, pointage, details="Correction pointage")
         return Response(PointageSerializer(pointage).data)
 
 
-class AbsenceViewSet(viewsets.ModelViewSet):
+class AbsenceViewSet(AuditMixin, viewsets.ModelViewSet):
     """Déclaration d'absences justifiées (payées comme une journée complète)
     — réservée à Direction/Admin. Une absence injustifiée ne nécessite
     aucune déclaration ici : elle ressort automatiquement du résumé/de la
@@ -242,6 +244,7 @@ class AbsenceViewSet(viewsets.ModelViewSet):
         absence = self.get_object()
         absence.statut = StatutAbsence.VALIDEE
         absence.save(update_fields=["statut"])
+        journaliser_objet(request.user, ActionAudit.MODIFICATION, absence, details="Absence validée")
         return Response(AbsenceSerializer(absence).data)
 
     @action(detail=True, methods=["post"], url_path="rejeter")
@@ -251,10 +254,11 @@ class AbsenceViewSet(viewsets.ModelViewSet):
         absence = self.get_object()
         absence.statut = StatutAbsence.REJETEE
         absence.save(update_fields=["statut"])
+        journaliser_objet(request.user, ActionAudit.MODIFICATION, absence, details="Absence rejetée")
         return Response(AbsenceSerializer(absence).data)
 
 
-class LignePaieViewSet(viewsets.ModelViewSet):
+class LignePaieViewSet(AuditMixin, viewsets.ModelViewSet):
     """Ajustements de paie du mois (frais, primes, avances, retenues,
     carburant, appel/internet, mode et statut de paiement) — réservé à
     Direction/Admin. Une seule ligne par employé et par mois : POST fait un
@@ -290,6 +294,9 @@ class LignePaieViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         code = status.HTTP_200_OK if instance else status.HTTP_201_CREATED
+        journaliser_objet(
+            request.user, ActionAudit.MODIFICATION if instance else ActionAudit.CREATION, serializer.instance,
+        )
         return Response(serializer.data, status=code)
 
 
