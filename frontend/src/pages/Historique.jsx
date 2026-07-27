@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Download, Share2, Pencil, Trash2, Archive, WifiOff, GitCompareArrows } from "lucide-react";
-import { getFermes, getPointsJournaliers, deletePointJournalier, getBandes, getBilanBande, getComparaisonBandes } from "../api/client";
+import { ChevronRight, Download, Share2, Pencil, Trash2, Archive, WifiOff, GitCompareArrows, RefreshCw } from "lucide-react";
+import { getFermes, getPointsJournaliers, deletePointJournalier, corrigerPointJournalier, getBandes, getBilanBande, getComparaisonBandes } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY, formatSacs, formatColis } from "../theme";
 import { genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { mettreEnCache, lireCache } from "../offline/cache";
@@ -91,6 +91,20 @@ export default function Historique() {
     setEnvoi(true);
     try {
       await deletePointJournalier(p.id);
+      rafraichir();
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  async function recalculer(p) {
+    // Force le recalcul en cascade (stock aliment/alvéole/œuf, effectif...)
+    // depuis cette date jusqu'à aujourd'hui — utile après l'ajout tardif
+    // d'un jour manquant plus tôt dans l'historique, qui ne se répercute
+    // pas automatiquement sur les jours déjà enregistrés après coup.
+    setEnvoi(true);
+    try {
+      await corrigerPointJournalier(p.id, {});
       rafraichir();
     } finally {
       setEnvoi(false);
@@ -321,6 +335,11 @@ export default function Historique() {
                                 <Link to={`/point-journalier?ferme=${p.ferme_id}&date=${p.date}`} style={styles.pdfBtnLink}>
                                   <Pencil size={15} /> Modifier
                                 </Link>
+                                {peutSupprimer() && (
+                                  <button style={styles.pdfBtn} disabled={envoi} onClick={() => recalculer(p)} title="Recalcule les stocks depuis cette date jusqu'à aujourd'hui (utile après l'ajout d'un jour manquant plus tôt)">
+                                    <RefreshCw size={15} /> Recalculer
+                                  </button>
+                                )}
                                 {peutSupprimer() && (
                                   <button style={styles.deleteBtn} disabled={envoi} onClick={() => supprimer(p)}>
                                     <Trash2 size={15} /> Supprimer
