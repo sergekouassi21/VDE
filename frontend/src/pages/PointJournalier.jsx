@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Egg, Skull, Wheat, Package, TrendingUp, Check, ChevronDown, AlertTriangle, Calendar, Download, Share2, WifiOff, RefreshCw, Archive, X } from "lucide-react";
-import { getFermes, soumettrePointJournalier, declarerBande, terminerBande, getBilanBande, getPointJournalier } from "../api/client";
+import { getFermes, soumettrePointJournalier, declarerBande, terminerBande, getBilanBande, getPointJournalier, getPointsJournaliers } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, CLAY, formatSacs, formatColis, AGE_REFORME_SEMAINES } from "../theme";
 import { genererPdfPointJournalier, genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { ajouterSoumissionEnAttente, listerSoumissionsEnAttente } from "../offline/queue";
@@ -16,6 +16,14 @@ function peutDeclarerBande() {
 
 const n = (v) => (v === "" || v === null || v === undefined || isNaN(v) ? 0 : Number(v));
 const todayISO = () => new Date().toISOString().slice(0, 10);
+// Jour calendaire précédent une date ISO ("YYYY-MM-DD"), en local (pas UTC) —
+// sert à retrouver le vrai "jour d'avant" d'une date arbitraire (pas
+// forcément aujourd'hui), cf. veilleDuJour ci-dessous.
+function veilleISO(dateISOStr) {
+  const [a, m, j] = dateISOStr.split("-").map(Number);
+  const d = new Date(a, m - 1, j - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 const FORM_VIDE = {
   morts: "", conso_aliment_sacs: "", aliment_recu_sacs: "", traitement: "", eau_consommee_litres: "",
   alveole_recu_unites: "", production_oeufs: "", casse: "", brise: "", poids_moyen_grammes: "", observation: "",
@@ -41,6 +49,11 @@ export default function PointJournalier() {
   // ce même jour comme "veille" de lui-même). Le PDF post-envoi doit donc
   // toujours refléter la réponse du serveur, pas l'aperçu.
   const [pointEnregistre, setPointEnregistre] = useState(null);
+  // Vrai "jour d'avant" dateJour pour cette ferme — distinct de
+  // ferme.dernier_point, qui est le point le plus RÉCENT de la ferme et peut
+  // donc être dateJour lui-même si on recorrige le jour déjà le plus récent
+  // (l'aperçu se servirait alors de lui-même comme sa propre veille).
+  const [pointVeille, setPointVeille] = useState(undefined);
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
   const [erreur, setErreur] = useState("");
   const [declaration, setDeclaration] = useState({ date_mise_en_place: todayISO(), effectif_initial: "" });
@@ -128,6 +141,20 @@ export default function PointJournalier() {
     return () => { annule = true; };
   }, [fermeId, dateJour]);
 
+  // Le vrai point "veille" pour le calcul en direct (report, stock d'œuf) —
+  // toujours celui strictement avant dateJour, jamais dateJour lui-même
+  // même s'il s'agit du point le plus récent existant pour cette ferme
+  // (cf. commentaire sur pointVeille).
+  useEffect(() => {
+    if (!fermeId || !dateJour) { setPointVeille(undefined); return; }
+    let annule = false;
+    setPointVeille(undefined);
+    getPointsJournaliers({ ferme: fermeId, date_fin: veilleISO(dateJour) })
+      .then((points) => { if (!annule) setPointVeille(points[0] || null); })
+      .catch(() => { if (!annule) setPointVeille(null); });
+    return () => { annule = true; };
+  }, [fermeId, dateJour]);
+
   const totalSorties = sorties.reduce((s, x) => s + n(x.quantite), 0);
 
   function ajouterSortie() {
@@ -142,9 +169,9 @@ export default function PointJournalier() {
   }
 
   const calc = useMemo(() => {
-    if (!ferme || !bande || !magasin) return null;
-    const effectifVeille = ferme.dernier_point ? ferme.dernier_point.effectif_reste : bande.effectif_actuel;
-    const stockOeufVeille = ferme.dernier_point ? ferme.dernier_point.stock_oeuf_total : bande.stock_oeuf_actuel;
+    if (!ferme || !bande || !magasin || pointVeille === undefined) return null;
+    const effectifVeille = pointVeille ? pointVeille.effectif_reste : bande.effectif_actuel;
+    const stockOeufVeille = pointVeille ? pointVeille.stock_oeuf_total : bande.stock_oeuf_actuel;
     const resteEffectif = effectifVeille - n(form.morts);
     const stockOeufJour = n(form.production_oeufs) - n(form.casse) - n(form.brise);
     const stockTotal = stockOeufVeille + stockOeufJour - totalSorties;
@@ -153,7 +180,7 @@ export default function PointJournalier() {
     const alveoleConsoAuto = Math.floor(n(form.production_oeufs) / 30);
     const stockAlveole = magasin.stock_alveoles_unites + n(form.alveole_recu_unites) - alveoleConsoAuto;
     return { resteEffectif, stockOeufJour, stockTotal, tauxPonte, stockAlimentSacs, alveoleConsoAuto, stockAlveole };
-  }, [form, ferme, bande, magasin, totalSorties]);
+  }, [form, ferme, bande, magasin, totalSorties, pointVeille]);
 
   const tauxAlerte = ferme?.type === "PONTE" && n(form.production_oeufs) > 0 && calc && calc.tauxPonte < 60;
   const mortsAlerte = n(form.morts) > 5;
