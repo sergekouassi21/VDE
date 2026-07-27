@@ -15,8 +15,9 @@ import Rentabilite from "./pages/Rentabilite";
 import AchatsAliment from "./pages/AchatsAliment";
 import Vaccinations from "./pages/Vaccinations";
 import JournalAudit from "./pages/JournalAudit";
-import { isAuthenticated, logout, ADMIN_URL, getRechercheGlobale } from "./api/client";
+import { isAuthenticated, logout, ADMIN_URL, getRechercheGlobale, getDashboard, getEvenementsSante, getAbsences, getEmployes, getFactures } from "./api/client";
 import { GREEN_DARK } from "./theme";
+import { calculerAlertes, signatureAlertes, joursDepuis, JOURS_CREANCE_RETARD } from "./alertes";
 
 function RequireAuth({ children }) {
   if (!isAuthenticated()) return <Navigate to="/connexion" replace />;
@@ -174,11 +175,66 @@ function ResultRow({ children, onClick }) {
   return <button style={searchStyles.row} onClick={onClick}>{children}</button>;
 }
 
+const REFRESH_ALERTES_MS = 5 * 60 * 1000;
+
+// Badge de notification sur "Tableau de bord" — recalcule les mêmes
+// alertes que Dashboard.jsx (calculerAlertes) indépendamment, pour pouvoir
+// l'afficher depuis n'importe quelle page. Se vide en visitant le
+// Dashboard (qui écrit sa propre signature dans localStorage) et revient
+// si de nouvelles alertes apparaissent ensuite — cf. conversation du
+// 27/07/2026 (point 14 du backlog).
+function useBadgeAlertes() {
+  const location = useLocation();
+  const [signatureActuelle, setSignatureActuelle] = useState("");
+  const [nbAlertes, setNbAlertes] = useState(0);
+  const [signatureVue, setSignatureVue] = useState(() => localStorage.getItem("vde_alertes_vues") || "");
+
+  useEffect(() => {
+    let annule = false;
+    async function charger() {
+      const role = localStorage.getItem("vde_role");
+      const autoriseRole = !role || role === "DIRECTION" || role === "ADMIN";
+      try {
+        const [dashboard, evenementsSante, absences, employes, factures] = await Promise.all([
+          getDashboard(),
+          getEvenementsSante({ non_faits: "true" }),
+          autoriseRole ? getAbsences({ statut: "EN_ATTENTE" }) : Promise.resolve([]),
+          autoriseRole ? getEmployes() : Promise.resolve([]),
+          autoriseRole ? getFactures() : Promise.resolve([]),
+        ]);
+        if (annule) return;
+        const alertes = calculerAlertes({
+          fermes: dashboard.fermes,
+          absencesEnAttente: absences,
+          employesSansSalaire: employes.filter((e) => e.actif && Number(e.salaire_mensuel) === 0),
+          evenementsSanteEnRetard: evenementsSante.filter((e) => e.statut === "EN_RETARD"),
+          creancesEnRetard: factures.filter((f) => Number(f.reste_du) > 0 && joursDepuis(f.date) > JOURS_CREANCE_RETARD),
+        });
+        setSignatureActuelle(signatureAlertes(alertes));
+        setNbAlertes(alertes.length);
+      } catch {
+        // Le badge reste simplement inchangé si la requête échoue.
+      }
+    }
+    charger();
+    const interval = setInterval(charger, REFRESH_ALERTES_MS);
+    return () => { annule = true; clearInterval(interval); };
+  }, []);
+
+  useEffect(() => {
+    setSignatureVue(localStorage.getItem("vde_alertes_vues") || "");
+  }, [location.pathname]);
+
+  const surDashboard = location.pathname === "/tableau-de-bord";
+  return surDashboard || signatureActuelle === signatureVue ? 0 : nbAlertes;
+}
+
 function NavBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const autorise = estDirectionOuAdmin();
   const [ouvert, setOuvert] = useState(false);
+  const badgeAlertes = useBadgeAlertes();
 
   useEffect(() => { setOuvert(false); }, [location.pathname]);
 
@@ -192,7 +248,10 @@ function NavBar() {
         </button>
       </div>
       <div className={`nav-links${ouvert ? " open" : ""}`}>
-        <Link to="/tableau-de-bord" style={navStyles.link}><LayoutDashboard size={16} /> Tableau de bord</Link>
+        <Link to="/tableau-de-bord" style={navStyles.link}>
+          <LayoutDashboard size={16} /> Tableau de bord
+          {badgeAlertes > 0 && <span style={navStyles.badge}>{badgeAlertes}</span>}
+        </Link>
         <Link to="/point-journalier" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
         <Link to="/historique" style={navStyles.link}><History size={16} /> Historique</Link>
         <Link to="/vaccinations" style={navStyles.link}><Syringe size={16} /> Vaccins & traitements</Link>
@@ -230,6 +289,10 @@ const navStyles = {
   brand: { height: 36, width: 36, borderRadius: 8, objectFit: "cover" },
   link: { color: "#fff", textDecoration: "none", display: "flex", alignItems: "center", gap: 6, opacity: .9 },
   logout: { marginLeft: "auto", background: "none", border: "none", color: "#fff", opacity: .8, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: "inherit", fontSize: 14 },
+  badge: {
+    background: "#E05A3C", color: "#fff", fontSize: 10.5, fontWeight: 700, lineHeight: 1,
+    borderRadius: 999, padding: "2px 6px", minWidth: 15, textAlign: "center",
+  },
 };
 
 const searchStyles = {
