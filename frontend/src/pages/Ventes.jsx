@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Plus, Trash2, Pencil, Check, X, Receipt, CreditCard, Wallet, ChevronRight, AlertTriangle, Download, Share2, WifiOff } from "lucide-react";
-import { getFermes, getClients, getFactures, getVentes, creerFacture, encaisserVersement, updateSortieOeuf, deleteSortieOeuf } from "../api/client";
+import { getFermes, getClients, getFactures, getVentes, creerFacture, encaisserVersement, updateSortieOeuf, deleteSortieOeuf, getHistoriquePrixClient } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 import { genererPdfFacture, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { mettreEnCache, lireCache } from "../offline/cache";
@@ -184,6 +184,18 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
     return alertes;
   }, [detail]);
 
+  const clientTrouve = useMemo(
+    () => clients.find((c) => c.nom.trim().toLowerCase() === clientNom.trim().toLowerCase()),
+    [clients, clientNom],
+  );
+  const [historiquePrix, setHistoriquePrix] = useState(null);
+  useEffect(() => {
+    if (!clientTrouve) { setHistoriquePrix(null); return; }
+    let annule = false;
+    getHistoriquePrixClient(clientTrouve.id).then((data) => { if (!annule) setHistoriquePrix(data); });
+    return () => { annule = true; };
+  }, [clientTrouve]);
+
   const pretAEnvoyer = clientNom.trim() && date && lignes.every((l) => l.ferme && Number(l.quantite) > 0) && total > 0;
 
   async function valider() {
@@ -239,6 +251,25 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
             <input style={styles.input} value={clientTel} onChange={(e) => { setClientTel(e.target.value); setFacture(null); }} />
           </label>
         </div>
+
+        {historiquePrix && historiquePrix.length > 0 && (
+          <div style={styles.prixHistoBox}>
+            <div style={styles.prixHistoTitre}>Prix déjà pratiqués pour {clientTrouve.nom}</div>
+            {historiquePrix.map((h) => (
+              <div key={h.type_produit} style={styles.prixHistoLigne}>
+                <span style={styles.prixHistoProduit}>{CATALOGUE_MAP[h.type_produit]?.label || h.type_produit}</span>
+                <span style={styles.prixHistoValeurs}>
+                  {h.dernieres.map((d, i) => (
+                    <span key={i} style={styles.prixHistoValeur}>
+                      {fcfa(d.prix_unitaire)} <span style={styles.prixHistoDate}>({new Date(d.date).toLocaleDateString("fr-FR")})</span>
+                    </span>
+                  ))}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         <label style={styles.field}>
           <span style={styles.fieldLabel}>Date</span>
           <input type="date" style={styles.input} value={date} onChange={(e) => { setDate(e.target.value); setFacture(null); }} />
@@ -565,6 +596,13 @@ const styles = {
   stockGlobalLabel: { fontSize: 12.5, opacity: .9 },
   stockGlobalVal: { fontSize: 20, fontWeight: 700 },
   fieldRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
+  prixHistoBox: { background: "#F4F9F6", border: "1px solid #DCEAE1", borderRadius: 10, padding: "10px 12px", margin: "4px 0 10px", display: "flex", flexDirection: "column", gap: 6 },
+  prixHistoTitre: { fontSize: 11.5, fontWeight: 600, color: GREEN_DARK, textTransform: "uppercase", letterSpacing: .3 },
+  prixHistoLigne: { display: "flex", flexDirection: "column", gap: 2 },
+  prixHistoProduit: { fontSize: 12.5, fontWeight: 600, color: INK },
+  prixHistoValeurs: { display: "flex", gap: 10, flexWrap: "wrap" },
+  prixHistoValeur: { fontSize: 12.5, color: GREEN_DARK, fontWeight: 600 },
+  prixHistoDate: { fontSize: 11, color: "#8A948D", fontWeight: 400 },
   field: { display: "flex", flexDirection: "column", gap: 5, padding: "6px 0" },
   fieldLabel: { fontSize: 12, color: "#7A857F", fontWeight: 500 },
   input: { border: "1px solid #DDE2DE", borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: "inherit", background: "#FCFCFA", color: INK },

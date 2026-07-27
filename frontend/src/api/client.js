@@ -59,6 +59,7 @@ export const getVentes = (params) => api.get("/ventes/", { params }).then((r) =>
 export const updateSortieOeuf = (id, payload) => api.patch(`/sorties-oeufs/${id}/`, payload).then((r) => r.data);
 export const deleteSortieOeuf = (id) => api.delete(`/sorties-oeufs/${id}/`);
 export const getClients = () => api.get("/clients/").then((r) => r.data);
+export const getHistoriquePrixClient = (clientId) => api.get(`/clients/${clientId}/historique-prix/`).then((r) => r.data);
 export const getFactures = () => api.get("/factures/").then((r) => r.data);
 export const creerFacture = (payload) => api.post("/factures/", payload).then((r) => r.data);
 export const encaisserVersement = (factureId, payload) =>
