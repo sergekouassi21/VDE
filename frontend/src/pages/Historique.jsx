@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Download, Share2, Pencil, Trash2, Archive } from "lucide-react";
+import { ChevronRight, Download, Share2, Pencil, Trash2, Archive, WifiOff } from "lucide-react";
 import { getFermes, getPointsJournaliers, deletePointJournalier, getBandes, getBilanBande } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY, formatSacs, formatColis } from "../theme";
 import { genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
+import { mettreEnCache, lireCache } from "../offline/cache";
+
+const CACHE_CLE_HISTORIQUE = "historique-points";
 
 const nf = (v) => (Number(v) || 0).toLocaleString("fr-FR");
 const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
@@ -26,11 +29,12 @@ export default function Historique() {
   const [ouvert, setOuvert] = useState(null);
   const [envoi, setEnvoi] = useState(false);
   const [envoiBilan, setEnvoiBilan] = useState(null);
+  const [horsLigneDepuis, setHorsLigneDepuis] = useState(null);
 
-  useEffect(() => { getFermes().then(setFermes); }, []);
+  useEffect(() => { getFermes().then(setFermes).catch(() => {}); }, []);
 
   useEffect(() => {
-    getBandes({ statut: "TERMINEE", ...(fermeId ? { ferme: fermeId } : {}) }).then(setBandesTerminees);
+    getBandes({ statut: "TERMINEE", ...(fermeId ? { ferme: fermeId } : {}) }).then(setBandesTerminees).catch(() => {});
   }, [fermeId]);
 
   async function telechargerBilan(bande) {
@@ -49,10 +53,32 @@ export default function Historique() {
     if (fermeId) params.ferme = fermeId;
     if (dateDebut) params.date_debut = dateDebut;
     if (dateFin) params.date_fin = dateFin;
-    getPointsJournaliers(params).then((data) => { setPoints(data); setChargement(false); });
+    getPointsJournaliers(params)
+      .then((data) => {
+        setPoints(data);
+        setChargement(false);
+        setHorsLigneDepuis(null);
+        mettreEnCache(CACHE_CLE_HISTORIQUE, data);
+      })
+      .catch(async () => {
+        // Pas de réseau (ou serveur injoignable) : on retombe sur la
+        // dernière consultation réussie plutôt que d'afficher une page
+        // vide — lecture seule, les filtres ne se ré-appliquent qu'au
+        // retour du réseau.
+        const cache = await lireCache(CACHE_CLE_HISTORIQUE);
+        setPoints(cache?.donnees || []);
+        setHorsLigneDepuis(cache?.sauvegardeLe || Date.now());
+        setChargement(false);
+      });
   }, [fermeId, dateDebut, dateFin]);
 
   useEffect(() => { rafraichir(); }, [rafraichir]);
+
+  useEffect(() => {
+    function surReconnexion() { rafraichir(); }
+    window.addEventListener("online", surReconnexion);
+    return () => window.removeEventListener("online", surReconnexion);
+  }, [rafraichir]);
 
   async function supprimer(p) {
     if (!window.confirm(`Supprimer le point journalier de ${p.ferme_nom} du ${new Date(p.date).toLocaleDateString("fr-FR")} ? Cette action est irréversible.`)) return;
@@ -72,6 +98,13 @@ export default function Historique() {
           <div style={styles.eyebrow}>Volailles de l'Est · Historique</div>
           <h1 style={styles.h1}>Points journaliers enregistrés</h1>
         </header>
+
+        {horsLigneDepuis && (
+          <div style={styles.offlineBanner}>
+            <WifiOff size={14} />
+            <span>Hors-ligne — données du {new Date(horsLigneDepuis).toLocaleString("fr-FR")} (les filtres ne s'appliqueront qu'au retour du réseau)</span>
+          </div>
+        )}
 
         <div style={styles.filters}>
           <select style={styles.select} value={fermeId} onChange={(e) => setFermeId(e.target.value)}>
@@ -258,6 +291,7 @@ const styles = {
   head: { marginBottom: 20 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
   filters: { display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" },
   select: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 13.5, fontFamily: "inherit", color: INK },
   dateLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "#7A857F" },

@@ -3,23 +3,7 @@
 // telle quelle vers l'API à la reconnexion (cf. sync.js) — sans risque de
 // doublon puisque le backend fait un update_or_create sur (bande, date).
 
-const DB_NAME = "vde-offline";
-const STORE = "points-journaliers";
-const DB_VERSION = 1;
-
-function ouvrirDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
+import { ouvrirDB, STORE_QUEUE as STORE } from "./db";
 
 export async function ajouterSoumissionEnAttente(fermeId, fermeNom, payload) {
   const db = await ouvrirDB();

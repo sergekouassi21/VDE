@@ -1,8 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Plus, Trash2, Pencil, Check, X, Receipt, CreditCard, Wallet, ChevronRight, AlertTriangle, Download, Share2 } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X, Receipt, CreditCard, Wallet, ChevronRight, AlertTriangle, Download, Share2, WifiOff } from "lucide-react";
 import { getFermes, getClients, getFactures, getVentes, creerFacture, encaisserVersement, updateSortieOeuf, deleteSortieOeuf } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 import { genererPdfFacture, telechargerPdf, partagerPdf } from "../utils/pdf";
+import { mettreEnCache, lireCache } from "../offline/cache";
+
+const CACHE_CLE_VENTES = "ventes-donnees";
 
 const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
 
@@ -37,14 +40,36 @@ export default function Ventes() {
   const [factures, setFactures] = useState([]);
   const [ventesManuelles, setVentesManuelles] = useState([]);
   const [chargement, setChargement] = useState(true);
+  const [horsLigneDepuis, setHorsLigneDepuis] = useState(null);
 
   const rafraichir = useCallback(() => {
-    Promise.all([getFermes(), getClients(), getFactures(), getVentes({ origine: "SAISIE" })]).then(([f, c, fa, vm]) => {
-      setFermes(f); setClients(c); setFactures(fa); setVentesManuelles(vm); setChargement(false);
-    });
+    Promise.all([getFermes(), getClients(), getFactures(), getVentes({ origine: "SAISIE" })])
+      .then(([f, c, fa, vm]) => {
+        setFermes(f); setClients(c); setFactures(fa); setVentesManuelles(vm); setChargement(false);
+        setHorsLigneDepuis(null);
+        mettreEnCache(CACHE_CLE_VENTES, { fermes: f, clients: c, factures: fa, ventesManuelles: vm });
+      })
+      .catch(async () => {
+        // Consultation seule hors-ligne (créances/historique déjà chargés) —
+        // la création de facture, elle, reste volontairement en ligne
+        // uniquement (vérification de stock en temps réel).
+        const cache = await lireCache(CACHE_CLE_VENTES);
+        if (cache?.donnees) {
+          setFermes(cache.donnees.fermes); setClients(cache.donnees.clients);
+          setFactures(cache.donnees.factures); setVentesManuelles(cache.donnees.ventesManuelles);
+        }
+        setHorsLigneDepuis(cache?.sauvegardeLe || Date.now());
+        setChargement(false);
+      });
   }, []);
 
   useEffect(() => { rafraichir(); }, [rafraichir]);
+
+  useEffect(() => {
+    function surReconnexion() { rafraichir(); }
+    window.addEventListener("online", surReconnexion);
+    return () => window.removeEventListener("online", surReconnexion);
+  }, [rafraichir]);
 
   const fermesActives = fermes.filter((f) => !f.est_vide);
   const totalOeufsManuel = ventesManuelles.reduce((s, v) => s + v.quantite, 0);
@@ -61,6 +86,16 @@ export default function Ventes() {
           <div style={styles.eyebrow}>Volailles de l'Est · Ventes</div>
           <h1 style={styles.h1}>Facturation</h1>
         </header>
+
+        {horsLigneDepuis && (
+          <div style={styles.offlineBanner}>
+            <WifiOff size={14} />
+            <span>
+              Hors-ligne — créances/historique du {new Date(horsLigneDepuis).toLocaleString("fr-FR")}
+              {onglet === "facture" ? " · la création de facture nécessite une connexion" : ""}
+            </span>
+          </div>
+        )}
 
         <div style={styles.tabs}>
           <button style={{ ...styles.tab, ...(onglet === "facture" ? styles.tabOn : {}) }} onClick={() => setOnglet("facture")}>
@@ -166,7 +201,11 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
       setFacture(data);
       onCreee();
     } catch (e) {
-      setErreur(e.response?.data?.detail || "Erreur lors de la création de la facture.");
+      if (!e.response) {
+        setErreur("Impossible de créer une facture hors-ligne — la vérification du stock nécessite une connexion. Réessaie une fois reconnecté.");
+      } else {
+        setErreur(e.response?.data?.detail || "Erreur lors de la création de la facture.");
+      }
     } finally {
       setEnvoi(false);
     }
@@ -504,6 +543,7 @@ const styles = {
   head: { marginBottom: 14 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
   tabs: { display: "flex", gap: 6, marginBottom: 16 },
   tab: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#fff", border: "1px solid #ECE9DF", color: "#7A857F", padding: "10px 8px", borderRadius: 10, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" },
   tabOn: { background: GREEN, borderColor: GREEN, color: "#fff", fontWeight: 600 },
