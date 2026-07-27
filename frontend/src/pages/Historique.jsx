@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Download, Share2, Pencil, Trash2, Archive, WifiOff, GitCompareArrows, RefreshCw } from "lucide-react";
-import { getFermes, getPointsJournaliers, deletePointJournalier, corrigerPointJournalier, getBandes, getBilanBande, getComparaisonBandes } from "../api/client";
+import { ChevronRight, Download, Share2, Pencil, Trash2, Archive, WifiOff, GitCompareArrows, RefreshCw, Lock, LockOpen, Siren } from "lucide-react";
+import {
+  getFermes, getPointsJournaliers, deletePointJournalier, corrigerPointJournalier, getBandes, getBilanBande,
+  getComparaisonBandes, getCloturesMensuelles, cloturerMois, rouvrirMois,
+} from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY, formatSacs, formatColis } from "../theme";
 import { genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { mettreEnCache, lireCache } from "../offline/cache";
@@ -12,10 +15,23 @@ const nf = (v) => (Number(v) || 0).toLocaleString("fr-FR");
 const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
 const nomFichierPoint = (p) => `point-journalier-${p.ferme_nom.replace(/\s+/g, "-")}-${p.date}.pdf`;
 const LABEL_MOTIF_FIN = { REFORME: "Réforme", TRANSFERT: "Transfert", MORTALITE_TOTALE: "Mortalité totale" };
+const LABEL_CAUSE_MORTS = {
+  MALADIE: "Maladie", CHALEUR: "Chaleur / stress thermique", PICAGE: "Picage / cannibalisme",
+  PREDATEUR: "Prédateur", ACCIDENT: "Accident", INCONNUE: "Cause inconnue", AUTRE: "Autre",
+};
+const NOMS_MOIS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
 function peutSupprimer() {
   const role = localStorage.getItem("vde_role");
   return !role || role === "DIRECTION" || role === "ADMIN";
+}
+// Un chef peut librement resoumettre le jour même (rattrapage), mais
+// corriger un jour déjà passé et déjà enregistré est réservé à
+// Direction/Admin — même règle appliquée côté serveur (point 15 du
+// backlog, cf. conversation du 27/07/2026 avec Serge).
+function peutModifier(p) {
+  return peutSupprimer() || p.date === todayISO();
 }
 
 export default function Historique() {
@@ -31,8 +47,40 @@ export default function Historique() {
   const [envoi, setEnvoi] = useState(false);
   const [envoiBilan, setEnvoiBilan] = useState(null);
   const [horsLigneDepuis, setHorsLigneDepuis] = useState(null);
+  const [clotures, setClotures] = useState([]);
+  const aujourdhui = new Date();
+  const [nouvelleCloture, setNouvelleCloture] = useState({ annee: aujourdhui.getFullYear(), mois: aujourdhui.getMonth() + 1 });
+  const [envoiCloture, setEnvoiCloture] = useState(false);
 
   useEffect(() => { getFermes().then(setFermes).catch(() => {}); }, []);
+
+  const rafraichirClotures = useCallback(() => {
+    if (!fermeId) { setClotures([]); return; }
+    getCloturesMensuelles({ ferme: fermeId }).then(setClotures).catch(() => {});
+  }, [fermeId]);
+
+  useEffect(() => { rafraichirClotures(); }, [rafraichirClotures]);
+
+  async function handleCloturerMois() {
+    setEnvoiCloture(true);
+    try {
+      await cloturerMois(fermeId, nouvelleCloture);
+      rafraichirClotures();
+    } finally {
+      setEnvoiCloture(false);
+    }
+  }
+
+  async function handleRouvrirMois(c) {
+    if (!window.confirm(`Rouvrir ${NOMS_MOIS[c.mois - 1]} ${c.annee} pour ${c.ferme_nom} ? Les corrections redeviendront possibles sur ce mois.`)) return;
+    setEnvoiCloture(true);
+    try {
+      await rouvrirMois(fermeId, { annee: c.annee, mois: c.mois });
+      rafraichirClotures();
+    } finally {
+      setEnvoiCloture(false);
+    }
+  }
 
   useEffect(() => {
     getBandes({ statut: "TERMINEE", ...(fermeId ? { ferme: fermeId } : {}) }).then(setBandesTerminees).catch(() => {});
@@ -145,6 +193,36 @@ export default function Historique() {
             </button>
           )}
         </div>
+
+        {fermeId && peutSupprimer() && (
+          <section style={{ ...styles.card, marginBottom: 16 }}>
+            <div style={styles.resumeHead}><Lock size={15} color={GREEN} /><span>Clôture mensuelle</span></div>
+            <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+              {clotures.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {clotures.map((c) => (
+                    <div key={c.id} style={styles.clotureRow}>
+                      <span><Lock size={13} /> {NOMS_MOIS[c.mois - 1]} {c.annee} — clôturé par {c.cloture_par_nom}</span>
+                      <button style={styles.pdfBtn} disabled={envoiCloture} onClick={() => handleRouvrirMois(c)}>
+                        <LockOpen size={14} /> Rouvrir
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <select style={styles.select} value={nouvelleCloture.mois} onChange={(e) => setNouvelleCloture((c) => ({ ...c, mois: Number(e.target.value) }))}>
+                  {NOMS_MOIS.map((nom, i) => <option key={i} value={i + 1}>{nom}</option>)}
+                </select>
+                <input type="number" style={{ ...styles.date, width: 90 }} value={nouvelleCloture.annee}
+                  onChange={(e) => setNouvelleCloture((c) => ({ ...c, annee: Number(e.target.value) }))} />
+                <button style={styles.pdfBtn} disabled={envoiCloture} onClick={handleCloturerMois}>
+                  <Lock size={14} /> Clôturer ce mois pour cette ferme
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
 
         {comparaisonBandes.length > 1 && (
           <section style={{ ...styles.card, marginBottom: 16 }}>
@@ -271,11 +349,14 @@ export default function Historique() {
                     const estOuvert = ouvert === p.id;
                     return (
                       <Fragment key={p.id}>
-                        <tr style={{ cursor: "pointer" }} onClick={() => setOuvert(estOuvert ? null : p.id)}>
+                        <tr style={{ cursor: "pointer", ...(p.urgent ? styles.rowUrgente : {}) }} onClick={() => setOuvert(estOuvert ? null : p.id)}>
                           <td style={{ ...styles.td, width: 24 }}>
                             <ChevronRight size={15} color="#B5BBB2" style={{ transform: estOuvert ? "rotate(90deg)" : "none", transition: ".2s" }} />
                           </td>
-                          <td style={styles.td}>{new Date(p.date).toLocaleDateString("fr-FR")}</td>
+                          <td style={styles.td}>
+                            {new Date(p.date).toLocaleDateString("fr-FR")}
+                            {p.urgent && <Siren size={13} color={CLAY} style={{ marginLeft: 6, verticalAlign: "middle" }} />}
+                          </td>
                           <td style={styles.td}>{p.ferme_nom}</td>
                           <td style={{ ...styles.td, textAlign: "right", color: p.morts > 5 ? CLAY : "inherit" }}>{nf(p.morts)}</td>
                           <td style={{ ...styles.td, textAlign: "right" }}>{nf(p.effectif_reste)}</td>
@@ -287,6 +368,7 @@ export default function Historique() {
                           <tr>
                             <td colSpan={8} style={styles.detailCell}>
                               <div style={styles.detailGrid}>
+                                {p.cause_morts && <DetailItem label="Cause de mortalité" value={LABEL_CAUSE_MORTS[p.cause_morts] || p.cause_morts} danger />}
                                 <DetailItem label="Aliment consommé" value={`${p.conso_aliment_sacs} sacs`} />
                                 <DetailItem label="Aliment reçu" value={`${p.aliment_recu_sacs} sacs`} />
                                 <DetailItem label="Stock aliment après" value={formatSacs(Number(p.stock_aliment_apres_sacs))} />
@@ -332,9 +414,11 @@ export default function Historique() {
                                     <Share2 size={15} /> Partager
                                   </button>
                                 )}
-                                <Link to={`/point-journalier?ferme=${p.ferme_id}&date=${p.date}`} style={styles.pdfBtnLink}>
-                                  <Pencil size={15} /> Modifier
-                                </Link>
+                                {peutModifier(p) && (
+                                  <Link to={`/point-journalier?ferme=${p.ferme_id}&date=${p.date}`} style={styles.pdfBtnLink}>
+                                    <Pencil size={15} /> Modifier
+                                  </Link>
+                                )}
                                 {peutSupprimer() && (
                                   <button style={styles.pdfBtn} disabled={envoi} onClick={() => recalculer(p)} title="Recalcule les stocks depuis cette date jusqu'à aujourd'hui (utile après l'ajout d'un jour manquant plus tôt)">
                                     <RefreshCw size={15} /> Recalculer
@@ -386,6 +470,8 @@ const styles = {
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
   resumeHead: { display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", fontSize: 13, fontWeight: 600, color: GREEN_DARK, borderBottom: "1px solid #ECE9DF" },
   badgeEnCours: { marginLeft: 8, fontSize: 10.5, fontWeight: 700, color: GREEN_DARK, background: "#EAF3EE", borderRadius: 6, padding: "1px 6px", textTransform: "uppercase", letterSpacing: .3 },
+  clotureRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontSize: 12.5, color: GREEN_DARK, background: "#F4F1EA", borderRadius: 9, padding: "7px 11px" },
+  rowUrgente: { background: "#FDEEE8" },
   empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
   tableWrap: { overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },

@@ -1,7 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Egg, Skull, Wheat, Package, TrendingUp, Check, ChevronDown, AlertTriangle, Calendar, Download, Share2, WifiOff, RefreshCw, Archive, X } from "lucide-react";
-import { getFermes, soumettrePointJournalier, declarerBande, terminerBande, getBilanBande, getPointJournalier, getPointsJournaliers } from "../api/client";
+import { Egg, Skull, Wheat, Package, TrendingUp, Check, ChevronDown, AlertTriangle, Calendar, Download, Share2, WifiOff, RefreshCw, Archive, X, Pencil } from "lucide-react";
+import {
+  getFermes, soumettrePointJournalier, declarerBande, terminerBande, getBilanBande, getPointJournalier,
+  getPointsJournaliers, getEmployesFerme, getCommandesAliment, creerEvenementSante,
+} from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, CLAY, formatSacs, formatColis, AGE_REFORME_SEMAINES } from "../theme";
 import { genererPdfPointJournalier, genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { ajouterSoumissionEnAttente, listerSoumissionsEnAttente } from "../offline/queue";
@@ -13,6 +16,25 @@ function peutDeclarerBande() {
   const role = localStorage.getItem("vde_role");
   return !role || role === "DIRECTION" || role === "ADMIN";
 }
+// Même règle que peutDeclarerBande — corriger un jour déjà passé (pas le
+// jour même) est réservé à Direction/Admin (point 15 du backlog, cf.
+// conversation du 27/07/2026 avec Serge). Le backend applique la même
+// restriction ; ce garde-fou côté client évite juste de laisser un chef
+// remplir un formulaire pour rien.
+function peutCorrigerPasse() {
+  const role = localStorage.getItem("vde_role");
+  return !role || role === "DIRECTION" || role === "ADMIN";
+}
+
+const CAUSES_MORTALITE = [
+  { value: "MALADIE", label: "Maladie" },
+  { value: "CHALEUR", label: "Chaleur / stress thermique" },
+  { value: "PICAGE", label: "Picage / cannibalisme" },
+  { value: "PREDATEUR", label: "Prédateur" },
+  { value: "ACCIDENT", label: "Accident" },
+  { value: "INCONNUE", label: "Cause inconnue" },
+  { value: "AUTRE", label: "Autre" },
+];
 
 const n = (v) => (v === "" || v === null || v === undefined || isNaN(v) ? 0 : Number(v));
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -25,10 +47,22 @@ function veilleISO(dateISOStr) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 const FORM_VIDE = {
-  morts: "", conso_aliment_sacs: "", aliment_recu_sacs: "", traitement: "", eau_consommee_litres: "",
-  alveole_recu_unites: "", production_oeufs: "", casse: "", brise: "", poids_moyen_grammes: "", observation: "",
+  morts: "", cause_morts: "", conso_aliment_sacs: "", aliment_recu_sacs: "", traitement: "", eau_consommee_litres: "",
+  alveole_recu_unites: "", production_oeufs: "", casse: "", brise: "", poids_moyen_grammes: "", observation: "", urgent: false,
 };
-const NOUVELLE_SORTIE_VIDE = { quantite: "", type_sortie: "VENTE", responsable: "" };
+const NOUVELLE_SORTIE_VIDE = { quantite: "", type_sortie: "VENTE", responsable: "", responsable_employe: "" };
+const AUTRE_RESPONSABLE = "__autre__";
+const CLE_BROUILLON = (fermeId, dateJour) => `vde_brouillon_${fermeId}_${dateJour}`;
+// Jour civil précédent une date ISO — sert au calcul du nombre de jours
+// d'écart pour l'avertissement de saisie rétroactive (point 16 du backlog).
+function joursEcartAujourdhui(dateISOStr) {
+  const [a, m, j] = dateISOStr.split("-").map(Number);
+  const cible = new Date(a, m - 1, j);
+  const aujourdhui = new Date();
+  aujourdhui.setHours(0, 0, 0, 0);
+  cible.setHours(0, 0, 0, 0);
+  return Math.round((aujourdhui - cible) / 86400000);
+}
 
 export default function PointJournalier() {
   const nomChef = localStorage.getItem("vde_nom") || "";
@@ -54,8 +88,13 @@ export default function PointJournalier() {
   // donc être dateJour lui-même si on recorrige le jour déjà le plus récent
   // (l'aperçu se servirait alors de lui-même comme sa propre veille).
   const [pointVeille, setPointVeille] = useState(undefined);
+  // true si le fetch de la veille a échoué (réseau) — distinct de "null"
+  // (confirmé : pas de point antérieur), pour ne jamais afficher un aperçu
+  // silencieusement faux faute de connexion (point 6 du backlog).
+  const [pointVeilleErreur, setPointVeilleErreur] = useState(false);
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
   const [erreur, setErreur] = useState("");
+  const [conflitVersion, setConflitVersion] = useState(false);
   const [declaration, setDeclaration] = useState({ date_mise_en_place: todayISO(), effectif_initial: "" });
   const [horsLigneEnvoi, setHorsLigneEnvoi] = useState(false);
   const [enLigne, setEnLigne] = useState(navigator.onLine);
@@ -64,6 +103,15 @@ export default function PointJournalier() {
   const [envoiCloture, setEnvoiCloture] = useState(false);
   const [erreurCloture, setErreurCloture] = useState("");
   const [bilan, setBilan] = useState(null);
+  // Point déjà enregistré pour ce jour (avant modification) — sert à
+  // distinguer une nouvelle saisie d'une correction (bannière, restriction
+  // de droits, verrouillage optimiste) et à afficher les sorties déjà
+  // facturées par la Direction pour ce jour (points 3, 4, 10, 13, 15).
+  const [existant, setExistant] = useState(null);
+  const [sortiesFacture, setSortiesFacture] = useState([]);
+  const [employes, setEmployes] = useState([]);
+  const [commandesAliment, setCommandesAliment] = useState([]);
+  const [ajouterAuCalendrierSante, setAjouterAuCalendrierSante] = useState(false);
 
   const chargerFermes = useCallback(async () => {
     const data = await getFermes();
@@ -100,13 +148,28 @@ export default function PointJournalier() {
   const bande = ferme?.bande_active;
   const magasin = ferme?.magasin;
 
-  const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setEnvoye(false); setHorsLigneEnvoi(false); setPointEnregistre(null); };
+  const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setEnvoye(false); setHorsLigneEnvoi(false); setPointEnregistre(null); setConflitVersion(false); };
   const reset = () => { setForm(FORM_VIDE); setSorties([]); setNouvelleSortie(NOUVELLE_SORTIE_VIDE); };
+
+  // Employés de la ferme (pour le choix du responsable d'une sortie) et
+  // commandes d'aliment récentes du magasin (pour le recoupement de
+  // l'aliment reçu) — points 18 et 19 du backlog.
+  useEffect(() => {
+    if (!fermeId) { setEmployes([]); return; }
+    getEmployesFerme(fermeId).then(setEmployes).catch(() => setEmployes([]));
+  }, [fermeId]);
+
+  useEffect(() => {
+    if (!magasin?.id) { setCommandesAliment([]); return; }
+    getCommandesAliment({ magasin: magasin.id }).then(setCommandesAliment).catch(() => setCommandesAliment([]));
+  }, [magasin?.id]);
 
   // Si une fiche existe déjà pour cette ferme et cette date (ex: on arrive
   // ici depuis "Modifier" dans Historique), on pré-remplit avec les vraies
   // valeurs enregistrées plutôt que de laisser le formulaire vide — sinon
-  // valider écraserait la journée avec des champs à zéro.
+  // valider écraserait la journée avec des champs à zéro. Sinon, on
+  // restaure un éventuel brouillon local (point 12 du backlog) avant de
+  // retomber sur un formulaire vide.
   useEffect(() => {
     if (!fermeId || !dateJour) return;
     let annule = false;
@@ -114,9 +177,12 @@ export default function PointJournalier() {
       .then((points) => {
         if (annule) return;
         const point = points[0];
+        setExistant(point || null);
+        setAjouterAuCalendrierSante(false);
         if (point) {
           setForm({
             morts: String(point.morts),
+            cause_morts: point.cause_morts || "",
             conso_aliment_sacs: String(point.conso_aliment_sacs),
             aliment_recu_sacs: String(point.aliment_recu_sacs),
             traitement: point.traitement,
@@ -127,15 +193,40 @@ export default function PointJournalier() {
             brise: String(point.brise),
             poids_moyen_grammes: point.poids_moyen_grammes ? String(point.poids_moyen_grammes) : "",
             observation: point.observation,
+            urgent: !!point.urgent,
           });
-          setSorties(point.sorties.map((s) => ({ quantite: s.quantite, type_sortie: s.type_sortie, responsable: s.responsable })));
+          // Seules les sorties saisies à la main sont éditables ici — les
+          // sorties d'une facture ne doivent jamais être réinjectées dans ce
+          // tableau (sinon la resoumission les recréerait en double, cf.
+          // conversation du 27/07/2026 avec Serge) ; elles restent affichées
+          // à part, en lecture seule, pour contexte (point 10 du backlog).
+          setSorties(
+            point.sorties.filter((s) => s.origine === "SAISIE")
+              .map((s) => ({ quantite: s.quantite, type_sortie: s.type_sortie, responsable: s.responsable, responsable_employe: s.responsable_employe || "" }))
+          );
+          setSortiesFacture(point.sorties.filter((s) => s.origine === "FACTURE"));
+          localStorage.removeItem(CLE_BROUILLON(fermeId, dateJour));
         } else {
-          setForm(FORM_VIDE);
-          setSorties([]);
+          const brouillon = localStorage.getItem(CLE_BROUILLON(fermeId, dateJour));
+          if (brouillon) {
+            try {
+              const { form: formBrouillon, sorties: sortiesBrouillon } = JSON.parse(brouillon);
+              setForm({ ...FORM_VIDE, ...formBrouillon });
+              setSorties(sortiesBrouillon || []);
+            } catch {
+              setForm(FORM_VIDE);
+              setSorties([]);
+            }
+          } else {
+            setForm(FORM_VIDE);
+            setSorties([]);
+          }
+          setSortiesFacture([]);
         }
         setEnvoye(false);
         setHorsLigneEnvoi(false);
         setPointEnregistre(null);
+        setConflitVersion(false);
       })
       .catch(() => {});
     return () => { annule = true; };
@@ -144,16 +235,29 @@ export default function PointJournalier() {
   // Le vrai point "veille" pour le calcul en direct (report, stock d'œuf) —
   // toujours celui strictement avant dateJour, jamais dateJour lui-même
   // même s'il s'agit du point le plus récent existant pour cette ferme
-  // (cf. commentaire sur pointVeille).
+  // (cf. commentaire sur pointVeille). Un échec réseau reste distinct
+  // d'une absence confirmée de point antérieur — sinon l'aperçu utiliserait
+  // silencieusement de mauvaises valeurs de report (point 6 du backlog).
   useEffect(() => {
     if (!fermeId || !dateJour) { setPointVeille(undefined); return; }
     let annule = false;
     setPointVeille(undefined);
+    setPointVeilleErreur(false);
     getPointsJournaliers({ ferme: fermeId, date_fin: veilleISO(dateJour) })
       .then((points) => { if (!annule) setPointVeille(points[0] || null); })
-      .catch(() => { if (!annule) setPointVeille(null); });
+      .catch(() => { if (!annule) setPointVeilleErreur(true); });
     return () => { annule = true; };
   }, [fermeId, dateJour]);
+
+  // Brouillon local — sauvegardé en continu tant que la fiche n'a pas
+  // encore été transmise avec succès, pour ne rien perdre en cas de coupure
+  // de session/rafraîchissement accidentel (point 12 du backlog).
+  useEffect(() => {
+    if (!fermeId || !dateJour || existant || envoye) return;
+    const estVide = form === FORM_VIDE || (!form.morts && !form.production_oeufs && !form.conso_aliment_sacs && sorties.length === 0);
+    if (estVide) return;
+    localStorage.setItem(CLE_BROUILLON(fermeId, dateJour), JSON.stringify({ form, sorties }));
+  }, [fermeId, dateJour, form, sorties, existant, envoye]);
 
   const totalSorties = sorties.reduce((s, x) => s + n(x.quantite), 0);
 
@@ -161,15 +265,23 @@ export default function PointJournalier() {
     if (!n(nouvelleSortie.quantite) || !nouvelleSortie.responsable.trim()) return;
     setSorties((s) => [...s, { ...nouvelleSortie, quantite: n(nouvelleSortie.quantite) }]);
     setNouvelleSortie(NOUVELLE_SORTIE_VIDE);
-    setEnvoye(false); setHorsLigneEnvoi(false); setPointEnregistre(null);
+    setEnvoye(false); setHorsLigneEnvoi(false); setPointEnregistre(null); setConflitVersion(false);
   }
   function retirerSortie(index) {
     setSorties((s) => s.filter((_, i) => i !== index));
-    setEnvoye(false); setHorsLigneEnvoi(false); setPointEnregistre(null);
+    setEnvoye(false); setHorsLigneEnvoi(false); setPointEnregistre(null); setConflitVersion(false);
+  }
+  function choisirResponsable(nomOuId) {
+    if (nomOuId === AUTRE_RESPONSABLE) {
+      setNouvelleSortie((s) => ({ ...s, responsable: "", responsable_employe: "" }));
+      return;
+    }
+    const employe = employes.find((e) => String(e.id) === nomOuId);
+    setNouvelleSortie((s) => ({ ...s, responsable: employe?.nom || "", responsable_employe: employe?.id || "" }));
   }
 
   const calc = useMemo(() => {
-    if (!ferme || !bande || !magasin || pointVeille === undefined) return null;
+    if (!ferme || !bande || !magasin || pointVeille === undefined || pointVeilleErreur) return null;
     const effectifVeille = pointVeille ? pointVeille.effectif_reste : bande.effectif_actuel;
     const stockOeufVeille = pointVeille ? pointVeille.stock_oeuf_total : bande.stock_oeuf_actuel;
     const resteEffectif = effectifVeille - n(form.morts);
@@ -180,25 +292,40 @@ export default function PointJournalier() {
     const alveoleConsoAuto = Math.floor(n(form.production_oeufs) / 30);
     const stockAlveole = magasin.stock_alveoles_unites + n(form.alveole_recu_unites) - alveoleConsoAuto;
     return { resteEffectif, stockOeufJour, stockTotal, tauxPonte, stockAlimentSacs, alveoleConsoAuto, stockAlveole };
-  }, [form, ferme, bande, magasin, totalSorties, pointVeille]);
+  }, [form, ferme, bande, magasin, totalSorties, pointVeille, pointVeilleErreur]);
 
   const tauxAlerte = ferme?.type === "PONTE" && n(form.production_oeufs) > 0 && calc && calc.tauxPonte < 60;
   const mortsAlerte = n(form.morts) > 5;
+  const causeMortsManquante = n(form.morts) > 0 && !form.cause_morts;
   const alimentAlerte = calc && magasin && calc.stockAlimentSacs <= Number(magasin.seuil_alerte_aliment_sacs);
   const alveoleAlerte = calc && magasin && ferme?.type === "PONTE" && calc.stockAlveole <= magasin.seuil_alerte_alveoles_unites;
   const dateAffiche = new Date(dateJour).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  // Aucune commande d'aliment enregistrée à proximité de ce jour (±3 jours)
+  // pour ce magasin — signal informatif seulement, ne bloque pas l'envoi
+  // (point 19 du backlog, cf. conversation du 27/07/2026).
+  const alimentSansCommandeProche = n(form.aliment_recu_sacs) > 0 && !commandesAliment.some((c) => Math.abs(joursEcartAujourdhui(c.date) - joursEcartAujourdhui(dateJour)) <= 3);
+  // Corriger un jour déjà passé (pas le jour même) est réservé à
+  // Direction/Admin (point 15 du backlog) — le formulaire reste
+  // consultable mais non modifiable pour un chef dans ce cas.
+  const modificationInterdite = !!existant && dateJour !== todayISO() && !peutCorrigerPasse();
 
   async function handleSubmit() {
-    setErreur(""); setEnvoiEnCours(true);
+    if (causeMortsManquante) { setErreur("La cause de mortalité est obligatoire dès qu'il y a des morts."); return; }
+    if (!existant && joursEcartAujourdhui(dateJour) > 3) {
+      if (!window.confirm(`Vous saisissez un jour d'il y a ${joursEcartAujourdhui(dateJour)} jours — confirmez-vous cette saisie rétroactive ?`)) return;
+    }
+    setErreur(""); setConflitVersion(false); setEnvoiEnCours(true);
     const payload = {
       date: dateJour,
-      morts: n(form.morts), conso_aliment_sacs: n(form.conso_aliment_sacs),
+      morts: n(form.morts), cause_morts: form.cause_morts, conso_aliment_sacs: n(form.conso_aliment_sacs),
       aliment_recu_sacs: n(form.aliment_recu_sacs), traitement: form.traitement,
       eau_consommee_litres: n(form.eau_consommee_litres),
       alveole_recu_unites: n(form.alveole_recu_unites), production_oeufs: n(form.production_oeufs),
-      casse: n(form.casse), brise: n(form.brise), sorties,
+      casse: n(form.casse), brise: n(form.brise),
+      sorties: sorties.map((s) => ({ ...s, responsable_employe: s.responsable_employe || null })),
       poids_moyen_grammes: form.poids_moyen_grammes === "" ? null : n(form.poids_moyen_grammes),
-      observation: form.observation,
+      observation: form.observation, urgent: form.urgent,
+      version_attendue: existant?.updated_at || null,
     };
 
     setPointEnregistre(null);
@@ -217,6 +344,13 @@ export default function PointJournalier() {
       setPointEnregistre(point);
       setHorsLigneEnvoi(false);
       setEnvoye(true);
+      localStorage.removeItem(CLE_BROUILLON(ferme.id, dateJour));
+      if (ajouterAuCalendrierSante && form.traitement.trim() && bande) {
+        creerEvenementSante({
+          bande: bande.id, type: "TRAITEMENT", nom: form.traitement.slice(0, 150),
+          date_prevue: dateJour, date_realisee: dateJour, notes: "Ajouté depuis le Point Journalier",
+        }).catch(() => {});
+      }
       await chargerFermes();
     } catch (err) {
       if (!err.response) {
@@ -226,6 +360,8 @@ export default function PointJournalier() {
         await rafraichirEnAttente();
         setHorsLigneEnvoi(true);
         setEnvoye(true);
+      } else if (err.response.status === 409) {
+        setConflitVersion(true);
       } else {
         setErreur(err.response?.data?.detail || "Erreur lors de l'envoi. Réessayez.");
       }
@@ -340,6 +476,20 @@ export default function PointJournalier() {
           </div>
         )}
 
+        {ferme && !ferme.est_vide && existant && (
+          <div style={styles.modifBanner}>
+            <Pencil size={14} />
+            <span>Vous modifiez une saisie déjà transmise pour le {dateAffiche}{modificationInterdite ? " — lecture seule, seule la direction peut la corriger" : ""}.</span>
+          </div>
+        )}
+
+        {ferme && !ferme.est_vide && pointVeilleErreur && (
+          <div style={styles.offlineBanner}>
+            <AlertTriangle size={14} />
+            <span>Impossible de vérifier les valeurs de la veille (connexion instable) — l'aperçu est masqué pour éviter d'afficher un mauvais calcul. Réessayez avant de valider.</span>
+          </div>
+        )}
+
         {ferme?.est_vide && (
           <div style={styles.vide}>
             <div style={styles.videIcon}>🐣</div>
@@ -363,6 +513,15 @@ export default function PointJournalier() {
         {ferme && !ferme.est_vide && calc && <>
           <Section icon={<Skull size={15} />} titre="Cheptel">
             <FieldNum label="Morts" value={form.morts} onChange={(v) => set("morts", v)} unit="sujets" />
+            {n(form.morts) > 0 && (
+              <label style={styles.field}>
+                <span style={styles.fieldLabel}>Cause de mortalité</span>
+                <select style={styles.input} value={form.cause_morts} onChange={(e) => set("cause_morts", e.target.value)}>
+                  <option value="">Sélectionner...</option>
+                  {CAUSES_MORTALITE.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </label>
+            )}
             <FieldCalc label="Reste (effectif)" value={calc.resteEffectif.toLocaleString("fr-FR")} unit="sujets" hint="report veille − morts" />
             {mortsAlerte && <Alerte txt="Mortalité élevée — vérifier la cause" />}
           </Section>
@@ -380,7 +539,16 @@ export default function PointJournalier() {
             )}
             <FieldNum label="Conso aliment" value={form.conso_aliment_sacs} onChange={(v) => set("conso_aliment_sacs", v)} unit="sacs" step="0.1" />
             <FieldNum label="Aliment reçu" value={form.aliment_recu_sacs} onChange={(v) => set("aliment_recu_sacs", v)} unit="sacs" step="0.1" />
+            {alimentSansCommandeProche && (
+              <Alerte txt="Aucune commande d'aliment enregistrée autour de cette date — à vérifier avec la Direction" />
+            )}
             <FieldText label="Traitement" value={form.traitement} onChange={(v) => set("traitement", v)} placeholder="ex. MAXI LAYER (1000L)" />
+            {form.traitement.trim() && (
+              <label style={styles.checkboxRow}>
+                <input type="checkbox" checked={ajouterAuCalendrierSante} onChange={(e) => setAjouterAuCalendrierSante(e.target.checked)} />
+                <span>Ajouter aussi ce traitement au calendrier santé</span>
+              </label>
+            )}
             <FieldNum label="Eau consommée" value={form.eau_consommee_litres} onChange={(v) => set("eau_consommee_litres", v)} unit="litres" step="0.1" />
             <FieldCalc label="Stock aliment restant" value={formatSacs(calc.stockAlimentSacs)}
               unit={`≈ ${Math.round(calc.stockAlimentSacs * 50).toLocaleString("fr-FR")} kg`}
@@ -412,6 +580,16 @@ export default function PointJournalier() {
 
           {ferme.type === "PONTE" && (
             <Section icon={<Egg size={15} />} titre="Sorties d'œufs">
+              {sortiesFacture.length > 0 && (
+                <div style={styles.sortieFactureBox}>
+                  <div style={styles.sortiesTitreFacture}>Déjà facturé aujourd'hui (Direction)</div>
+                  {sortiesFacture.map((s) => (
+                    <div key={s.id} style={styles.sortieRowFacture}>
+                      <span style={styles.sortieDetail}>{s.quantite.toLocaleString("fr-FR")} œufs — {s.responsable}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {sorties.length > 0 && (
                 <div style={styles.sortieList}>
                   {sorties.map((s, i) => (
@@ -434,9 +612,19 @@ export default function PointJournalier() {
                     <option value="DON">Don</option>
                   </select>
                 </div>
-                <input type="text" style={styles.input} placeholder="Responsable de la sortie"
-                  value={nouvelleSortie.responsable}
-                  onChange={(e) => setNouvelleSortie((s) => ({ ...s, responsable: e.target.value }))} />
+                {employes.length > 0 ? (
+                  <select style={styles.input} value={nouvelleSortie.responsable_employe || (nouvelleSortie.responsable ? AUTRE_RESPONSABLE : "")}
+                    onChange={(e) => choisirResponsable(e.target.value)}>
+                    <option value="">Responsable de la sortie...</option>
+                    {employes.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
+                    <option value={AUTRE_RESPONSABLE}>Autre (préciser)</option>
+                  </select>
+                ) : null}
+                {(employes.length === 0 || nouvelleSortie.responsable_employe === "") && (
+                  <input type="text" style={styles.input} placeholder="Responsable de la sortie"
+                    value={nouvelleSortie.responsable}
+                    onChange={(e) => setNouvelleSortie((s) => ({ ...s, responsable: e.target.value, responsable_employe: "" }))} />
+                )}
                 <button type="button" style={styles.sortieAddBtn} onClick={ajouterSortie}>+ Ajouter cette sortie</button>
               </div>
               <FieldCalc label="Total sorties" value={totalSorties.toLocaleString("fr-FR")} unit="œufs" hint={`${sorties.length} sortie(s) enregistrée(s)`} />
@@ -457,14 +645,29 @@ export default function PointJournalier() {
 
           <Section titre="Observation">
             <textarea style={styles.textarea} rows={2} value={form.observation} onChange={(e) => set("observation", e.target.value)} placeholder="Remarques du jour…" />
+            <label style={styles.checkboxRow}>
+              <input type="checkbox" checked={form.urgent} onChange={(e) => set("urgent", e.target.checked)} />
+              <span>Signaler comme urgent (mis en évidence immédiatement au tableau de bord)</span>
+            </label>
           </Section>
 
           {erreur && <p style={{ color: CLAY, textAlign: "center", fontSize: 13, margin: "10px 16px 0" }}>{erreur}</p>}
-          <button style={{ ...styles.submit, ...(envoye ? styles.submitDone : {}) }} onClick={handleSubmit} disabled={envoiEnCours}>
-            {envoye
-              ? (<><Check size={18} /> {horsLigneEnvoi ? "Enregistré (hors-ligne)" : "Envoyé au serveur"}</>)
-              : envoiEnCours ? "Envoi..." : "Valider et transmettre"}
-          </button>
+          {conflitVersion && (
+            <div style={styles.conflitBox}>
+              <AlertTriangle size={14} />
+              <span>Ce point a été modifié par quelqu'un d'autre entretemps.</span>
+              <button type="button" style={styles.conflitBtn} onClick={() => window.location.reload()}>Recharger la fiche</button>
+            </div>
+          )}
+          {modificationInterdite ? (
+            <p style={styles.interditTxt}>Seule la direction peut corriger un jour déjà passé.</p>
+          ) : (
+            <button style={{ ...styles.submit, ...(envoye ? styles.submitDone : {}) }} onClick={handleSubmit} disabled={envoiEnCours || pointVeilleErreur}>
+              {envoye
+                ? (<><Check size={18} /> {horsLigneEnvoi ? "Enregistré (hors-ligne)" : "Envoyé au serveur"}</>)
+                : envoiEnCours ? "Envoi..." : "Valider et transmettre"}
+            </button>
+          )}
           {envoye && (
             <>
               <p style={styles.synced}>
@@ -634,6 +837,14 @@ const styles = {
   submitDone: { background: GREEN_DARK },
   synced: { textAlign: "center", fontSize: 12.5, color: GREEN_DARK, margin: "10px 16px 0" },
   offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12.5, fontWeight: 500, padding: "9px 16px", margin: "14px 16px 0", borderRadius: 10 },
+  modifBanner: { display: "flex", alignItems: "center", gap: 8, background: "#EAF3EE", color: GREEN_DARK, fontSize: 12.5, fontWeight: 500, padding: "9px 16px", margin: "14px 16px 0", borderRadius: 10 },
+  checkboxRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#5A655F", padding: "10px 0 4px", cursor: "pointer" },
+  sortieFactureBox: { background: "#F4F1EA", borderRadius: 9, padding: "8px 11px", margin: "10px 0 0" },
+  sortiesTitreFacture: { fontSize: 11, fontWeight: 600, color: "#8A948D", textTransform: "uppercase", letterSpacing: .5, marginBottom: 5 },
+  sortieRowFacture: { display: "flex", justifyContent: "space-between", fontSize: 12.5, color: GREEN_DARK, padding: "3px 0" },
+  conflitBox: { display: "flex", flexDirection: "column", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 13, fontWeight: 500, padding: "12px 16px", margin: "10px 16px 0", borderRadius: 10, textAlign: "center" },
+  conflitBtn: { background: "#9E4527", color: "#fff", border: "none", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  interditTxt: { textAlign: "center", fontSize: 13, color: "#9E4527", margin: "18px 16px 0", fontWeight: 500 },
   pdfBtn: { margin: "10px 16px 0", width: "calc(100% - 32px)", background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 13, padding: "13px", fontSize: 14.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 },
   foot: { textAlign: "center", fontSize: 11, color: "#B5BBB2", margin: "24px 0 0", letterSpacing: .5 },
   vide: { margin: "28px 16px 0", background: "#fff", border: "1px dashed #C9CFC8", borderRadius: 16, padding: "34px 24px", textAlign: "center" },

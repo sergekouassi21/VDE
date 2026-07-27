@@ -33,3 +33,23 @@ export async function supprimerSoumissionEnAttente(id) {
     tx.onerror = () => reject(tx.error);
   });
 }
+
+// Marque une soumission comme rejetée par le serveur (validation, conflit,
+// mois clôturé...) — distinct d'un simple échec réseau, qui lui reste
+// silencieusement en attente du retour de connexion. Sans ça, une fiche
+// invalide restait bloquée indéfiniment dans la file sans que personne ne
+// sache pourquoi (point 5 du backlog, cf. conversation du 27/07/2026).
+export async function marquerErreurSoumission(id, message) {
+  const db = await ouvrirDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const store = tx.objectStore(STORE);
+    const req = store.get(id);
+    req.onsuccess = () => {
+      const item = req.result;
+      if (item) store.put({ ...item, erreur: message });
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}

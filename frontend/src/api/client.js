@@ -60,6 +60,10 @@ export const corrigerPointJournalier = (id, payload) =>
   api.patch(`/points-journaliers/${id}/`, payload).then((r) => r.data);
 export const getPointsJournaliers = (params) => api.get("/points-journaliers/", { params }).then((r) => r.data);
 export const deletePointJournalier = (id) => api.delete(`/points-journaliers/${id}/`);
+export const getEmployesFerme = (fermeId) => api.get("/employes-ferme/", { params: { ferme: fermeId } }).then((r) => r.data);
+export const getCloturesMensuelles = (params) => api.get("/clotures-mensuelles/", { params }).then((r) => r.data);
+export const cloturerMois = (fermeId, payload) => api.post(`/fermes/${fermeId}/cloturer-mois/`, payload).then((r) => r.data);
+export const rouvrirMois = (fermeId, payload) => api.post(`/fermes/${fermeId}/rouvrir-mois/`, payload).then((r) => r.data);
 export const getDashboard = () => api.get("/dashboard/").then((r) => r.data);
 export const getVentes = (params) => api.get("/ventes/", { params }).then((r) => r.data);
 export const updateSortieOeuf = (id, payload) => api.patch(`/sorties-oeufs/${id}/`, payload).then((r) => r.data);

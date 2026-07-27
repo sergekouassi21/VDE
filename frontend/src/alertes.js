@@ -20,11 +20,26 @@ export function calculerAlertes({ fermes, absencesEnAttente = [], employesSansSa
   const a = [];
   actives.forEach((f) => {
     const age = f.bande_active?.age;
+    if (f.dernier_point && joursDepuis(f.dernier_point.date) > 1) {
+      a.push({ ferme: f.nom, txt: `Aucune saisie depuis ${joursDepuis(f.dernier_point.date)} jours (dernière le ${new Date(f.dernier_point.date).toLocaleDateString("fr-FR")})`, grav: "haut" });
+    }
+    if (f.dernier_point?.urgent) {
+      a.push({ ferme: f.nom, txt: `Signalement urgent du ${new Date(f.dernier_point.date).toLocaleDateString("fr-FR")}${f.dernier_point.observation ? ` : ${f.dernier_point.observation}` : ""}`, grav: "haut" });
+    }
     if (f.type === "PONTE" && f.dernier_point && tauxPonte(f) < 60) {
       a.push({ ferme: f.nom, txt: `Taux de ponte ${tauxPonte(f).toFixed(0)} %`, grav: "haut" });
     }
+    // La chute "brutale" ne veut dire quelque chose que si les deux points
+    // comparés sont bien des jours consécutifs — sinon un trou dans
+    // l'historique compare deux jours éloignés et fausse l'ampleur réelle
+    // de la variation (point 20 du backlog, cf. conversation du 27/07/2026).
+    const joursEcart = f.taux_ponte_veille_date ? joursDepuis(f.taux_ponte_veille_date) - joursDepuis(f.dernier_point?.date) : null;
     if (f.type === "PONTE" && f.dernier_point && f.taux_ponte_veille != null && tauxPonte(f) - Number(f.taux_ponte_veille) < -10) {
-      a.push({ ferme: f.nom, txt: `Chute brutale du taux de ponte : ${Number(f.taux_ponte_veille).toFixed(0)} % → ${tauxPonte(f).toFixed(0)} %`, grav: "haut" });
+      if (joursEcart === 1) {
+        a.push({ ferme: f.nom, txt: `Chute brutale du taux de ponte : ${Number(f.taux_ponte_veille).toFixed(0)} % → ${tauxPonte(f).toFixed(0)} %`, grav: "haut" });
+      } else {
+        a.push({ ferme: f.nom, txt: `Écart de taux de ponte sur ${joursEcart} jours (saisies non consécutives) : ${Number(f.taux_ponte_veille).toFixed(0)} % → ${tauxPonte(f).toFixed(0)} %`, grav: "moy" });
+      }
     }
     if (Number(f.magasin.stock_aliment_sacs) <= Number(f.magasin.seuil_alerte_aliment_sacs)) {
       a.push({ ferme: f.nom, txt: `Aliment bas : ${formatSacs(Number(f.magasin.stock_aliment_sacs))}`, grav: "haut" });
