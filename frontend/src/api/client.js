@@ -90,6 +90,7 @@ export const getQrBadgeAbsenceBlob = () =>
   api.get("/pointage/badge-absence/qr/", { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
 export const getLignesPaie = (params) => api.get("/pointage/lignes-paie/", { params }).then((r) => r.data);
 export const getRentabilite = (params) => api.get("/pointage/rentabilite/", { params }).then((r) => r.data);
+export const getRapportMensuel = (params) => api.get("/pointage/rapport-mensuel/", { params }).then((r) => r.data);
 export const enregistrerLignePaie = (payload) => api.post("/pointage/lignes-paie/", payload).then((r) => r.data);
 export const getQrBadgeTemporaireBlob = () =>
   api.get("/pointage/badge-temporaire/qr/", { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));

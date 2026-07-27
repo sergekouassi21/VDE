@@ -361,6 +361,63 @@ export function genererBilanBande(bilan) {
   return doc;
 }
 
+const MOIS_LABEL = (iso) => new Date(iso).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+
+// Rapport mensuel consolidé — synthèse zootechnique + financière de toutes
+// les fermes visibles pour un mois donné, en un seul document plutôt que
+// de devoir croiser Tableau de bord / Rentabilité / Achats d'aliment.
+export function genererRapportMensuel(rapport) {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  entete(doc);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(...INK);
+  doc.text(`Rapport mensuel consolidé — ${MOIS_LABEL(rapport.mois)}`, 15, 42);
+
+  let y = 58;
+  y = bandeauSection(doc, y, "Total — toutes fermes");
+  y = ligneCle(doc, y, "Revenus des ventes", fcfa(rapport.total.revenus));
+  y = ligneCle(doc, y, "Coût aliment", fcfa(rapport.total.cout_aliment));
+  y = ligneCle(doc, y, "Coût paie", fcfa(rapport.total.cout_paie));
+  y = ligneCle(doc, y, "Marge", fcfa(rapport.total.marge));
+  y = ligneCle(doc, y, "Mortalité totale", `${nf(rapport.total.total_morts)} sujets`);
+  y = ligneCle(doc, y, "Production d'œufs totale", `${nf(rapport.total.total_production_oeufs)} œufs`);
+
+  rapport.fermes.forEach((f) => {
+    if (y > 230) {
+      doc.addPage();
+      entete(doc);
+      y = 42;
+    } else {
+      y += 4;
+    }
+    y = bandeauSection(doc, y, `${f.ferme_nom} — ${f.type_ferme === "PONTE" ? "Pondeuses" : "Chair"}`);
+    y = ligneCle(doc, y, "Mortalité", `${nf(f.total_morts)} sujets`);
+    if (f.type_ferme === "PONTE") {
+      y = ligneCle(doc, y, "Production", `${nf(f.total_production_oeufs)} œufs`);
+      y = ligneCle(doc, y, "Taux de ponte moyen", `${f.taux_ponte_moyen.toFixed(2)} %`);
+      y = ligneCle(doc, y, "Cassé / brisé", `${nf(f.total_casse)} / ${nf(f.total_brise)} œufs`);
+      if (f.ic_g_par_oeuf != null) y = ligneCle(doc, y, "Indice de consommation", `${nf(f.ic_g_par_oeuf)} g/œuf`);
+    } else {
+      y = ligneCle(doc, y, "Poids début / fin de mois", `${f.poids_debut_grammes ? nf(f.poids_debut_grammes) + " g" : "—"} / ${f.poids_fin_grammes ? nf(f.poids_fin_grammes) + " g" : "—"}`);
+      y = ligneCle(doc, y, "GMQ moyen", f.gmq_moyen_grammes != null ? `${nf(f.gmq_moyen_grammes)} g/j` : "—");
+    }
+    y = ligneCle(doc, y, "Aliment consommé", `${f.total_aliment_sacs} sacs${f.prix_sac ? ` (${fcfa(f.prix_sac)}/sac)` : ""}`);
+    y = ligneCle(doc, y, "Coût aliment", fcfa(f.cout_aliment));
+    y = ligneCle(doc, y, "Coût paie", fcfa(f.cout_paie));
+    y = ligneCle(doc, y, "Revenus des ventes", fcfa(f.revenus));
+    y = ligneCle(doc, y, "Marge", fcfa(f.marge));
+  });
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY);
+  doc.text("Volailles de l'Est", 105, 285, { align: "center" });
+
+  return doc;
+}
+
 const LABEL_MODE_PAIEMENT_PDF = {
   WAVE: "Wave", ORANGE_MONEY: "Orange Money", MTN_MONEY: "MTN Money",
   MOOV_MONEY: "Moov Money", ESPECES: "Main en main", VIREMENT: "Virement bancaire",

@@ -471,23 +471,21 @@ def badge_absence_declarer(request, token):
     return Response(AbsenceSerializer(absence).data, status=status.HTTP_201_CREATED)
 
 
-@api_view(["GET"])
-@permission_classes([EstDirectionOuAdmin])
-def rentabilite(request):
-    """Marge par ferme sur un mois : revenus des ventes moins coût de
-    l'aliment (valorisé à PRIX_ALIMENT_SAC_FCFA) moins coût de la paie.
-
-    Un employé qui couvre plusieurs fermes (ex: un superviseur) voit son
-    coût du mois (pointages + absences validées + ajustements LignePaie)
-    réparti à parts égales entre ses fermes — cf. conversation du
-    26/07/2026 avec Serge."""
-    mois_param = request.query_params.get("mois")
+def _mois_bornes(mois_param):
     debut = date_cls.fromisoformat(mois_param) if mois_param else timezone.localdate().replace(day=1)
     debut = debut.replace(day=1)
     dernier_jour = calendar.monthrange(debut.year, debut.month)[1]
     fin = min(debut.replace(day=dernier_jour), timezone.localdate())
+    return debut, fin
 
-    fermes = list(Ferme.objects.filter_visibles_par(request.user).select_related("magasin"))
+
+def _calculer_rentabilite_bruts(fermes, debut, fin):
+    """Cœur du calcul de rentabilité (revenus/coût aliment/coût paie, en
+    Decimal bruts) — partagé entre /rentabilite et le rapport mensuel
+    consolidé (point 11 du backlog). Un employé qui couvre plusieurs fermes
+    (ex: un superviseur) voit son coût du mois (pointages + absences
+    validées + ajustements LignePaie) réparti à parts égales entre ses
+    fermes — cf. conversation du 26/07/2026 avec Serge."""
     fermes_ids = {f.id for f in fermes}
     fermes_par_id = {f.id: f for f in fermes}
     resultats = {
@@ -533,6 +531,19 @@ def rentabilite(request):
         for f in fermes_employe:
             resultats[f.id]["cout_paie"] += part
 
+    return resultats
+
+
+@api_view(["GET"])
+@permission_classes([EstDirectionOuAdmin])
+def rentabilite(request):
+    """Marge par ferme sur un mois : revenus des ventes moins coût de
+    l'aliment (valorisé au prix réel moyen des commandes) moins coût de
+    la paie."""
+    debut, fin = _mois_bornes(request.query_params.get("mois"))
+    fermes = list(Ferme.objects.filter_visibles_par(request.user).select_related("magasin"))
+    resultats = _calculer_rentabilite_bruts(fermes, debut, fin)
+
     donnees = []
     total = {"revenus": Decimal("0"), "cout_aliment": Decimal("0"), "cout_paie": Decimal("0"), "marge": Decimal("0")}
     for r in resultats.values():
@@ -554,4 +565,101 @@ def rentabilite(request):
         "prix_aliment_sac_defaut": str(PRIX_ALIMENT_SAC_FCFA),
         "fermes": donnees,
         "total": {k: str(v.quantize(Decimal("1"))) for k, v in total.items()},
+    })
+
+
+@api_view(["GET"])
+@permission_classes([EstDirectionOuAdmin])
+def rapport_mensuel(request):
+    """Rapport mensuel consolidé : synthèse zootechnique (production/
+    mortalité/IC/ponte ou poids-GMQ) + financière (revenus/coûts/marge,
+    même calcul que /rentabilite) par ferme et globale, pour un mois donné
+    — cf. conversation du 27/07/2026 (point 11 du backlog)."""
+    debut, fin = _mois_bornes(request.query_params.get("mois"))
+    fermes = list(Ferme.objects.filter_visibles_par(request.user).select_related("magasin"))
+    fermes_ids = {f.id for f in fermes}
+    financier = _calculer_rentabilite_bruts(fermes, debut, fin)
+
+    zoo = {
+        ligne["bande__ferme_id"]: ligne
+        for ligne in (
+            PointJournalier.objects.filter(bande__ferme_id__in=fermes_ids, date__gte=debut, date__lte=fin)
+            .values("bande__ferme_id")
+            .annotate(
+                morts=Sum("morts"), production_oeufs=Sum("production_oeufs"), casse=Sum("casse"), brise=Sum("brise"),
+                effectif_jours=Sum("effectif_reste"), aliment_sacs=Sum("conso_aliment_sacs"),
+            )
+        )
+    }
+
+    donnees = []
+    total = {
+        "revenus": Decimal("0"), "cout_aliment": Decimal("0"), "cout_paie": Decimal("0"), "marge": Decimal("0"),
+        "total_morts": 0, "total_production_oeufs": 0,
+    }
+    for ferme in fermes:
+        r = financier[ferme.id]
+        z = zoo.get(ferme.id, {})
+        marge = r["revenus"] - r["cout_aliment"] - r["cout_paie"]
+        for cle in ("revenus", "cout_aliment", "cout_paie"):
+            total[cle] += r[cle]
+        total["marge"] += marge
+        total["total_morts"] += z.get("morts") or 0
+        total["total_production_oeufs"] += z.get("production_oeufs") or 0
+
+        entree = {
+            "ferme_id": ferme.id, "ferme_nom": ferme.nom, "type_ferme": ferme.type,
+            "total_morts": z.get("morts") or 0,
+            "total_aliment_sacs": str(z.get("aliment_sacs") or Decimal("0")),
+            "revenus": str(r["revenus"].quantize(Decimal("1"))),
+            "cout_aliment": str(r["cout_aliment"].quantize(Decimal("1"))),
+            "cout_paie": str(r["cout_paie"].quantize(Decimal("1"))),
+            "marge": str(marge.quantize(Decimal("1"))),
+            "prix_sac": str(r["prix_sac"].quantize(Decimal("1"))) if r["prix_sac"] is not None else None,
+        }
+
+        if ferme.type == "PONTE":
+            production = z.get("production_oeufs") or 0
+            hen_days = z.get("effectif_jours") or 0
+            aliment_sacs = z.get("aliment_sacs") or Decimal("0")
+            entree.update({
+                "total_production_oeufs": production,
+                "total_casse": z.get("casse") or 0,
+                "total_brise": z.get("brise") or 0,
+                "taux_ponte_moyen": round(production / hen_days * 100, 2) if hen_days else 0,
+                "ic_g_par_oeuf": round(aliment_sacs * 50 * 1000 / production) if production else None,
+            })
+        else:
+            points_pesee = list(
+                PointJournalier.objects.filter(
+                    bande__ferme=ferme, date__gte=debut, date__lte=fin, poids_moyen_grammes__isnull=False,
+                ).order_by("date")
+            )
+            poids_debut = points_pesee[0].poids_moyen_grammes if points_pesee else None
+            poids_fin = points_pesee[-1].poids_moyen_grammes if points_pesee else None
+            gmq = None
+            if poids_debut is not None and poids_fin is not None and len(points_pesee) > 1:
+                jours = (points_pesee[-1].date - points_pesee[0].date).days
+                if jours > 0:
+                    gmq = round((poids_fin - poids_debut) / jours, 1)
+            entree.update({
+                "poids_debut_grammes": str(poids_debut) if poids_debut is not None else None,
+                "poids_fin_grammes": str(poids_fin) if poids_fin is not None else None,
+                "gmq_moyen_grammes": gmq,
+            })
+
+        donnees.append(entree)
+
+    donnees.sort(key=lambda d: d["ferme_nom"])
+    return Response({
+        "mois": debut.isoformat(),
+        "fermes": donnees,
+        "total": {
+            "revenus": str(total["revenus"].quantize(Decimal("1"))),
+            "cout_aliment": str(total["cout_aliment"].quantize(Decimal("1"))),
+            "cout_paie": str(total["cout_paie"].quantize(Decimal("1"))),
+            "marge": str(total["marge"].quantize(Decimal("1"))),
+            "total_morts": total["total_morts"],
+            "total_production_oeufs": total["total_production_oeufs"],
+        },
     })

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { TrendingUp, TrendingDown } from "lucide-react";
-import { getRentabilite } from "../api/client";
+import { TrendingUp, TrendingDown, Download } from "lucide-react";
+import { getRentabilite, getRapportMensuel } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+import { genererRapportMensuel, telechargerPdf } from "../utils/pdf";
 
 const pad = (n) => String(n).padStart(2, "0");
 const moisCourant = () => {
@@ -15,6 +16,7 @@ export default function Rentabilite() {
   const [mois, setMois] = useState(moisCourant());
   const [donnees, setDonnees] = useState(null);
   const [chargement, setChargement] = useState(true);
+  const [envoiRapport, setEnvoiRapport] = useState(false);
 
   const rafraichir = useCallback(() => {
     setChargement(true);
@@ -25,6 +27,16 @@ export default function Rentabilite() {
   }, [mois]);
 
   useEffect(() => { rafraichir(); }, [rafraichir]);
+
+  async function telechargerRapport() {
+    setEnvoiRapport(true);
+    try {
+      const rapport = await getRapportMensuel({ mois: `${mois}-01` });
+      telechargerPdf(genererRapportMensuel(rapport), `rapport-mensuel-${mois}.pdf`);
+    } finally {
+      setEnvoiRapport(false);
+    }
+  }
 
   return (
     <div style={styles.page}>
@@ -39,6 +51,9 @@ export default function Rentabilite() {
             Mois
             <input type="month" style={styles.date} value={mois} onChange={(e) => setMois(e.target.value)} />
           </label>
+          <button style={styles.rapportBtn} onClick={telechargerRapport} disabled={envoiRapport}>
+            <Download size={14} /> {envoiRapport ? "Génération..." : "Rapport mensuel consolidé (PDF)"}
+          </button>
         </div>
 
         <section style={styles.card}>
@@ -114,6 +129,7 @@ const styles = {
   dateLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "#7A857F" },
   date: { padding: "8px 10px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
   hint: { fontSize: 12.5, color: "#8A948D" },
+  rapportBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 10, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginLeft: "auto" },
   prixSacHint: { fontSize: 11, color: "#8A948D", fontWeight: 400 },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
   empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
