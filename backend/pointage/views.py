@@ -21,7 +21,7 @@ from exploitation.audit import AuditMixin, journaliser, journaliser_objet
 from exploitation.calculs import prix_moyen_sac_aliment
 from exploitation.models import ActionAudit, Ferme, LigneFacture, PointJournalier, RoleUtilisateur
 
-from .models import Absence, BadgeAbsence, BadgeTemporaire, Employe, LignePaie, Pointage, StatutAbsence
+from .models import Absence, BadgeAbsence, BadgeTemporaire, DocumentEmploye, Employe, LignePaie, Pointage, StatutAbsence
 
 # Prix moyen de secours si un magasin n'a encore aucune commande d'aliment
 # enregistrée (cf. exploitation.calculs.prix_moyen_sac_aliment, qui utilise
@@ -31,6 +31,7 @@ PRIX_ALIMENT_SAC_FCFA = Decimal("10755")
 from .serializers import (
     AbsenceSerializer,
     CorrigerPointageSerializer,
+    DocumentEmployeSerializer,
     EmployeSerializer,
     LignePaieSerializer,
     PointageSerializer,
@@ -112,6 +113,22 @@ class EmployeViewSet(AuditMixin, viewsets.ModelViewSet):
                 {"detail": "Impossible de supprimer : cet employé a déjà des pointages enregistrés. Désactive-le plutôt."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+
+class DocumentEmployeViewSet(AuditMixin, viewsets.ModelViewSet):
+    """Documents administratifs (CNI, contrat...) d'un employé — réservé à
+    Direction/Admin, vu la sensibilité de ces pièces."""
+
+    serializer_class = DocumentEmployeSerializer
+    permission_classes = [EstDirectionOuAdmin]
+    http_method_names = ["get", "post", "delete"]
+
+    def get_queryset(self):
+        qs = DocumentEmploye.objects.select_related("employe")
+        employe_id = self.request.query_params.get("employe")
+        if employe_id:
+            qs = qs.filter(employe_id=employe_id)
+        return qs
 
 
 class PointageViewSet(AuditMixin, viewsets.ModelViewSet):

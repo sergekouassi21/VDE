@@ -75,6 +75,9 @@ export const getUtilisateursDisponibles = () => api.get("/pointage/utilisateurs-
 export const creerEmploye = (payload) => api.post("/pointage/employes/", payload).then((r) => r.data);
 export const modifierEmploye = (id, payload) => api.patch(`/pointage/employes/${id}/`, payload).then((r) => r.data);
 export const supprimerEmploye = (id) => api.delete(`/pointage/employes/${id}/`);
+export const getDocumentsEmploye = (employeId) => api.get("/pointage/documents-employe/", { params: { employe: employeId } }).then((r) => r.data);
+export const uploaderDocumentEmploye = (formData) => api.post("/pointage/documents-employe/", formData).then((r) => r.data);
+export const supprimerDocumentEmploye = (id) => api.delete(`/pointage/documents-employe/${id}/`);
 // Le endpoint QR exige une authentification par token — un <img src=...>
 // classique n'enverrait pas l'en-tête Authorization, d'où le passage par
 // un blob récupéré via axios puis converti en URL locale.

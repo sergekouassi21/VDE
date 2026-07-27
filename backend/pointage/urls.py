@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     AbsenceViewSet,
+    DocumentEmployeViewSet,
     EmployeViewSet,
     LignePaieViewSet,
     PointageViewSet,
@@ -24,6 +25,7 @@ router.register("employes", EmployeViewSet, basename="employe")
 router.register("historique", PointageViewSet, basename="pointage-historique")
 router.register("absences", AbsenceViewSet, basename="absence")
 router.register("lignes-paie", LignePaieViewSet, basename="ligne-paie")
+router.register("documents-employe", DocumentEmployeViewSet, basename="document-employe")
 
 urlpatterns = [
     path("scan/<uuid:token>/", scan_info, name="pointage-scan-info"),

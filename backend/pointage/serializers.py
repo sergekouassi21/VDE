@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Absence, Employe, LignePaie, Pointage
+from .models import Absence, DocumentEmploye, Employe, LignePaie, Pointage
 
 
 def _noms_fermes(employe):
@@ -128,3 +128,10 @@ class ScanEmployeSerializer(serializers.ModelSerializer):
 
     def get_role(self, obj):
         return _role_employe(obj)
+
+
+class DocumentEmployeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DocumentEmploye
+        fields = ["id", "employe", "type_document", "nom", "fichier", "date_ajout"]
+        read_only_fields = ["date_ajout"]

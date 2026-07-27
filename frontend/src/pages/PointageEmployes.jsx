@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { QrCode, Plus, X, Download, UserX, UserCheck, Pencil, Trash2, LifeBuoy, CalendarX } from "lucide-react";
-import { getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye, getQrEmployeBlob, getUtilisateursDisponibles, getQrBadgeTemporaireBlob, getQrBadgeAbsenceBlob } from "../api/client";
+import { QrCode, Plus, X, Download, UserX, UserCheck, Pencil, Trash2, LifeBuoy, CalendarX, FileText, Upload } from "lucide-react";
+import { getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye, getQrEmployeBlob, getUtilisateursDisponibles, getQrBadgeTemporaireBlob, getQrBadgeAbsenceBlob, getDocumentsEmploye, uploaderDocumentEmploye, supprimerDocumentEmploye } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 
 const LABEL_ROLE = { CHEF_FERME: "Chef de ferme", SOUS_CHEF_FERME: "Sous-chef de ferme", SUPERVISEUR: "Superviseur", OUVRIER: "Volailler", GARDIEN: "Gardien" };
 const JOURS_SEMAINE = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+const LABEL_TYPE_DOCUMENT = { CNI: "Carte Nationale d'Identité", CONTRAT: "Contrat de travail", AUTRE: "Autre document" };
+const TYPE_DOCUMENT_VIDE = { type_document: "CNI", nom: "", fichier: null };
 
 export default function PointageEmployes() {
   const [fermes, setFermes] = useState([]);
@@ -23,6 +25,12 @@ export default function PointageEmployes() {
   const [erreur, setErreur] = useState("");
   const [qrOuvert, setQrOuvert] = useState(null);
   const [qrUrl, setQrUrl] = useState("");
+  const [documentsOuvert, setDocumentsOuvert] = useState(null);
+  const [documents, setDocuments] = useState([]);
+  const [chargementDocs, setChargementDocs] = useState(false);
+  const [formDoc, setFormDoc] = useState(TYPE_DOCUMENT_VIDE);
+  const [envoiDoc, setEnvoiDoc] = useState(false);
+  const [erreurDoc, setErreurDoc] = useState("");
 
   useEffect(() => { getFermes().then(setFermes); }, []);
   useEffect(() => { if (formOuvert) getUtilisateursDisponibles().then(setUtilisateurs); }, [formOuvert]);
@@ -108,6 +116,44 @@ export default function PointageEmployes() {
     setQrUrl("");
     const url = await getQrEmployeBlob(emp.id);
     setQrUrl(url);
+  }
+
+  async function ouvrirDocuments(emp) {
+    setDocumentsOuvert(emp);
+    setFormDoc(TYPE_DOCUMENT_VIDE);
+    setErreurDoc("");
+    setChargementDocs(true);
+    const data = await getDocumentsEmploye(emp.id);
+    setDocuments(data);
+    setChargementDocs(false);
+  }
+
+  async function ajouterDocument(e) {
+    e.preventDefault();
+    if (!formDoc.fichier) return;
+    setEnvoiDoc(true);
+    setErreurDoc("");
+    try {
+      const data = new FormData();
+      data.append("employe", documentsOuvert.id);
+      data.append("type_document", formDoc.type_document);
+      data.append("nom", formDoc.nom);
+      data.append("fichier", formDoc.fichier);
+      await uploaderDocumentEmploye(data);
+      setFormDoc(TYPE_DOCUMENT_VIDE);
+      const liste = await getDocumentsEmploye(documentsOuvert.id);
+      setDocuments(liste);
+    } catch {
+      setErreurDoc("Impossible d'enregistrer ce document.");
+    } finally {
+      setEnvoiDoc(false);
+    }
+  }
+
+  async function supprimerDocument(doc) {
+    if (!window.confirm(`Supprimer « ${doc.nom || LABEL_TYPE_DOCUMENT[doc.type_document]} » ?`)) return;
+    await supprimerDocumentEmploye(doc.id);
+    setDocuments((docs) => docs.filter((d) => d.id !== doc.id));
   }
 
   async function voirBadgeTemporaire() {
@@ -215,6 +261,9 @@ export default function PointageEmployes() {
                         <button style={styles.iconBtn} onClick={() => voirQr(emp)} title="Voir le badge QR">
                           <QrCode size={16} />
                         </button>
+                        <button style={styles.iconBtn} onClick={() => ouvrirDocuments(emp)} title="Documents (CNI, contrat...)">
+                          <FileText size={16} />
+                        </button>
                         <button style={styles.iconBtn} onClick={() => basculerActif(emp)} title={emp.actif ? "Désactiver" : "Réactiver"}>
                           {emp.actif ? <UserX size={16} /> : <UserCheck size={16} />}
                         </button>
@@ -250,6 +299,52 @@ export default function PointageEmployes() {
             ) : (
               <p style={styles.empty}>Génération du QR...</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {documentsOuvert && (
+        <div style={styles.modalOverlay} onClick={() => setDocumentsOuvert(null)}>
+          <div style={{ ...styles.modal, width: 400, textAlign: "left", alignItems: "stretch" }} onClick={(e) => e.stopPropagation()}>
+            <button style={styles.modalClose} onClick={() => setDocumentsOuvert(null)}><X size={18} /></button>
+            <h2 style={styles.modalTitre}>Documents — {documentsOuvert.nom}</h2>
+
+            {chargementDocs ? (
+              <p style={styles.empty}>Chargement...</p>
+            ) : documents.length === 0 ? (
+              <p style={styles.empty}>Aucun document enregistré.</p>
+            ) : (
+              <div style={styles.docListe}>
+                {documents.map((d) => (
+                  <div key={d.id} style={styles.docLigne}>
+                    <div>
+                      <div style={styles.docNom}>{d.nom || LABEL_TYPE_DOCUMENT[d.type_document]}</div>
+                      <div style={styles.docMeta}>{LABEL_TYPE_DOCUMENT[d.type_document]} · {new Date(d.date_ajout).toLocaleDateString("fr-FR")}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <a href={d.fichier} target="_blank" rel="noopener noreferrer" style={styles.iconBtn} title="Ouvrir">
+                        <Download size={14} />
+                      </a>
+                      <button style={{ ...styles.iconBtn, color: CLAY }} onClick={() => supprimerDocument(d)} title="Supprimer">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <form style={styles.docForm} onSubmit={ajouterDocument}>
+              <select style={styles.input} value={formDoc.type_document} onChange={(e) => setFormDoc({ ...formDoc, type_document: e.target.value })}>
+                {Object.entries(LABEL_TYPE_DOCUMENT).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+              <input style={styles.input} placeholder="Libellé (optionnel)" value={formDoc.nom} onChange={(e) => setFormDoc({ ...formDoc, nom: e.target.value })} />
+              <input style={styles.input} type="file" onChange={(e) => setFormDoc({ ...formDoc, fichier: e.target.files[0] || null })} required />
+              {erreurDoc && <p style={styles.erreur}>{erreurDoc}</p>}
+              <button style={styles.submitBtn} type="submit" disabled={envoiDoc}>
+                <Upload size={14} /> {envoiDoc ? "Envoi..." : "Ajouter le document"}
+              </button>
+            </form>
           </div>
         </div>
       )}
@@ -289,4 +384,9 @@ const styles = {
   modalSousTitre: { fontSize: 12.5, color: "#8A948D", margin: "0 0 10px" },
   qrImage: { width: 220, height: 220, imageRendering: "pixelated" },
   downloadBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 600, textDecoration: "none", marginTop: 10 },
+  docListe: { display: "flex", flexDirection: "column", gap: 8, margin: "10px 0" },
+  docLigne: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F4F1EA", borderRadius: 10, padding: "9px 12px" },
+  docNom: { fontSize: 13.5, fontWeight: 600, color: INK },
+  docMeta: { fontSize: 11.5, color: "#8A948D", marginTop: 2 },
+  docForm: { display: "flex", flexDirection: "column", gap: 8, marginTop: 12, paddingTop: 12, borderTop: "1px solid #ECE9DF" },
 };

@@ -66,6 +66,46 @@ class Employe(models.Model):
         super().save(*args, **kwargs)
 
 
+class TypeDocumentEmploye(models.TextChoices):
+    CNI = "CNI", "Carte Nationale d'Identité"
+    CONTRAT = "CONTRAT", "Contrat de travail"
+    AUTRE = "AUTRE", "Autre document"
+
+
+def _storage_documents_employes():
+    # PDF/scans quelconques, pas forcément des images — MediaCloudinaryStorage
+    # (utilisé pour Employe.photo) refuse les fichiers non-image, il faut le
+    # stockage "raw" de Cloudinary pour accepter n'importe quel type.
+    from django.conf import settings
+
+    if settings.CLOUDINARY_STORAGE.get("CLOUD_NAME"):
+        from cloudinary_storage.storage import RawMediaCloudinaryStorage
+
+        return RawMediaCloudinaryStorage()
+    from django.core.files.storage import FileSystemStorage
+
+    return FileSystemStorage()
+
+
+class DocumentEmploye(models.Model):
+    """Documents administratifs d'un employé (CNI, contrat...) — accès
+    réservé à Direction/Admin comme le reste de la fiche employé, vu la
+    sensibilité de ces pièces (point 17 du backlog, cf. conversation du
+    27/07/2026 avec Serge)."""
+
+    employe = models.ForeignKey(Employe, on_delete=models.CASCADE, related_name="documents")
+    type_document = models.CharField(max_length=10, choices=TypeDocumentEmploye.choices, default=TypeDocumentEmploye.AUTRE)
+    nom = models.CharField(max_length=150, blank=True, help_text="Libellé libre (ex: « CNI recto », « Contrat 2026 »)")
+    fichier = models.FileField(upload_to="documents_employes/", storage=_storage_documents_employes)
+    date_ajout = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date_ajout"]
+
+    def __str__(self):
+        return f"{self.get_type_document_display()} — {self.employe.nom}"
+
+
 class Pointage(models.Model):
     """Un pointage quotidien : heure de début renseignée au premier scan de
     la journée, heure de fin au second. Les heures travaillées et le montant
