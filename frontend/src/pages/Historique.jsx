@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Download, Share2, Pencil, Trash2, Archive, WifiOff } from "lucide-react";
-import { getFermes, getPointsJournaliers, deletePointJournalier, getBandes, getBilanBande } from "../api/client";
+import { ChevronRight, Download, Share2, Pencil, Trash2, Archive, WifiOff, GitCompareArrows } from "lucide-react";
+import { getFermes, getPointsJournaliers, deletePointJournalier, getBandes, getBilanBande, getComparaisonBandes } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY, formatSacs, formatColis } from "../theme";
 import { genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { mettreEnCache, lireCache } from "../offline/cache";
@@ -22,6 +22,7 @@ export default function Historique() {
   const [fermes, setFermes] = useState([]);
   const [points, setPoints] = useState([]);
   const [bandesTerminees, setBandesTerminees] = useState([]);
+  const [comparaisonBandes, setComparaisonBandes] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [fermeId, setFermeId] = useState("");
   const [dateDebut, setDateDebut] = useState("");
@@ -35,6 +36,11 @@ export default function Historique() {
 
   useEffect(() => {
     getBandes({ statut: "TERMINEE", ...(fermeId ? { ferme: fermeId } : {}) }).then(setBandesTerminees).catch(() => {});
+  }, [fermeId]);
+
+  useEffect(() => {
+    if (!fermeId) { setComparaisonBandes([]); return; }
+    getComparaisonBandes(fermeId).then(setComparaisonBandes).catch(() => {});
   }, [fermeId]);
 
   async function telechargerBilan(bande) {
@@ -125,6 +131,67 @@ export default function Historique() {
             </button>
           )}
         </div>
+
+        {comparaisonBandes.length > 1 && (
+          <section style={{ ...styles.card, marginBottom: 16 }}>
+            <div style={styles.resumeHead}><GitCompareArrows size={15} color={GREEN} /><span>Comparaison des bandes successives</span></div>
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Période</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Durée</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Effectif final</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Mortalité</th>
+                    {comparaisonBandes[0].type_ferme === "PONTE" ? (
+                      <>
+                        <th style={{ ...styles.th, textAlign: "right" }}>Production</th>
+                        <th style={{ ...styles.th, textAlign: "right" }}>Ponte moyenne</th>
+                        <th style={{ ...styles.th, textAlign: "right" }}>IC (g/œuf)</th>
+                      </>
+                    ) : (
+                      <>
+                        <th style={{ ...styles.th, textAlign: "right" }}>Poids début → fin</th>
+                        <th style={{ ...styles.th, textAlign: "right" }}>GMQ moyen</th>
+                        <th style={{ ...styles.th, textAlign: "right" }}>IC (kg/kg)</th>
+                      </>
+                    )}
+                    <th style={{ ...styles.th, textAlign: "right" }}>Aliment</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Revenus</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparaisonBandes.map((b) => (
+                    <tr key={`${b.date_mise_en_place}-${b.date_fin}`}>
+                      <td style={styles.td}>
+                        {new Date(b.date_mise_en_place).toLocaleDateString("fr-FR")} → {new Date(b.date_fin).toLocaleDateString("fr-FR")}
+                        {b.statut === "ACTIVE" ? <span style={styles.badgeEnCours}>en cours</span> : ` · ${LABEL_MOTIF_FIN[b.motif_fin] || b.motif_fin || ""}`}
+                      </td>
+                      <td style={{ ...styles.td, textAlign: "right" }}>{b.duree_jours} j</td>
+                      <td style={{ ...styles.td, textAlign: "right" }}>{nf(b.effectif_final)}</td>
+                      <td style={{ ...styles.td, textAlign: "right", color: b.taux_mortalite > 5 ? CLAY : "inherit" }}>{nf(b.total_morts)} ({b.taux_mortalite.toFixed(1)} %)</td>
+                      {b.type_ferme === "PONTE" ? (
+                        <>
+                          <td style={{ ...styles.td, textAlign: "right" }}>{nf(b.total_production_oeufs)}</td>
+                          <td style={{ ...styles.td, textAlign: "right" }}>{b.taux_ponte_moyen.toFixed(1)} %</td>
+                          <td style={{ ...styles.td, textAlign: "right" }}>{b.ic_global_g_par_oeuf != null ? `${nf(b.ic_global_g_par_oeuf)} g` : "—"}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td style={{ ...styles.td, textAlign: "right" }}>{b.poids_initial_grammes ? `${nf(b.poids_initial_grammes)} g` : "—"} → {b.poids_final_grammes ? `${nf(b.poids_final_grammes)} g` : "—"}</td>
+                          <td style={{ ...styles.td, textAlign: "right" }}>{b.gmq_moyen_grammes != null ? `${nf(b.gmq_moyen_grammes)} g/j` : "—"}</td>
+                          <td style={{ ...styles.td, textAlign: "right" }}>{b.ic_global_kg_par_kg ?? "—"}</td>
+                        </>
+                      )}
+                      <td style={{ ...styles.td, textAlign: "right" }}>{b.total_aliment_sacs} sacs</td>
+                      <td style={{ ...styles.td, textAlign: "right", fontWeight: 600, color: GREEN_DARK }}>{nf(b.revenus_ventes)} F</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         {bandesTerminees.length > 0 && (
           <section style={{ ...styles.card, marginBottom: 16 }}>
@@ -299,6 +366,7 @@ const styles = {
   clear: { padding: "8px 14px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 12.5, cursor: "pointer", color: "#7A857F", fontFamily: "inherit" },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
   resumeHead: { display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", fontSize: 13, fontWeight: 600, color: GREEN_DARK, borderBottom: "1px solid #ECE9DF" },
+  badgeEnCours: { marginLeft: 8, fontSize: 10.5, fontWeight: 700, color: GREEN_DARK, background: "#EAF3EE", borderRadius: 6, padding: "1px 6px", textTransform: "uppercase", letterSpacing: .3 },
   empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
   tableWrap: { overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },

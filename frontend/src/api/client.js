@@ -40,6 +40,7 @@ export const declarerBande = (id, payload) => api.post(`/fermes/${id}/declarer-b
 export const terminerBande = (id, payload) => api.post(`/fermes/${id}/terminer-bande/`, payload).then((r) => r.data);
 export const getBandes = (params) => api.get("/bandes/", { params }).then((r) => r.data);
 export const getBilanBande = (bandeId) => api.get(`/bandes/${bandeId}/bilan/`).then((r) => r.data);
+export const getComparaisonBandes = (fermeId) => api.get("/bandes/comparaison/", { params: { ferme: fermeId } }).then((r) => r.data);
 export const getEvenementsSante = (params) => api.get("/evenements-sante/", { params }).then((r) => r.data);
 export const creerEvenementSante = (payload) => api.post("/evenements-sante/", payload).then((r) => r.data);
 export const modifierEvenementSante = (id, payload) => api.patch(`/evenements-sante/${id}/`, payload).then((r) => r.data);
