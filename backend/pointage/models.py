@@ -239,6 +239,26 @@ class LignePaie(models.Model):
         return f"Paie {self.employe.nom} — {self.mois:%Y-%m}"
 
 
+class AppareilPointage(models.Model):
+    """Jeton du téléphone unique autorisé à valider les pointages — un seul
+    existe en pratique (créé à la demande si absent, même principe que
+    BadgeTemporaire/BadgeAbsence). Le téléphone désigné « s'active » en
+    scannant le QR encodant ce jeton (page /pointage/appareil/<token>), qui
+    reste alors enregistré dans son navigateur (localStorage) et doit être
+    présenté à chaque validation. Si aucun AppareilPointage n'existe
+    encore, aucune vérification n'est appliquée (transition en douceur —
+    ne casse pas l'usage existant tant que la Direction n'a pas activé
+    cette protection). Régénérer le jeton (au lieu de le modifier) invalide
+    immédiatement l'ancien téléphone, utile en cas de perte/vol/changement
+    d'appareil — cf. conversation du 28/07/2026 avec Serge."""
+
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    cree_le = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Appareil de pointage ({self.token})"
+
+
 class BadgeTemporaire(models.Model):
     """Badge de secours partagé (imprimé une seule fois, gardé par le
     superviseur/chef de ferme) pour le cas où un employé a oublié ou perdu

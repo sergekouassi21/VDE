@@ -7,6 +7,9 @@ from .views import (
     EmployeViewSet,
     LignePaieViewSet,
     PointageViewSet,
+    appareil_pointage_qr,
+    appareil_pointage_regenerer,
+    appareil_pointage_verifier,
     badge_absence_declarer,
     badge_absence_employes,
     badge_absence_qr,
@@ -39,4 +42,7 @@ urlpatterns = [
     path("badge-absence/qr/", badge_absence_qr, name="pointage-badge-absence-qr"),
     path("badge-absence/<uuid:token>/employes/", badge_absence_employes, name="pointage-badge-absence-employes"),
     path("badge-absence/<uuid:token>/declarer/", badge_absence_declarer, name="pointage-badge-absence-declarer"),
+    path("appareil/qr/", appareil_pointage_qr, name="pointage-appareil-qr"),
+    path("appareil/regenerer/", appareil_pointage_regenerer, name="pointage-appareil-regenerer"),
+    path("appareil/<uuid:token>/verifier/", appareil_pointage_verifier, name="pointage-appareil-verifier"),
 ] + router.urls

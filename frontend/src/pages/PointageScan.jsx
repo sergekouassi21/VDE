@@ -36,8 +36,8 @@ export default function PointageScan() {
     try {
       const data = await validerPointageScan(token, photo);
       setEtat(data);
-    } catch {
-      setErreur("Une erreur est survenue. Réessaie.");
+    } catch (err) {
+      setErreur(err.response?.data?.detail || "Une erreur est survenue. Réessaie.");
     } finally {
       setEnvoi(false);
     }

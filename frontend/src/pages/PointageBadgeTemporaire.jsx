@@ -47,8 +47,8 @@ export default function PointageBadgeTemporaire() {
       await validerBadgeTemporaire(token, employeId, photo);
       setSelectionne(null);
       charger();
-    } catch {
-      setErreur("Une erreur est survenue. Réessaie.");
+    } catch (err) {
+      setErreur(err.response?.data?.detail || "Une erreur est survenue. Réessaie.");
     } finally {
       setEnvoi(false);
     }

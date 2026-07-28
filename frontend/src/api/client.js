@@ -109,10 +109,31 @@ export const getRapportMensuel = (params) => api.get("/pointage/rapport-mensuel/
 export const enregistrerLignePaie = (payload) => api.post("/pointage/lignes-paie/", payload).then((r) => r.data);
 export const getQrBadgeTemporaireBlob = () =>
   api.get("/pointage/badge-temporaire/qr/", { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
+// Téléphone unique autorisé à valider les pointages (cf. conversation du
+// 28/07/2026 avec Serge) — QR d'activation à faire scanner par ce
+// téléphone, et régénération (invalide l'ancien) en cas de perte/vol.
+export const getQrAppareilPointageBlob = () =>
+  api.get("/pointage/appareil/qr/", { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
+export const regenererAppareilPointageBlob = () =>
+  api.post("/pointage/appareil/regenerer/", {}, { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
+
+const CLE_APPAREIL_TOKEN = "vde_appareil_pointage_token";
+export const getAppareilPointageToken = () => localStorage.getItem(CLE_APPAREIL_TOKEN);
+export const setAppareilPointageToken = (token) => localStorage.setItem(CLE_APPAREIL_TOKEN, token);
+export const verifierAppareilPointage = (token) =>
+  axios.get(`${API_BASE_URL}/pointage/appareil/${token}/verifier/`).then((r) => r.data);
 
 // Écran de scan public — pas de token d'authentification, le token du QR
-// (dans l'URL) fait office d'identifiant.
+// (dans l'URL) fait office d'identifiant. X-Appareil-Token identifie en
+// plus le téléphone lui-même (une fois activé) — voir _appareil_autorise
+// côté serveur : sans ce jeton, un autre téléphone qui aurait le QR d'un
+// employé (photographié/partagé) ne peut pas valider de pointage.
 const scanApi = axios.create({ baseURL: API_BASE_URL });
+scanApi.interceptors.request.use((config) => {
+  const token = getAppareilPointageToken();
+  if (token) config.headers["X-Appareil-Token"] = token;
+  return config;
+});
 export const getInfosPointageScan = (token) => scanApi.get(`/pointage/scan/${token}/`).then((r) => r.data);
 // Le selfie (obligatoire, cf. conversation du 28/07/2026 — un seul
 // téléphone partagé scanne le badge de chaque employé, plus celui d'un

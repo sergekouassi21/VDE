@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { QrCode, Plus, X, Download, UserX, UserCheck, Pencil, Trash2, LifeBuoy, CalendarX, FileText, Upload } from "lucide-react";
-import { getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye, getQrEmployeBlob, getUtilisateursDisponibles, getQrBadgeTemporaireBlob, getQrBadgeAbsenceBlob, getDocumentsEmploye, uploaderDocumentEmploye, supprimerDocumentEmploye } from "../api/client";
+import { QrCode, Plus, X, Download, UserX, UserCheck, Pencil, Trash2, LifeBuoy, CalendarX, FileText, Upload, Smartphone, RefreshCw } from "lucide-react";
+import {
+  getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye, getQrEmployeBlob, getUtilisateursDisponibles,
+  getQrBadgeTemporaireBlob, getQrBadgeAbsenceBlob, getQrAppareilPointageBlob, regenererAppareilPointageBlob,
+  getDocumentsEmploye, uploaderDocumentEmploye, supprimerDocumentEmploye,
+} from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 
 const LABEL_ROLE = { CHEF_FERME: "Chef de ferme", SOUS_CHEF_FERME: "Sous-chef de ferme", SUPERVISEUR: "Superviseur", OUVRIER: "Volailler", GARDIEN: "Gardien" };
@@ -170,6 +174,20 @@ export default function PointageEmployes() {
     setQrUrl(url);
   }
 
+  async function voirAppareilPointage() {
+    setQrOuvert({ nom: "Téléphone de pointage", fermes_noms: "Le seul appareil autorisé à valider les pointages", appareil: true });
+    setQrUrl("");
+    const url = await getQrAppareilPointageBlob();
+    setQrUrl(url);
+  }
+
+  async function regenererAppareil() {
+    if (!window.confirm("Régénérer invalide immédiatement l'ancien téléphone — il ne pourra plus valider aucun pointage tant qu'il n'aura pas re-scanné le nouveau QR. Continuer ?")) return;
+    setQrUrl("");
+    const url = await regenererAppareilPointageBlob();
+    setQrUrl(url);
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.wrap}>
@@ -191,6 +209,9 @@ export default function PointageEmployes() {
           </button>
           <button style={styles.secoursBtn} onClick={voirBadgeAbsence}>
             <CalendarX size={16} /> Badge absence
+          </button>
+          <button style={styles.secoursBtn} onClick={voirAppareilPointage}>
+            <Smartphone size={16} /> Téléphone de pointage
           </button>
         </div>
 
@@ -292,9 +313,14 @@ export default function PointageEmployes() {
             {qrUrl ? (
               <>
                 <img src={qrUrl} alt="QR code" style={styles.qrImage} />
-                <a href={qrUrl} download={`${qrOuvert.temporaire ? "badge-temporaire" : qrOuvert.absence ? "badge-absence" : "qr-" + qrOuvert.nom.replace(/\s+/g, "-")}.png`} style={styles.downloadBtn}>
+                <a href={qrUrl} download={`${qrOuvert.temporaire ? "badge-temporaire" : qrOuvert.absence ? "badge-absence" : qrOuvert.appareil ? "appareil-pointage" : "qr-" + qrOuvert.nom.replace(/\s+/g, "-")}.png`} style={styles.downloadBtn}>
                   <Download size={15} /> Télécharger le badge
                 </a>
+                {qrOuvert.appareil && (
+                  <button type="button" style={styles.regenererBtn} onClick={regenererAppareil}>
+                    <RefreshCw size={14} /> Régénérer (invalide l'ancien téléphone)
+                  </button>
+                )}
               </>
             ) : (
               <p style={styles.empty}>Génération du QR...</p>
@@ -384,6 +410,7 @@ const styles = {
   modalSousTitre: { fontSize: 12.5, color: "#8A948D", margin: "0 0 10px" },
   qrImage: { width: 220, height: 220, imageRendering: "pixelated" },
   downloadBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 600, textDecoration: "none", marginTop: 10 },
+  regenererBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: CLAY, border: "1.5px solid #E0BBA9", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginTop: 8 },
   docListe: { display: "flex", flexDirection: "column", gap: 8, margin: "10px 0" },
   docLigne: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F4F1EA", borderRadius: 10, padding: "9px 12px" },
   docNom: { fontSize: 13.5, fontWeight: 600, color: INK },

@@ -21,7 +21,10 @@ from exploitation.audit import AuditMixin, journaliser, journaliser_objet
 from exploitation.calculs import prix_moyen_sac_aliment
 from exploitation.models import ActionAudit, Ferme, LigneFacture, PointJournalier, RoleUtilisateur
 
-from .models import Absence, BadgeAbsence, BadgeTemporaire, DocumentEmploye, Employe, LignePaie, Pointage, StatutAbsence
+from .models import (
+    Absence, AppareilPointage, BadgeAbsence, BadgeTemporaire, DocumentEmploye, Employe, LignePaie, Pointage,
+    StatutAbsence,
+)
 
 # Prix moyen de secours si un magasin n'a encore aucune commande d'aliment
 # enregistrée (cf. exploitation.calculs.prix_moyen_sac_aliment, qui utilise
@@ -317,6 +320,18 @@ class LignePaieViewSet(AuditMixin, viewsets.ModelViewSet):
         return Response(serializer.data, status=code)
 
 
+def _appareil_autorise(request):
+    """True si aucun AppareilPointage n'est encore configuré (transition en
+    douceur), ou si le jeton présenté dans l'en-tête X-Appareil-Token
+    correspond à celui du téléphone unique autorisé (cf. conversation du
+    28/07/2026 avec Serge : empêcher qu'un autre téléphone valide un
+    pointage à partir d'un QR d'employé photographié/partagé)."""
+    appareil = AppareilPointage.objects.first()
+    if not appareil:
+        return True
+    return request.headers.get("X-Appareil-Token") == str(appareil.token)
+
+
 def _etat_pointage(request, employe):
     aujourdhui = timezone.localdate()
     pointage = Pointage.objects.filter(employe=employe, date=aujourdhui).first()
@@ -385,7 +400,12 @@ def scan_valider(request, token):
     Un selfie est obligatoire à chaque validation (arrivée et départ) —
     dissuade et permet de vérifier a posteriori qu'un employé n'a pas
     scanné le badge d'un collègue absent, un seul téléphone partagé servant
-    maintenant à scanner tout le monde (cf. conversation du 28/07/2026)."""
+    maintenant à scanner tout le monde (cf. conversation du 28/07/2026).
+    Le jeton d'appareil (X-Appareil-Token) garantit en plus que seul CE
+    téléphone peut valider, même si le QR d'un employé a été photographié
+    ou partagé."""
+    if not _appareil_autorise(request):
+        return Response({"detail": "Cet appareil n'est pas autorisé à valider les pointages."}, status=status.HTTP_403_FORBIDDEN)
     photo = request.FILES.get("photo")
     if not photo:
         return Response({"detail": "Une photo est requise pour valider le pointage."}, status=status.HTTP_400_BAD_REQUEST)
@@ -397,6 +417,42 @@ def scan_valider(request, token):
     elif not pointage.heure_fin:
         pointage.valider_fin(photo=photo)
     return Response(_etat_pointage(request, employe))
+
+
+@api_view(["GET"])
+@permission_classes([EstDirectionOuAdmin])
+def appareil_pointage_qr(request):
+    """Image PNG du QR d'activation du téléphone unique autorisé à valider
+    les pointages — à faire scanner UNE FOIS par le téléphone désigné (cf.
+    conversation du 28/07/2026 avec Serge). Une seule instance
+    d'AppareilPointage existe en pratique (créée à la demande si absente)."""
+    appareil = AppareilPointage.objects.first() or AppareilPointage.objects.create()
+    url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/appareil/{appareil.token}"
+    return HttpResponse(_composer_badge(url, "Téléphone de pointage"), content_type="image/png")
+
+
+@api_view(["POST"])
+@permission_classes([EstDirectionOuAdmin])
+def appareil_pointage_regenerer(request):
+    """Invalide immédiatement le téléphone actuellement autorisé (perte,
+    vol, remplacement) en générant un nouveau jeton — l'ancien téléphone ne
+    pourra plus valider aucun pointage tant qu'il n'aura pas re-scanné le
+    nouveau QR."""
+    AppareilPointage.objects.all().delete()
+    appareil = AppareilPointage.objects.create()
+    journaliser(request.user, ActionAudit.MODIFICATION, "AppareilPointage", appareil.pk, str(appareil), details="Régénération du jeton")
+    url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/appareil/{appareil.token}"
+    return HttpResponse(_composer_badge(url, "Téléphone de pointage"), content_type="image/png")
+
+
+@api_view(["GET"])
+@permission_classes([])
+def appareil_pointage_verifier(request, token):
+    """Public — la page d'activation appelle ceci avant d'enregistrer le
+    jeton dans le navigateur du téléphone, pour ne pas stocker un jeton
+    invalide/déjà régénéré silencieusement."""
+    valide = AppareilPointage.objects.filter(token=token).exists()
+    return Response({"valide": valide})
 
 
 @api_view(["GET"])
@@ -428,9 +484,12 @@ def badge_temporaire_employes(request, token):
 @permission_classes([])
 def badge_temporaire_valider(request, token, employe_id):
     """Valide l'arrivée/le départ de l'employé choisi manuellement sur
-    l'écran du badge temporaire — même logique idempotente et même selfie
-    obligatoire que scan_valider (ce badge partagé n'a même pas de jeton
-    personnel à vérifier, donc le selfie y est encore plus indispensable)."""
+    l'écran du badge temporaire — même logique idempotente, même selfie
+    obligatoire et même vérification d'appareil que scan_valider (ce badge
+    partagé n'a même pas de jeton personnel à vérifier, donc ces deux
+    garde-fous y sont encore plus indispensables)."""
+    if not _appareil_autorise(request):
+        return Response({"detail": "Cet appareil n'est pas autorisé à valider les pointages."}, status=status.HTTP_403_FORBIDDEN)
     photo = request.FILES.get("photo")
     if not photo:
         return Response({"detail": "Une photo est requise pour valider le pointage."}, status=status.HTTP_400_BAD_REQUEST)
