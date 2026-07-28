@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { Clock, CheckCircle2, LogIn, LogOut, Search, ChevronLeft } from "lucide-react";
+import { Clock, CheckCircle2, LogIn, LogOut, Search, ChevronLeft, Camera } from "lucide-react";
 import { getEmployesBadgeTemporaire, validerBadgeTemporaire } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, CLAY } from "../theme";
 
@@ -20,6 +20,8 @@ export default function PointageBadgeTemporaire() {
   const [erreur, setErreur] = useState("");
   const [chargement, setChargement] = useState(true);
   const [envoi, setEnvoi] = useState(false);
+  const inputPhotoRef = useRef(null);
+  const employeAValiderRef = useRef(null);
 
   const charger = useCallback(() => {
     getEmployesBadgeTemporaire(token)
@@ -29,10 +31,20 @@ export default function PointageBadgeTemporaire() {
 
   useEffect(() => { charger(); }, [charger]);
 
-  async function valider(employeId) {
+  // Selfie obligatoire ici aussi — ce badge partagé n'a même pas de jeton
+  // personnel à vérifier (n'importe qui choisit n'importe quel nom dans la
+  // liste), donc c'est le seul garde-fou contre le pointage pour un
+  // collègue absent (cf. conversation du 28/07/2026 avec Serge).
+  function demanderSelfie(employeId) {
+    setErreur("");
+    employeAValiderRef.current = employeId;
+    inputPhotoRef.current?.click();
+  }
+
+  async function valider(employeId, photo) {
     setEnvoi(true);
     try {
-      await validerBadgeTemporaire(token, employeId);
+      await validerBadgeTemporaire(token, employeId, photo);
       setSelectionne(null);
       charger();
     } catch {
@@ -70,10 +82,19 @@ export default function PointageBadgeTemporaire() {
           <h1 style={styles.nom}>{employe.employe.nom}</h1>
           <p style={styles.ferme}>{employe.employe.role ? `${employe.employe.role} · ${employe.employe.ferme_nom}` : employe.employe.ferme_nom}</p>
 
+          <input
+            ref={inputPhotoRef} type="file" accept="image/*" capture="user" style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0]; e.target.value = "";
+              if (f && employeAValiderRef.current) valider(employeAValiderRef.current, f);
+            }}
+          />
+
           {employe.etat === "NON_COMMENCE" && (
             <>
               <p style={styles.statut}>Journée pas encore commencée</p>
-              <button style={styles.bouton} onClick={() => valider(employe.employe.id)} disabled={envoi}>
+              <p style={styles.selfieNote}><Camera size={13} style={{ verticalAlign: -2 }} /> Un selfie te sera demandé pour valider</p>
+              <button style={styles.bouton} onClick={() => demanderSelfie(employe.employe.id)} disabled={envoi}>
                 <LogIn size={18} /> {envoi ? "Validation..." : "Valider l'arrivée"}
               </button>
             </>
@@ -82,7 +103,8 @@ export default function PointageBadgeTemporaire() {
           {employe.etat === "EN_COURS" && (
             <>
               <p style={styles.statut}><Clock size={15} style={{ verticalAlign: -2 }} /> Arrivé à {heure(employe.heure_debut)}</p>
-              <button style={{ ...styles.bouton, background: CLAY }} onClick={() => valider(employe.employe.id)} disabled={envoi}>
+              <p style={styles.selfieNote}><Camera size={13} style={{ verticalAlign: -2 }} /> Un selfie te sera demandé pour valider</p>
+              <button style={{ ...styles.bouton, background: CLAY }} onClick={() => demanderSelfie(employe.employe.id)} disabled={envoi}>
                 <LogOut size={18} /> {envoi ? "Validation..." : "Valider le départ"}
               </button>
             </>
@@ -161,7 +183,8 @@ const styles = {
   photo: { height: 80, width: 80, borderRadius: "50%", objectFit: "cover", marginBottom: 4 },
   nom: { fontSize: 20, fontWeight: 700, margin: 0, color: INK },
   ferme: { fontSize: 13, color: "#6B756E", margin: "0 0 10px" },
-  statut: { fontSize: 14, color: INK, margin: "6px 0 16px" },
+  statut: { fontSize: 14, color: INK, margin: "6px 0 8px" },
+  selfieNote: { fontSize: 11.5, color: "#8A948D", margin: "0 0 14px" },
   bouton: {
     display: "flex", alignItems: "center", gap: 8, background: GREEN, color: "#fff", border: "none",
     borderRadius: 12, padding: "14px 22px", fontSize: 15.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", width: "100%", justifyContent: "center",

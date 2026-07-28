@@ -479,6 +479,7 @@ export default function PointageHistorique() {
                     <th style={styles.th}>Départ</th>
                     <th style={{ ...styles.th, textAlign: "right" }}>Heures</th>
                     <th style={{ ...styles.th, textAlign: "right" }}>Montant</th>
+                    <th style={styles.th}>Selfies</th>
                     <th style={styles.th}></th>
                   </tr>
                 </thead>
@@ -492,6 +493,21 @@ export default function PointageHistorique() {
                       <td style={styles.td}>{heure(p.heure_fin)}</td>
                       <td style={{ ...styles.td, textAlign: "right" }}>{p.heure_fin ? `${p.heures_travaillees} h` : "—"}</td>
                       <td style={{ ...styles.td, textAlign: "right", fontWeight: 600, color: GREEN_DARK }}>{p.heure_fin ? fcfa(p.montant_du_jour) : "—"}</td>
+                      <td style={styles.td}>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {p.photo_debut && (
+                            <a href={p.photo_debut} target="_blank" rel="noreferrer" title="Selfie arrivée">
+                              <img src={p.photo_debut} alt="Selfie arrivée" style={styles.selfieThumb} />
+                            </a>
+                          )}
+                          {p.photo_fin && (
+                            <a href={p.photo_fin} target="_blank" rel="noreferrer" title="Selfie départ">
+                              <img src={p.photo_fin} alt="Selfie départ" style={{ ...styles.selfieThumb, borderColor: CLAY }} />
+                            </a>
+                          )}
+                          {!p.photo_debut && !p.photo_fin && "—"}
+                        </div>
+                      </td>
                       <td style={{ ...styles.td, display: "flex", gap: 8 }}>
                         <button style={styles.iconBtn} onClick={() => ouvrirEdition(p)} title="Corriger les heures">
                           <Pencil size={15} />
@@ -611,6 +627,7 @@ const styles = {
   th: { textAlign: "left", padding: "12px 16px", fontSize: 11.5, textTransform: "uppercase", letterSpacing: .5, color: "#8A948D", borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
   td: { padding: "11px 16px", borderBottom: "1px solid #F2F0E8", color: INK, whiteSpace: "nowrap" },
   iconBtn: { background: "#F4F1EA", border: "1px solid #ECE9DF", borderRadius: 8, padding: 6, cursor: "pointer", color: GREEN_DARK, display: "flex" },
+  selfieThumb: { width: 30, height: 30, borderRadius: "50%", objectFit: "cover", border: `1.5px solid ${GREEN}` },
   modalOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 50 },
   modal: { background: "#fff", borderRadius: 18, padding: 26, width: 320, maxWidth: "100%", position: "relative", display: "flex", flexDirection: "column", gap: 10 },
   modalClose: { position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", color: "#8A948D" },

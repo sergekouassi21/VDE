@@ -114,13 +114,23 @@ export const getQrBadgeTemporaireBlob = () =>
 // (dans l'URL) fait office d'identifiant.
 const scanApi = axios.create({ baseURL: API_BASE_URL });
 export const getInfosPointageScan = (token) => scanApi.get(`/pointage/scan/${token}/`).then((r) => r.data);
-export const validerPointageScan = (token) => scanApi.post(`/pointage/scan/${token}/valider/`).then((r) => r.data);
+// Le selfie (obligatoire, cf. conversation du 28/07/2026 — un seul
+// téléphone partagé scanne le badge de chaque employé, plus celui d'un
+// superviseur qui reconnaît chacun) est envoyé en multipart.
+export const validerPointageScan = (token, photo) => {
+  const donnees = new FormData();
+  donnees.append("photo", photo);
+  return scanApi.post(`/pointage/scan/${token}/valider/`, donnees).then((r) => r.data);
+};
 
 // Badge temporaire (secours) — public lui aussi, pas de compte employé.
 export const getEmployesBadgeTemporaire = (token, params) =>
   scanApi.get(`/pointage/badge-temporaire/${token}/employes/`, { params }).then((r) => r.data);
-export const validerBadgeTemporaire = (token, employeId) =>
-  scanApi.post(`/pointage/badge-temporaire/${token}/employes/${employeId}/valider/`).then((r) => r.data);
+export const validerBadgeTemporaire = (token, employeId, photo) => {
+  const donnees = new FormData();
+  donnees.append("photo", photo);
+  return scanApi.post(`/pointage/badge-temporaire/${token}/employes/${employeId}/valider/`, donnees).then((r) => r.data);
+};
 
 // Badge absence (signalement par un superviseur) — public, pas de compte.
 export const getEmployesBadgeAbsence = (token, params) =>

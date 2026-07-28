@@ -380,14 +380,22 @@ def scan_info(request, token):
 def scan_valider(request, token):
     """Premier scan du jour = heure de début, second = heure de fin (avec
     calcul heures/montant). Un scan supplémentaire une fois la journée
-    terminée ne fait rien (idempotent) plutôt que d'écraser les valeurs."""
+    terminée ne fait rien (idempotent) plutôt que d'écraser les valeurs.
+
+    Un selfie est obligatoire à chaque validation (arrivée et départ) —
+    dissuade et permet de vérifier a posteriori qu'un employé n'a pas
+    scanné le badge d'un collègue absent, un seul téléphone partagé servant
+    maintenant à scanner tout le monde (cf. conversation du 28/07/2026)."""
+    photo = request.FILES.get("photo")
+    if not photo:
+        return Response({"detail": "Une photo est requise pour valider le pointage."}, status=status.HTTP_400_BAD_REQUEST)
     employe = get_object_or_404(Employe, qr_token=token, actif=True)
     aujourdhui = timezone.localdate()
     pointage, _ = Pointage.objects.get_or_create(employe=employe, date=aujourdhui)
     if not pointage.heure_debut:
-        pointage.valider_debut()
+        pointage.valider_debut(photo=photo)
     elif not pointage.heure_fin:
-        pointage.valider_fin()
+        pointage.valider_fin(photo=photo)
     return Response(_etat_pointage(request, employe))
 
 
@@ -420,15 +428,20 @@ def badge_temporaire_employes(request, token):
 @permission_classes([])
 def badge_temporaire_valider(request, token, employe_id):
     """Valide l'arrivée/le départ de l'employé choisi manuellement sur
-    l'écran du badge temporaire — même logique idempotente que scan_valider."""
+    l'écran du badge temporaire — même logique idempotente et même selfie
+    obligatoire que scan_valider (ce badge partagé n'a même pas de jeton
+    personnel à vérifier, donc le selfie y est encore plus indispensable)."""
+    photo = request.FILES.get("photo")
+    if not photo:
+        return Response({"detail": "Une photo est requise pour valider le pointage."}, status=status.HTTP_400_BAD_REQUEST)
     get_object_or_404(BadgeTemporaire, token=token)
     employe = get_object_or_404(Employe, id=employe_id, actif=True)
     aujourdhui = timezone.localdate()
     pointage, _ = Pointage.objects.get_or_create(employe=employe, date=aujourdhui)
     if not pointage.heure_debut:
-        pointage.valider_debut()
+        pointage.valider_debut(photo=photo)
     elif not pointage.heure_fin:
-        pointage.valider_fin()
+        pointage.valider_fin(photo=photo)
     return Response(_etat_pointage(request, employe))
 
 

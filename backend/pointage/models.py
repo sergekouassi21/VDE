@@ -111,12 +111,21 @@ class Pointage(models.Model):
     la journée, heure de fin au second. Les heures travaillées et le montant
     du jour ne sont calculés qu'une fois les deux heures connues — jamais
     recalculés à la volée ensuite (même logique d'instantané que
-    PointJournalier)."""
+    PointJournalier).
+
+    photo_debut/photo_fin : selfie pris par le téléphone au moment du scan
+    (arrivée/départ) — dissuade et permet de vérifier a posteriori qu'un
+    employé n'a pas scanné le badge d'un collègue absent, maintenant qu'un
+    seul téléphone partagé (plus celui d'un superviseur qui reconnaît
+    chacun) scanne le badge de chaque employé (cf. conversation du
+    28/07/2026 avec Serge)."""
 
     employe = models.ForeignKey(Employe, on_delete=models.PROTECT, related_name="pointages")
     date = models.DateField()
     heure_debut = models.DateTimeField(null=True, blank=True)
     heure_fin = models.DateTimeField(null=True, blank=True)
+    photo_debut = models.ImageField(upload_to="pointages_selfies/", blank=True, null=True)
+    photo_fin = models.ImageField(upload_to="pointages_selfies/", blank=True, null=True)
     heures_travaillees = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     montant_du_jour = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
@@ -129,16 +138,24 @@ class Pointage(models.Model):
     def __str__(self):
         return f"{self.employe.nom} — {self.date}"
 
-    def valider_debut(self):
+    def valider_debut(self, photo=None):
         self.heure_debut = timezone.now()
-        self.save(update_fields=["heure_debut"])
+        champs = ["heure_debut"]
+        if photo:
+            self.photo_debut = photo
+            champs.append("photo_debut")
+        self.save(update_fields=champs)
 
-    def valider_fin(self):
+    def valider_fin(self, photo=None):
         self.heure_fin = timezone.now()
         duree = self.heure_fin - self.heure_debut
         self.heures_travaillees = (Decimal(duree.total_seconds()) / Decimal(3600)).quantize(Decimal("0.01"))
         self.montant_du_jour = (self.heures_travaillees * self.employe.taux_horaire).quantize(Decimal("0.01"))
-        self.save(update_fields=["heure_fin", "heures_travaillees", "montant_du_jour"])
+        champs = ["heure_fin", "heures_travaillees", "montant_du_jour"]
+        if photo:
+            self.photo_fin = photo
+            champs.append("photo_fin")
+        self.save(update_fields=champs)
 
 
 class StatutAbsence(models.TextChoices):

@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { Clock, CheckCircle2, LogIn, LogOut } from "lucide-react";
+import { Clock, CheckCircle2, LogIn, LogOut, Camera } from "lucide-react";
 import { getInfosPointageScan, validerPointageScan } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, CLAY } from "../theme";
 
@@ -11,6 +11,7 @@ export default function PointageScan() {
   const [etat, setEtat] = useState(null);
   const [erreur, setErreur] = useState("");
   const [envoi, setEnvoi] = useState(false);
+  const inputPhotoRef = useRef(null);
 
   const charger = useCallback(() => {
     getInfosPointageScan(token)
@@ -20,10 +21,20 @@ export default function PointageScan() {
 
   useEffect(() => { charger(); }, [charger]);
 
-  async function valider() {
+  // Un selfie est obligatoire pour valider (arrivée ou départ) — un seul
+  // téléphone partagé scanne désormais le badge de chaque employé (plus
+  // celui d'un superviseur qui les reconnaît tous), donc ça dissuade et
+  // permet de vérifier a posteriori qu'un employé n'a pas scanné le badge
+  // d'un collègue absent (cf. conversation du 28/07/2026 avec Serge).
+  function demanderSelfie() {
+    setErreur("");
+    inputPhotoRef.current?.click();
+  }
+
+  async function valider(photo) {
     setEnvoi(true);
     try {
-      const data = await validerPointageScan(token);
+      const data = await validerPointageScan(token, photo);
       setEtat(data);
     } catch {
       setErreur("Une erreur est survenue. Réessaie.");
@@ -58,10 +69,16 @@ export default function PointageScan() {
         <h1 style={styles.nom}>{etat.employe.nom}</h1>
         <p style={styles.ferme}>{etat.employe.role ? `${etat.employe.role} · ${etat.employe.ferme_nom}` : etat.employe.ferme_nom}</p>
 
+        <input
+          ref={inputPhotoRef} type="file" accept="image/*" capture="user" style={{ display: "none" }}
+          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) valider(f); }}
+        />
+
         {etat.etat === "NON_COMMENCE" && (
           <>
             <p style={styles.statut}>Journée pas encore commencée</p>
-            <button style={styles.bouton} onClick={valider} disabled={envoi}>
+            <p style={styles.selfieNote}><Camera size={13} style={{ verticalAlign: -2 }} /> Un selfie te sera demandé pour valider</p>
+            <button style={styles.bouton} onClick={demanderSelfie} disabled={envoi}>
               <LogIn size={18} /> {envoi ? "Validation..." : "Valider l'arrivée"}
             </button>
           </>
@@ -70,7 +87,8 @@ export default function PointageScan() {
         {etat.etat === "EN_COURS" && (
           <>
             <p style={styles.statut}><Clock size={15} style={{ verticalAlign: -2 }} /> Arrivé à {heure(etat.heure_debut)}</p>
-            <button style={{ ...styles.bouton, background: CLAY }} onClick={valider} disabled={envoi}>
+            <p style={styles.selfieNote}><Camera size={13} style={{ verticalAlign: -2 }} /> Un selfie te sera demandé pour valider</p>
+            <button style={{ ...styles.bouton, background: CLAY }} onClick={demanderSelfie} disabled={envoi}>
               <LogOut size={18} /> {envoi ? "Validation..." : "Valider le départ"}
             </button>
           </>
@@ -104,7 +122,8 @@ const styles = {
   photo: { height: 80, width: 80, borderRadius: "50%", objectFit: "cover", marginBottom: 4 },
   nom: { fontSize: 20, fontWeight: 700, margin: 0, color: INK },
   ferme: { fontSize: 13, color: "#6B756E", margin: "0 0 10px" },
-  statut: { fontSize: 14, color: INK, margin: "6px 0 16px" },
+  statut: { fontSize: 14, color: INK, margin: "6px 0 8px" },
+  selfieNote: { fontSize: 11.5, color: "#8A948D", margin: "0 0 14px" },
   bouton: {
     display: "flex", alignItems: "center", gap: 8, background: GREEN, color: "#fff", border: "none",
     borderRadius: 12, padding: "14px 22px", fontSize: 15.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", width: "100%", justifyContent: "center",
