@@ -15,7 +15,7 @@ const tauxCasseJour = (f) => {
   return ((f.dernier_point?.casse || 0) + (f.dernier_point?.brise || 0)) / p * 100;
 };
 
-export function calculerAlertes({ fermes, absencesEnAttente = [], employesSansSalaire = [], evenementsSanteEnRetard = [], creancesEnRetard = [] }) {
+export function calculerAlertes({ fermes, absencesEnAttente = [], employesSansSalaire = [], evenementsSanteEnRetard = [], creancesEnRetard = [], pointagesSecoursRecents = [] }) {
   const actives = fermes.filter((f) => !f.est_vide);
   const a = [];
   actives.forEach((f) => {
@@ -74,6 +74,13 @@ export function calculerAlertes({ fermes, absencesEnAttente = [], employesSansSa
   });
   creancesEnRetard.forEach((f) => {
     a.push({ ferme: "Créances", txt: `${f.client.nom} doit ${nf(Math.round(f.reste_du))} F depuis ${joursDepuis(f.date)} jours (facture n°${String(f.numero).padStart(7, "0")})`, grav: "moy" });
+  });
+  // Le badge de secours n'a aucun jeton personnel à vérifier — signaler son
+  // usage récent plutôt que de le laisser invisible sauf revue manuelle de
+  // l'historique (cf. conversation du 29/07/2026 avec Serge).
+  pointagesSecoursRecents.forEach((p) => {
+    const via = [p.arrivee_via_secours && "arrivée", p.depart_via_secours && "départ"].filter(Boolean).join(" et ");
+    a.push({ ferme: "Pointage", txt: `Badge de secours utilisé pour ${p.employe_nom} (${via}, ${new Date(p.date).toLocaleDateString("fr-FR")})`, grav: "moy" });
   });
   return a.sort((x, y) => (x.grav === "haut" ? -1 : 1));
 }

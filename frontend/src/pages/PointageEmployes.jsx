@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { QrCode, Plus, X, Download, UserX, UserCheck, Pencil, Trash2, LifeBuoy, CalendarX, FileText, Upload, Smartphone, RefreshCw } from "lucide-react";
 import {
-  getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye, getQrEmployeBlob, getUtilisateursDisponibles,
+  getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye, getQrEmployeBlob, regenererQrEmployeBlob, getUtilisateursDisponibles,
   getQrBadgeTemporaireBlob, getQrBadgeAbsenceBlob, getQrAppareilPointageBlob, regenererAppareilPointageBlob,
   getStatutAppareilPointage, desactiverAppareilPointage,
   getDocumentsEmploye, uploaderDocumentEmploye, supprimerDocumentEmploye,
@@ -121,6 +121,13 @@ export default function PointageEmployes() {
     setQrOuvert(emp);
     setQrUrl("");
     const url = await getQrEmployeBlob(emp.id);
+    setQrUrl(url);
+  }
+
+  async function regenererBadgeEmploye(emp) {
+    if (!window.confirm(`Régénérer le badge de ${emp.nom} ? L'ancienne carte imprimée ne fonctionnera plus — il faudra réimprimer/redistribuer le nouveau QR.`)) return;
+    setQrUrl("");
+    const url = await regenererQrEmployeBlob(emp.id);
     setQrUrl(url);
   }
 
@@ -365,6 +372,11 @@ export default function PointageEmployes() {
                 <a href={qrUrl} download={`${qrOuvert.temporaire ? "badge-temporaire" : qrOuvert.absence ? "badge-absence" : "qr-" + qrOuvert.nom.replace(/\s+/g, "-")}.png`} style={styles.downloadBtn}>
                   <Download size={15} /> Télécharger le badge
                 </a>
+                {qrOuvert.id && (
+                  <button type="button" style={styles.regenererBtn} onClick={() => regenererBadgeEmploye(qrOuvert)}>
+                    <RefreshCw size={14} /> Régénérer (invalide l'ancienne carte)
+                  </button>
+                )}
               </>
             ) : (
               <p style={styles.empty}>Génération du QR...</p>

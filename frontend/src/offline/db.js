@@ -3,9 +3,10 @@
 // d'écriture (queue.js) et le cache de lecture (cache.js).
 
 export const DB_NAME = "vde-offline";
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 export const STORE_QUEUE = "points-journaliers";
 export const STORE_CACHE = "cache-lecture";
+export const STORE_QUEUE_POINTAGE = "pointages";
 
 export function ouvrirDB() {
   return new Promise((resolve, reject) => {
@@ -17,6 +18,9 @@ export function ouvrirDB() {
       }
       if (!db.objectStoreNames.contains(STORE_CACHE)) {
         db.createObjectStore(STORE_CACHE, { keyPath: "cle" });
+      }
+      if (!db.objectStoreNames.contains(STORE_QUEUE_POINTAGE)) {
+        db.createObjectStore(STORE_QUEUE_POINTAGE, { keyPath: "id", autoIncrement: true });
       }
     };
     req.onsuccess = () => resolve(req.result);

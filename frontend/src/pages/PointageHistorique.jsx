@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Pencil, Trash2, X, Download, FileText, UserMinus, Wallet, Check, Ban } from "lucide-react";
+import { Pencil, Trash2, X, Download, FileText, UserMinus, Wallet, Check, Ban, LifeBuoy } from "lucide-react";
 import {
   getFermes, getEmployes, getPointages, corrigerPointage, supprimerPointage,
   getAbsences, declarerAbsence, supprimerAbsence, validerAbsence, rejeterAbsence, getLignesPaie, enregistrerLignePaie,
@@ -489,8 +489,14 @@ export default function PointageHistorique() {
                       <td style={styles.td}>{new Date(p.date).toLocaleDateString("fr-FR")}</td>
                       <td style={styles.td}>{p.employe_nom}</td>
                       <td style={styles.td}>{p.ferme_nom}</td>
-                      <td style={styles.td}>{heure(p.heure_debut)}</td>
-                      <td style={styles.td}>{heure(p.heure_fin)}</td>
+                      <td style={styles.td}>
+                        {heure(p.heure_debut)}
+                        {p.arrivee_via_secours && <LifeBuoy size={12} color={CLAY} style={{ marginLeft: 5, verticalAlign: -1 }} title="Badge de secours utilisé" />}
+                      </td>
+                      <td style={styles.td}>
+                        {heure(p.heure_fin)}
+                        {p.depart_via_secours && <LifeBuoy size={12} color={CLAY} style={{ marginLeft: 5, verticalAlign: -1 }} title="Badge de secours utilisé" />}
+                      </td>
                       <td style={{ ...styles.td, textAlign: "right" }}>{p.heure_fin ? `${p.heures_travaillees} h` : "—"}</td>
                       <td style={{ ...styles.td, textAlign: "right", fontWeight: 600, color: GREEN_DARK }}>{p.heure_fin ? fcfa(p.montant_du_jour) : "—"}</td>
                       <td style={styles.td}>

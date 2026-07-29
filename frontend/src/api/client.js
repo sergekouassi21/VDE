@@ -93,6 +93,8 @@ export const supprimerDocumentEmploye = (id) => api.delete(`/pointage/documents-
 // un blob récupéré via axios puis converti en URL locale.
 export const getQrEmployeBlob = (id) =>
   api.get(`/pointage/employes/${id}/qr/`, { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
+export const regenererQrEmployeBlob = (id) =>
+  api.post(`/pointage/employes/${id}/regenerer-qr/`, {}, { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
 export const getPointages = (params) => api.get("/pointage/historique/", { params }).then((r) => r.data);
 export const corrigerPointage = (id, payload) => api.patch(`/pointage/historique/${id}/`, payload).then((r) => r.data);
 export const supprimerPointage = (id) => api.delete(`/pointage/historique/${id}/`);

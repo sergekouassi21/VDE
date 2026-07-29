@@ -9,12 +9,14 @@ from exploitation.models import Ferme, Magasin, ProfilUtilisateur, RoleUtilisate
 
 from .models import AppareilPointage, BadgeTemporaire, Employe, Pointage
 from .views import (
+    EmployeViewSet,
     appareil_pointage_desactiver,
     appareil_pointage_qr,
     appareil_pointage_regenerer,
     appareil_pointage_statut,
     appareil_pointage_verifier,
     badge_temporaire_valider,
+    scan_info,
     scan_valider,
 )
 
@@ -189,3 +191,104 @@ class AppareilPointageTests(TestCase):
         req = self.factory.post(f"/api/pointage/scan/{self.employe.qr_token}/valider/", {"photo": self._photo()})
         resp = scan_valider(req, token=str(self.employe.qr_token))
         self.assertEqual(resp.status_code, 200)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class RegenererBadgeEmployeTests(TestCase):
+    """Un badge employé perdu/volé doit pouvoir être invalidé individuellement
+    (l'ancienne carte imprimée arrête de fonctionner) — cf. conversation du
+    29/07/2026 avec Serge."""
+
+    def setUp(self):
+        magasin = Magasin.objects.create(nom="Magasin")
+        ferme = Ferme.objects.create(nom="Ferme", type=TypeFerme.PONTE, nombre_chambres=1, magasin=magasin)
+        self.employe = Employe.objects.create(nom="Employe Test")
+        self.employe.fermes.add(ferme)
+        self.factory = APIRequestFactory()
+        self.direction = User.objects.create(username="direction")
+        ProfilUtilisateur.objects.create(user=self.direction, role=RoleUtilisateur.DIRECTION)
+
+    def test_regenerer_change_le_token_et_invalide_l_ancien(self):
+        ancien_token = self.employe.qr_token
+        view = EmployeViewSet.as_view({"post": "regenerer_qr"})
+        req = self.factory.post(f"/api/pointage/employes/{self.employe.id}/regenerer-qr/")
+        force_authenticate(req, user=self.direction)
+        resp = view(req, pk=self.employe.id)
+        self.assertEqual(resp.status_code, 200)
+
+        self.employe.refresh_from_db()
+        self.assertNotEqual(self.employe.qr_token, ancien_token)
+
+        # L'ancien token ne retrouve plus personne.
+        req_ancien = self.factory.get(f"/api/pointage/scan/{ancien_token}/")
+        resp_ancien = scan_info(req_ancien, token=str(ancien_token))
+        self.assertEqual(resp_ancien.status_code, 404)
+
+        # Le nouveau token fonctionne.
+        req_nouveau = self.factory.get(f"/api/pointage/scan/{self.employe.qr_token}/")
+        resp_nouveau = scan_info(req_nouveau, token=str(self.employe.qr_token))
+        self.assertEqual(resp_nouveau.status_code, 200)
+
+    def test_regenerer_reserve_direction(self):
+        view = EmployeViewSet.as_view({"post": "regenerer_qr"})
+        req = self.factory.post(f"/api/pointage/employes/{self.employe.id}/regenerer-qr/")
+        # Pas de force_authenticate -> anonyme, doit être refusé.
+        resp = view(req, pk=self.employe.id)
+        self.assertEqual(resp.status_code, 403)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class OrigineSecoursPointageTests(TestCase):
+    """Distingue un pointage validé via le badge personnel (scan_valider) de
+    celui validé via le badge de secours (badge_temporaire_valider), qui
+    n'a aucun jeton personnel à vérifier — cf. conversation du 29/07/2026."""
+
+    def setUp(self):
+        magasin = Magasin.objects.create(nom="Magasin")
+        ferme = Ferme.objects.create(nom="Ferme", type=TypeFerme.PONTE, nombre_chambres=1, magasin=magasin)
+        self.employe = Employe.objects.create(nom="Employe Test")
+        self.employe.fermes.add(ferme)
+        self.factory = APIRequestFactory()
+
+    def _photo(self, nom="selfie.png"):
+        return SimpleUploadedFile(nom, PIXEL_PNG, content_type="image/png")
+
+    def test_scan_personnel_ne_marque_pas_via_secours(self):
+        req = self.factory.post(f"/api/pointage/scan/{self.employe.qr_token}/valider/", {"photo": self._photo()})
+        scan_valider(req, token=str(self.employe.qr_token))
+        pointage = Pointage.objects.get(employe=self.employe)
+        self.assertFalse(pointage.arrivee_via_secours)
+
+    def test_badge_temporaire_marque_arrivee_et_depart_via_secours(self):
+        badge = BadgeTemporaire.objects.create()
+        req1 = self.factory.post(
+            f"/api/pointage/badge-temporaire/{badge.token}/employes/{self.employe.id}/valider/", {"photo": self._photo("a.png")}
+        )
+        badge_temporaire_valider(req1, token=str(badge.token), employe_id=self.employe.id)
+        pointage = Pointage.objects.get(employe=self.employe)
+        self.assertTrue(pointage.arrivee_via_secours)
+        self.assertFalse(pointage.depart_via_secours)
+
+        req2 = self.factory.post(
+            f"/api/pointage/badge-temporaire/{badge.token}/employes/{self.employe.id}/valider/", {"photo": self._photo("b.png")}
+        )
+        badge_temporaire_valider(req2, token=str(badge.token), employe_id=self.employe.id)
+        pointage.refresh_from_db()
+        self.assertTrue(pointage.depart_via_secours)
+
+    def test_arrivee_personnelle_puis_depart_via_secours_ne_marque_que_le_depart(self):
+        # Un employé peut arriver avec son badge personnel puis repartir via
+        # le secours (badge perdu dans la journée) — les deux se suivent
+        # indépendamment, pas un simple champ "origine" global au pointage.
+        req1 = self.factory.post(f"/api/pointage/scan/{self.employe.qr_token}/valider/", {"photo": self._photo("a.png")})
+        scan_valider(req1, token=str(self.employe.qr_token))
+
+        badge = BadgeTemporaire.objects.create()
+        req2 = self.factory.post(
+            f"/api/pointage/badge-temporaire/{badge.token}/employes/{self.employe.id}/valider/", {"photo": self._photo("b.png")}
+        )
+        badge_temporaire_valider(req2, token=str(badge.token), employe_id=self.employe.id)
+
+        pointage = Pointage.objects.get(employe=self.employe)
+        self.assertFalse(pointage.arrivee_via_secours)
+        self.assertTrue(pointage.depart_via_secours)

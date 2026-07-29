@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { Clock, CheckCircle2, LogIn, LogOut, Search, ChevronLeft, Camera } from "lucide-react";
+import { Clock, CheckCircle2, LogIn, LogOut, Search, ChevronLeft, Camera, WifiOff } from "lucide-react";
 import { getEmployesBadgeTemporaire, validerBadgeTemporaire } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, CLAY } from "../theme";
 import CaptureSelfie from "../components/CaptureSelfie";
+import { ajouterPointageEnAttente, listerPointagesEnAttente } from "../offline/queuePointage";
+import { synchroniserPointagesEnAttente } from "../offline/syncPointage";
 
 const heure = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
@@ -22,15 +24,42 @@ export default function PointageBadgeTemporaire() {
   const [chargement, setChargement] = useState(true);
   const [envoi, setEnvoi] = useState(false);
   const [captureOuverte, setCaptureOuverte] = useState(false);
+  const [envoyeHorsLigne, setEnvoyeHorsLigne] = useState(false);
+  const [enAttenteCount, setEnAttenteCount] = useState(0);
   const employeAValiderRef = useRef(null);
+
+  const rafraichirEnAttente = useCallback(async () => {
+    const items = await listerPointagesEnAttente();
+    setEnAttenteCount(items.length);
+  }, []);
 
   const charger = useCallback(() => {
     getEmployesBadgeTemporaire(token)
-      .then((data) => { setEmployes(data); setChargement(false); })
-      .catch(() => { setErreur("Badge temporaire invalide. Contactez la direction."); setChargement(false); });
+      .then((data) => { setEmployes(data); setChargement(false); setErreur(""); })
+      .catch((err) => {
+        // Distinct d'un badge vraiment invalide : sans réseau, on ne peut
+        // même pas charger la liste des employés depuis ce badge de secours
+        // (cf. conversation du 29/07/2026 avec Serge — l'ancien message
+        // "Badge temporaire invalide" était trompeur en cas de coupure).
+        setErreur(!err.response
+          ? "Pas de réseau — impossible de charger la liste des employés. Réessaie une fois la connexion revenue."
+          : "Badge temporaire invalide. Contactez la direction.");
+        setChargement(false);
+      });
   }, [token]);
 
-  useEffect(() => { charger(); }, [charger]);
+  useEffect(() => { charger(); rafraichirEnAttente(); }, [charger, rafraichirEnAttente]);
+
+  useEffect(() => {
+    const synchroniser = () => synchroniserPointagesEnAttente(() => rafraichirEnAttente());
+    function onOnline() { synchroniser(); }
+    window.addEventListener("online", onOnline);
+    const interval = setInterval(() => { if (navigator.onLine) synchroniser(); }, 30000);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      clearInterval(interval);
+    };
+  }, [rafraichirEnAttente]);
 
   // Selfie obligatoire ici aussi — ce badge partagé n'a même pas de jeton
   // personnel à vérifier (n'importe qui choisit n'importe quel nom dans la
@@ -47,12 +76,25 @@ export default function PointageBadgeTemporaire() {
     const employeId = employeAValiderRef.current;
     setCaptureOuverte(false);
     setEnvoi(true);
+    if (!navigator.onLine) {
+      await ajouterPointageEnAttente({ type: "temporaire", token, employeId, photo });
+      await rafraichirEnAttente();
+      setEnvoyeHorsLigne(true);
+      setEnvoi(false);
+      return;
+    }
     try {
       await validerBadgeTemporaire(token, employeId, photo);
       setSelectionne(null);
       charger();
     } catch (err) {
-      setErreur(err.response?.data?.detail || "Une erreur est survenue. Réessaie.");
+      if (!err.response) {
+        await ajouterPointageEnAttente({ type: "temporaire", token, employeId, photo });
+        await rafraichirEnAttente();
+        setEnvoyeHorsLigne(true);
+      } else {
+        setErreur(err.response?.data?.detail || "Une erreur est survenue. Réessaie.");
+      }
     } finally {
       setEnvoi(false);
     }
@@ -62,6 +104,19 @@ export default function PointageBadgeTemporaire() {
     return (
       <div style={styles.page}>
         <div style={styles.card}><p style={styles.erreur}>{erreur}</p></div>
+      </div>
+    );
+  }
+
+  if (envoyeHorsLigne) {
+    return (
+      <div style={styles.page}>
+        <div style={styles.card}>
+          <CheckCircle2 size={34} color={GREEN} />
+          <p style={styles.recapTitre}>Enregistré hors-ligne</p>
+          <p style={styles.txtHorsLigne}>Cette validation sera envoyée automatiquement dès que le réseau reviendra sur ce téléphone.</p>
+          <button style={styles.bouton} onClick={() => { setEnvoyeHorsLigne(false); setSelectionne(null); }}>Retour à la liste</button>
+        </div>
       </div>
     );
   }
@@ -125,6 +180,9 @@ export default function PointageBadgeTemporaire() {
   return (
     <div style={styles.page}>
       <div style={{ ...styles.card, width: 380 }}>
+        {enAttenteCount > 0 && (
+          <div style={styles.offlineBanner}><WifiOff size={14} /><span>{enAttenteCount} pointage(s) en attente de synchronisation</span></div>
+        )}
         <img src="/logo.png" alt="Volailles de l'Est" style={styles.logo} />
         <h1 style={styles.nom}>Badge temporaire</h1>
         <p style={styles.ferme}>Choisis l'employé qui a oublié ou perdu son badge</p>
@@ -188,6 +246,8 @@ const styles = {
   },
   attente: { fontSize: 14, color: "#6B756E" },
   erreur: { fontSize: 14, color: "#9E4527", margin: 0 },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12, fontWeight: 500, padding: "8px 12px", borderRadius: 10, width: "100%", marginBottom: 6 },
+  txtHorsLigne: { fontSize: 13, color: "#6B756E", margin: "0 0 10px", lineHeight: 1.5 },
   recap: { width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginTop: 6 },
   recapTitre: { fontSize: 16, fontWeight: 700, color: INK, margin: "6px 0 10px" },
   recapLigne: { display: "flex", justifyContent: "space-between", width: "100%", fontSize: 13.5, color: "#4C544E", padding: "5px 0", borderBottom: "1px solid #ECE9DF" },

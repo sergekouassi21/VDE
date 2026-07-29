@@ -58,7 +58,8 @@ class PointageSerializer(serializers.ModelSerializer):
         model = Pointage
         fields = [
             "id", "employe", "employe_nom", "ferme_nom", "date",
-            "heure_debut", "heure_fin", "photo_debut", "photo_fin", "heures_travaillees", "montant_du_jour",
+            "heure_debut", "heure_fin", "photo_debut", "photo_fin",
+            "arrivee_via_secours", "depart_via_secours", "heures_travaillees", "montant_du_jour",
         ]
 
     def get_ferme_nom(self, obj):

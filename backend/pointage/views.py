@@ -1,5 +1,6 @@
 import calendar
 import os
+import uuid
 from datetime import date as date_cls
 from decimal import Decimal
 from io import BytesIO
@@ -102,6 +103,20 @@ class EmployeViewSet(AuditMixin, viewsets.ModelViewSet):
         scan), avec le nom écrit en texte lisible sous l'image, comme sur
         une carte d'identité classique."""
         employe = self.get_object()
+        url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/{employe.qr_token}"
+        return HttpResponse(_composer_badge(url, employe.nom), content_type="image/png")
+
+    @action(detail=True, methods=["post"], url_path="regenerer-qr")
+    def regenerer_qr(self, request, pk=None):
+        """Invalide immédiatement l'ancien badge physique de cet employé
+        (perdu, volé, ou simple rotation périodique décidée par la
+        Direction) en générant un nouveau jeton — l'ancienne carte imprimée
+        ne fonctionnera plus, il faut réimprimer/redistribuer le nouveau QR
+        (cf. conversation du 29/07/2026 avec Serge)."""
+        employe = self.get_object()
+        employe.qr_token = uuid.uuid4()
+        employe.save(update_fields=["qr_token"])
+        journaliser_objet(request.user, ActionAudit.MODIFICATION, employe, details="Régénération du badge QR")
         url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/{employe.qr_token}"
         return HttpResponse(_composer_badge(url, employe.nom), content_type="image/png")
 
@@ -524,9 +539,9 @@ def badge_temporaire_valider(request, token, employe_id):
     aujourdhui = timezone.localdate()
     pointage, _ = Pointage.objects.get_or_create(employe=employe, date=aujourdhui)
     if not pointage.heure_debut:
-        pointage.valider_debut(photo=photo)
+        pointage.valider_debut(photo=photo, via_secours=True)
     elif not pointage.heure_fin:
-        pointage.valider_fin(photo=photo)
+        pointage.valider_fin(photo=photo, via_secours=True)
     return Response(_etat_pointage(request, employe))
 
 

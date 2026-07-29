@@ -126,6 +126,14 @@ class Pointage(models.Model):
     heure_fin = models.DateTimeField(null=True, blank=True)
     photo_debut = models.ImageField(upload_to="pointages_selfies/", blank=True, null=True)
     photo_fin = models.ImageField(upload_to="pointages_selfies/", blank=True, null=True)
+    # Le badge temporaire de secours n'a aucun jeton personnel à vérifier
+    # (n'importe qui choisit n'importe quel nom dans la liste) — signaler
+    # quand il a servi, pour l'arrivée et/ou le départ indépendamment (un
+    # employé peut arriver avec son badge personnel puis repartir via le
+    # secours s'il le perd dans la journée), permet à la Direction de
+    # repérer ces pointages plus à risque (cf. conversation du 29/07/2026).
+    arrivee_via_secours = models.BooleanField(default=False)
+    depart_via_secours = models.BooleanField(default=False)
     heures_travaillees = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     montant_du_jour = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
@@ -138,15 +146,18 @@ class Pointage(models.Model):
     def __str__(self):
         return f"{self.employe.nom} — {self.date}"
 
-    def valider_debut(self, photo=None):
+    def valider_debut(self, photo=None, via_secours=False):
         self.heure_debut = timezone.now()
         champs = ["heure_debut"]
         if photo:
             self.photo_debut = photo
             champs.append("photo_debut")
+        if via_secours:
+            self.arrivee_via_secours = True
+            champs.append("arrivee_via_secours")
         self.save(update_fields=champs)
 
-    def valider_fin(self, photo=None):
+    def valider_fin(self, photo=None, via_secours=False):
         self.heure_fin = timezone.now()
         duree = self.heure_fin - self.heure_debut
         self.heures_travaillees = (Decimal(duree.total_seconds()) / Decimal(3600)).quantize(Decimal("0.01"))
@@ -155,6 +166,9 @@ class Pointage(models.Model):
         if photo:
             self.photo_fin = photo
             champs.append("photo_fin")
+        if via_secours:
+            self.depart_via_secours = True
+            champs.append("depart_via_secours")
         self.save(update_fields=champs)
 
 

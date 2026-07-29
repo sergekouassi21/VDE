@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, Fragment } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import { Egg, TrendingUp, AlertTriangle, Skull, Package, ChevronRight, Activity, Wheat, Droplet } from "lucide-react";
-import { getDashboard, getEmployes, getAbsences, getEvenementsSante, getFactures } from "../api/client";
+import { getDashboard, getEmployes, getAbsences, getEvenementsSante, getFactures, getPointages } from "../api/client";
 import { GREEN, GREEN_DARK, INK, formatSacs, formatColis, AGE_REFORME_SEMAINES, KG_PAR_SAC } from "../theme";
 import { calculerAlertes, signatureAlertes, JOURS_CREANCE_RETARD, joursDepuis } from "../alertes";
 
@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [employesSansSalaire, setEmployesSansSalaire] = useState([]);
   const [evenementsSanteEnRetard, setEvenementsSanteEnRetard] = useState([]);
   const [creancesEnRetard, setCreancesEnRetard] = useState([]);
+  const [pointagesSecoursRecents, setPointagesSecoursRecents] = useState([]);
   const [sel, setSel] = useState(null);
   const [chargement, setChargement] = useState(true);
 
@@ -34,6 +35,14 @@ export default function Dashboard() {
       getEmployes().then((emps) => setEmployesSansSalaire(emps.filter((e) => e.actif && Number(e.salaire_mensuel) === 0)));
       getFactures().then((factures) => setCreancesEnRetard(
         factures.filter((f) => Number(f.reste_du) > 0 && joursDepuis(f.date) > JOURS_CREANCE_RETARD)
+      ));
+      // Le badge de secours n'a aucun jeton personnel à vérifier — signaler
+      // son usage récent (48 h) permet à la Direction de le remarquer sans
+      // avoir à parcourir tout l'historique des pointages (cf. conversation
+      // du 29/07/2026 avec Serge).
+      const depuis = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+      getPointages({ date_debut: depuis }).then((pts) => setPointagesSecoursRecents(
+        pts.filter((p) => p.arrivee_via_secours || p.depart_via_secours)
       ));
     }
   }, []);
@@ -116,8 +125,8 @@ export default function Dashboard() {
   }, [actives, pondeuses]);
 
   const alertes = useMemo(
-    () => calculerAlertes({ fermes, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard, creancesEnRetard }),
-    [fermes, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard, creancesEnRetard],
+    () => calculerAlertes({ fermes, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard, creancesEnRetard, pointagesSecoursRecents }),
+    [fermes, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard, creancesEnRetard, pointagesSecoursRecents],
   );
 
   // Marque ces alertes comme "vues" — cf. badge de notification dans la
