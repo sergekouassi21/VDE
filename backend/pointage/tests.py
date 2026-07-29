@@ -8,7 +8,15 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from exploitation.models import Ferme, Magasin, ProfilUtilisateur, RoleUtilisateur, TypeFerme
 
 from .models import AppareilPointage, BadgeTemporaire, Employe, Pointage
-from .views import appareil_pointage_qr, appareil_pointage_regenerer, appareil_pointage_verifier, badge_temporaire_valider, scan_valider
+from .views import (
+    appareil_pointage_desactiver,
+    appareil_pointage_qr,
+    appareil_pointage_regenerer,
+    appareil_pointage_statut,
+    appareil_pointage_verifier,
+    badge_temporaire_valider,
+    scan_valider,
+)
 
 User = get_user_model()
 
@@ -156,3 +164,28 @@ class AppareilPointageTests(TestCase):
         # Pas de force_authenticate -> anonyme, doit être refusé.
         resp = appareil_pointage_qr(req)
         self.assertEqual(resp.status_code, 403)
+
+    def test_statut_reflete_l_etat_actuel(self):
+        req = self.factory.get("/api/pointage/appareil/statut/")
+        force_authenticate(req, user=self.direction)
+        self.assertFalse(appareil_pointage_statut(req).data["actif"])
+
+        AppareilPointage.objects.create()
+        req2 = self.factory.get("/api/pointage/appareil/statut/")
+        force_authenticate(req2, user=self.direction)
+        self.assertTrue(appareil_pointage_statut(req2).data["actif"])
+
+    def test_desactiver_supprime_l_appareil_et_debloque_le_scan(self):
+        appareil = AppareilPointage.objects.create()
+        req_off = self.factory.post("/api/pointage/appareil/desactiver/")
+        force_authenticate(req_off, user=self.direction)
+        resp_off = appareil_pointage_desactiver(req_off)
+        self.assertEqual(resp_off.status_code, 200)
+        self.assertFalse(resp_off.data["actif"])
+        self.assertFalse(AppareilPointage.objects.exists())
+
+        # Plus aucun jeton exigé : un scan sans en-tête (ni même l'ancien
+        # jeton, qui n'existe plus) fonctionne de nouveau.
+        req = self.factory.post(f"/api/pointage/scan/{self.employe.qr_token}/valider/", {"photo": self._photo()})
+        resp = scan_valider(req, token=str(self.employe.qr_token))
+        self.assertEqual(resp.status_code, 200)

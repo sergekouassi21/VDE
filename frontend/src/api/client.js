@@ -116,6 +116,8 @@ export const getQrAppareilPointageBlob = () =>
   api.get("/pointage/appareil/qr/", { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
 export const regenererAppareilPointageBlob = () =>
   api.post("/pointage/appareil/regenerer/", {}, { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
+export const getStatutAppareilPointage = () => api.get("/pointage/appareil/statut/").then((r) => r.data);
+export const desactiverAppareilPointage = () => api.post("/pointage/appareil/desactiver/").then((r) => r.data);
 
 const CLE_APPAREIL_TOKEN = "vde_appareil_pointage_token";
 export const getAppareilPointageToken = () => localStorage.getItem(CLE_APPAREIL_TOKEN);

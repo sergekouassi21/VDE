@@ -457,6 +457,32 @@ def appareil_pointage_verifier(request, token):
 
 @api_view(["GET"])
 @permission_classes([EstDirectionOuAdmin])
+def appareil_pointage_statut(request):
+    """Indique si la protection « téléphone unique » est actuellement
+    activée — sert à afficher un bouton Activer/Désactiver explicite côté
+    Direction plutôt que de la déclencher silencieusement en affichant
+    juste le QR (cf. conversation du 28/07/2026 avec Serge : le téléphone
+    désigné n'était pas encore disponible pour scanner le QR, ce qui
+    bloquait tous les pointages dès que la protection était activée)."""
+    return Response({"actif": AppareilPointage.objects.exists()})
+
+
+@api_view(["POST"])
+@permission_classes([EstDirectionOuAdmin])
+def appareil_pointage_desactiver(request):
+    """Désactive complètement la protection « téléphone unique » — tant
+    qu'aucun AppareilPointage n'existe, _appareil_autorise n'exige plus
+    aucun jeton et tous les pointages redeviennent possibles depuis
+    n'importe quel appareil (retour à l'état d'avant cette fonctionnalité)."""
+    supprimes = AppareilPointage.objects.count()
+    AppareilPointage.objects.all().delete()
+    if supprimes:
+        journaliser(request.user, ActionAudit.MODIFICATION, "AppareilPointage", 0, "Téléphone unique", details="Désactivation de la protection")
+    return Response({"actif": False})
+
+
+@api_view(["GET"])
+@permission_classes([EstDirectionOuAdmin])
 def badge_temporaire_qr(request):
     """Image PNG du badge de secours (imprimé une seule fois) — réservée à
     Direction/Admin. Une seule instance de BadgeTemporaire existe en

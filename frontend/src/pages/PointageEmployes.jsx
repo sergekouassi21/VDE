@@ -3,6 +3,7 @@ import { QrCode, Plus, X, Download, UserX, UserCheck, Pencil, Trash2, LifeBuoy, 
 import {
   getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye, getQrEmployeBlob, getUtilisateursDisponibles,
   getQrBadgeTemporaireBlob, getQrBadgeAbsenceBlob, getQrAppareilPointageBlob, regenererAppareilPointageBlob,
+  getStatutAppareilPointage, desactiverAppareilPointage,
   getDocumentsEmploye, uploaderDocumentEmploye, supprimerDocumentEmploye,
 } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
@@ -29,6 +30,7 @@ export default function PointageEmployes() {
   const [erreur, setErreur] = useState("");
   const [qrOuvert, setQrOuvert] = useState(null);
   const [qrUrl, setQrUrl] = useState("");
+  const [appareilInfo, setAppareilInfo] = useState(null);
   const [documentsOuvert, setDocumentsOuvert] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [chargementDocs, setChargementDocs] = useState(false);
@@ -175,10 +177,26 @@ export default function PointageEmployes() {
   }
 
   async function voirAppareilPointage() {
-    setQrOuvert({ nom: "Téléphone de pointage", fermes_noms: "Le seul appareil autorisé à valider les pointages", appareil: true });
+    setQrOuvert({ nom: "Téléphone de pointage", fermes_noms: "Protection : un seul appareil autorisé à valider les pointages", appareil: true });
     setQrUrl("");
+    setAppareilInfo(null);
+    const statut = await getStatutAppareilPointage();
+    setAppareilInfo(statut);
+    if (statut.actif) {
+      const url = await getQrAppareilPointageBlob();
+      setQrUrl(url);
+    }
+  }
+
+  // Action explicite et distincte du simple affichage — sinon consulter la
+  // fenêtre suffirait à activer la protection avant que le téléphone désigné
+  // soit prêt à scanner le QR, bloquant tous les pointages entretemps (cf.
+  // conversation du 28/07/2026 avec Serge : "le téléphone n'est pas encore
+  // disponible").
+  async function activerAppareil() {
     const url = await getQrAppareilPointageBlob();
     setQrUrl(url);
+    setAppareilInfo({ actif: true });
   }
 
   async function regenererAppareil() {
@@ -186,6 +204,13 @@ export default function PointageEmployes() {
     setQrUrl("");
     const url = await regenererAppareilPointageBlob();
     setQrUrl(url);
+  }
+
+  async function desactiverAppareil() {
+    if (!window.confirm("Désactiver la protection ? N'importe quel téléphone pourra de nouveau valider un pointage, sans jeton particulier.")) return;
+    await desactiverAppareilPointage();
+    setAppareilInfo({ actif: false });
+    setQrUrl("");
   }
 
   return (
@@ -310,17 +335,36 @@ export default function PointageEmployes() {
             <button style={styles.modalClose} onClick={() => setQrOuvert(null)}><X size={18} /></button>
             <h2 style={styles.modalTitre}>{qrOuvert.nom}</h2>
             <p style={styles.modalSousTitre}>{qrOuvert.fermes_noms}</p>
-            {qrUrl ? (
-              <>
-                <img src={qrUrl} alt="QR code" style={styles.qrImage} />
-                <a href={qrUrl} download={`${qrOuvert.temporaire ? "badge-temporaire" : qrOuvert.absence ? "badge-absence" : qrOuvert.appareil ? "appareil-pointage" : "qr-" + qrOuvert.nom.replace(/\s+/g, "-")}.png`} style={styles.downloadBtn}>
-                  <Download size={15} /> Télécharger le badge
-                </a>
-                {qrOuvert.appareil && (
+            {qrOuvert.appareil ? (
+              appareilInfo === null ? (
+                <p style={styles.empty}>Chargement...</p>
+              ) : !appareilInfo.actif ? (
+                <>
+                  <p style={styles.empty}>Protection actuellement désactivée — n'importe quel téléphone peut valider un pointage.</p>
+                  <button type="button" style={styles.activerBtn} onClick={activerAppareil}>Activer et générer le QR</button>
+                </>
+              ) : qrUrl ? (
+                <>
+                  <img src={qrUrl} alt="QR code" style={styles.qrImage} />
+                  <a href={qrUrl} download="appareil-pointage.png" style={styles.downloadBtn}>
+                    <Download size={15} /> Télécharger le badge
+                  </a>
                   <button type="button" style={styles.regenererBtn} onClick={regenererAppareil}>
                     <RefreshCw size={14} /> Régénérer (invalide l'ancien téléphone)
                   </button>
-                )}
+                  <button type="button" style={{ ...styles.regenererBtn, marginTop: 8 }} onClick={desactiverAppareil}>
+                    <UserX size={14} /> Désactiver la protection
+                  </button>
+                </>
+              ) : (
+                <p style={styles.empty}>Génération du QR...</p>
+              )
+            ) : qrUrl ? (
+              <>
+                <img src={qrUrl} alt="QR code" style={styles.qrImage} />
+                <a href={qrUrl} download={`${qrOuvert.temporaire ? "badge-temporaire" : qrOuvert.absence ? "badge-absence" : "qr-" + qrOuvert.nom.replace(/\s+/g, "-")}.png`} style={styles.downloadBtn}>
+                  <Download size={15} /> Télécharger le badge
+                </a>
               </>
             ) : (
               <p style={styles.empty}>Génération du QR...</p>
@@ -411,6 +455,7 @@ const styles = {
   qrImage: { width: 220, height: 220, imageRendering: "pixelated" },
   downloadBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 600, textDecoration: "none", marginTop: 10 },
   regenererBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: CLAY, border: "1.5px solid #E0BBA9", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginTop: 8 },
+  activerBtn: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: GREEN, color: "#fff", border: "none", borderRadius: 9, padding: "11px 16px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", width: "100%", marginTop: 6 },
   docListe: { display: "flex", flexDirection: "column", gap: 8, margin: "10px 0" },
   docLigne: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F4F1EA", borderRadius: 10, padding: "9px 12px" },
   docNom: { fontSize: 13.5, fontWeight: 600, color: INK },
