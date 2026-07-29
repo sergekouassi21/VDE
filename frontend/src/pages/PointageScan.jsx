@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Clock, CheckCircle2, LogIn, LogOut, Camera } from "lucide-react";
 import { getInfosPointageScan, validerPointageScan } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, CLAY } from "../theme";
-import { comprimerImage } from "../utils/image";
+import CaptureSelfie from "../components/CaptureSelfie";
 
 const heure = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
@@ -12,7 +12,7 @@ export default function PointageScan() {
   const [etat, setEtat] = useState(null);
   const [erreur, setErreur] = useState("");
   const [envoi, setEnvoi] = useState(false);
-  const inputPhotoRef = useRef(null);
+  const [captureOuverte, setCaptureOuverte] = useState(false);
 
   const charger = useCallback(() => {
     getInfosPointageScan(token)
@@ -26,13 +26,18 @@ export default function PointageScan() {
   // téléphone partagé scanne désormais le badge de chaque employé (plus
   // celui d'un superviseur qui les reconnaît tous), donc ça dissuade et
   // permet de vérifier a posteriori qu'un employé n'a pas scanné le badge
-  // d'un collègue absent (cf. conversation du 28/07/2026 avec Serge).
+  // d'un collègue absent (cf. conversation du 28/07/2026 avec Serge). La
+  // photo est prise directement en basse résolution (CaptureSelfie) plutôt
+  // que via l'appareil photo natif — ce dernier renvoyait des photos en
+  // pleine résolution qui faisaient planter la validation sur certains
+  // téléphones ("Mémoire insuffisante", cf. conversation du 29/07/2026).
   function demanderSelfie() {
     setErreur("");
-    inputPhotoRef.current?.click();
+    setCaptureOuverte(true);
   }
 
   async function valider(photo) {
+    setCaptureOuverte(false);
     setEnvoi(true);
     try {
       const data = await validerPointageScan(token, photo);
@@ -70,17 +75,6 @@ export default function PointageScan() {
         <h1 style={styles.nom}>{etat.employe.nom}</h1>
         <p style={styles.ferme}>{etat.employe.role ? `${etat.employe.role} · ${etat.employe.ferme_nom}` : etat.employe.ferme_nom}</p>
 
-        <input
-          ref={inputPhotoRef} type="file" accept="image/*" capture="user" style={{ display: "none" }}
-          onChange={async (e) => {
-            const f = e.target.files?.[0]; e.target.value = "";
-            if (!f) return;
-            setEnvoi(true);
-            const photo = await comprimerImage(f);
-            valider(photo);
-          }}
-        />
-
         {etat.etat === "NON_COMMENCE" && (
           <>
             <p style={styles.statut}>Journée pas encore commencée</p>
@@ -111,6 +105,7 @@ export default function PointageScan() {
           </div>
         )}
       </div>
+      {captureOuverte && <CaptureSelfie onCapture={valider} onAnnuler={() => setCaptureOuverte(false)} />}
     </div>
   );
 }

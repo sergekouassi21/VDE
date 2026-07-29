@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { Clock, CheckCircle2, LogIn, LogOut, Search, ChevronLeft, Camera } from "lucide-react";
 import { getEmployesBadgeTemporaire, validerBadgeTemporaire } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, CLAY } from "../theme";
-import { comprimerImage } from "../utils/image";
+import CaptureSelfie from "../components/CaptureSelfie";
 
 const heure = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
@@ -21,7 +21,7 @@ export default function PointageBadgeTemporaire() {
   const [erreur, setErreur] = useState("");
   const [chargement, setChargement] = useState(true);
   const [envoi, setEnvoi] = useState(false);
-  const inputPhotoRef = useRef(null);
+  const [captureOuverte, setCaptureOuverte] = useState(false);
   const employeAValiderRef = useRef(null);
 
   const charger = useCallback(() => {
@@ -35,14 +35,17 @@ export default function PointageBadgeTemporaire() {
   // Selfie obligatoire ici aussi — ce badge partagé n'a même pas de jeton
   // personnel à vérifier (n'importe qui choisit n'importe quel nom dans la
   // liste), donc c'est le seul garde-fou contre le pointage pour un
-  // collègue absent (cf. conversation du 28/07/2026 avec Serge).
+  // collègue absent (cf. conversation du 28/07/2026 avec Serge). Photo
+  // prise directement en basse résolution (CaptureSelfie), cf. PointageScan.
   function demanderSelfie(employeId) {
     setErreur("");
     employeAValiderRef.current = employeId;
-    inputPhotoRef.current?.click();
+    setCaptureOuverte(true);
   }
 
-  async function valider(employeId, photo) {
+  async function valider(photo) {
+    const employeId = employeAValiderRef.current;
+    setCaptureOuverte(false);
     setEnvoi(true);
     try {
       await validerBadgeTemporaire(token, employeId, photo);
@@ -83,17 +86,6 @@ export default function PointageBadgeTemporaire() {
           <h1 style={styles.nom}>{employe.employe.nom}</h1>
           <p style={styles.ferme}>{employe.employe.role ? `${employe.employe.role} · ${employe.employe.ferme_nom}` : employe.employe.ferme_nom}</p>
 
-          <input
-            ref={inputPhotoRef} type="file" accept="image/*" capture="user" style={{ display: "none" }}
-            onChange={async (e) => {
-              const f = e.target.files?.[0]; e.target.value = "";
-              if (!f || !employeAValiderRef.current) return;
-              setEnvoi(true);
-              const photo = await comprimerImage(f);
-              valider(employeAValiderRef.current, photo);
-            }}
-          />
-
           {employe.etat === "NON_COMMENCE" && (
             <>
               <p style={styles.statut}>Journée pas encore commencée</p>
@@ -123,6 +115,7 @@ export default function PointageBadgeTemporaire() {
             </div>
           )}
         </div>
+        {captureOuverte && <CaptureSelfie onCapture={valider} onAnnuler={() => setCaptureOuverte(false)} />}
       </div>
     );
   }
