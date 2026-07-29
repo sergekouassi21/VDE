@@ -142,7 +142,10 @@ export const getInfosPointageScan = (token) => scanApi.get(`/pointage/scan/${tok
 // superviseur qui reconnaît chacun) est envoyé en multipart.
 export const validerPointageScan = (token, photo) => {
   const donnees = new FormData();
-  donnees.append("photo", photo);
+  // Un Blob recompressé (cf. utils/image.js) n'a pas de nom de fichier —
+  // on lui en donne un explicitement pour que l'upload multipart reste
+  // cohérent quel que soit le navigateur.
+  donnees.append("photo", photo, photo.name || "selfie.jpg");
   return scanApi.post(`/pointage/scan/${token}/valider/`, donnees).then((r) => r.data);
 };
 
@@ -151,7 +154,7 @@ export const getEmployesBadgeTemporaire = (token, params) =>
   scanApi.get(`/pointage/badge-temporaire/${token}/employes/`, { params }).then((r) => r.data);
 export const validerBadgeTemporaire = (token, employeId, photo) => {
   const donnees = new FormData();
-  donnees.append("photo", photo);
+  donnees.append("photo", photo, photo.name || "selfie.jpg");
   return scanApi.post(`/pointage/badge-temporaire/${token}/employes/${employeId}/valider/`, donnees).then((r) => r.data);
 };
 

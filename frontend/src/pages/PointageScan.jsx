@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { Clock, CheckCircle2, LogIn, LogOut, Camera } from "lucide-react";
 import { getInfosPointageScan, validerPointageScan } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, CLAY } from "../theme";
+import { comprimerImage } from "../utils/image";
 
 const heure = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
@@ -71,7 +72,13 @@ export default function PointageScan() {
 
         <input
           ref={inputPhotoRef} type="file" accept="image/*" capture="user" style={{ display: "none" }}
-          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) valider(f); }}
+          onChange={async (e) => {
+            const f = e.target.files?.[0]; e.target.value = "";
+            if (!f) return;
+            setEnvoi(true);
+            const photo = await comprimerImage(f);
+            valider(photo);
+          }}
         />
 
         {etat.etat === "NON_COMMENCE" && (
