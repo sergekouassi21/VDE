@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Plus, Trash2, Pencil, Check, X, Receipt, CreditCard, Wallet, ChevronRight, AlertTriangle, Download, Share2, WifiOff } from "lucide-react";
-import { getFermes, getClients, getFactures, getVentes, creerFacture, encaisserVersement, updateSortieOeuf, deleteSortieOeuf, getHistoriquePrixClient } from "../api/client";
+import {
+  getFermes, getClients, getFactures, getFacturesCreances, getVentes, getVentesResume,
+  creerFacture, encaisserVersement, updateSortieOeuf, deleteSortieOeuf, getHistoriquePrixClient,
+} from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY, formatCartons } from "../theme";
 import { genererPdfFacture, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { mettreEnCache, lireCache } from "../offline/cache";
@@ -41,15 +44,26 @@ export default function Ventes() {
   const [clients, setClients] = useState([]);
   const [factures, setFactures] = useState([]);
   const [ventesManuelles, setVentesManuelles] = useState([]);
+  const [creances, setCreances] = useState([]);
+  const [resume, setResume] = useState(null);
   const [chargement, setChargement] = useState(true);
   const [horsLigneDepuis, setHorsLigneDepuis] = useState(null);
 
   const rafraichir = useCallback(() => {
-    Promise.all([getFermes(), getClients(), getFactures(), getVentes({ origine: "SAISIE" })])
-      .then(([f, c, fa, vm]) => {
-        setFermes(f); setClients(c); setFactures(fa); setVentesManuelles(vm); setChargement(false);
+    // Les totaux (créances, œufs restant à facturer) sont désormais calculés
+    // côté serveur (getFacturesCreances/getVentesResume) plutôt que sommés
+    // ici à partir de tout l'historique des factures/ventes — cf. audit du
+    // 30/07/2026. factures/ventesManuelles ne servent plus qu'à l'affichage
+    // de l'onglet Historique.
+    Promise.all([
+      getFermes(), getClients(), getFactures(), getVentes({ origine: "SAISIE" }),
+      getFacturesCreances(), getVentesResume(),
+    ])
+      .then(([f, c, fa, vm, cr, res]) => {
+        setFermes(f); setClients(c); setFactures(fa); setVentesManuelles(vm);
+        setCreances(cr); setResume(res); setChargement(false);
         setHorsLigneDepuis(null);
-        mettreEnCache(CACHE_CLE_VENTES, { fermes: f, clients: c, factures: fa, ventesManuelles: vm });
+        mettreEnCache(CACHE_CLE_VENTES, { fermes: f, clients: c, factures: fa, ventesManuelles: vm, creances: cr, resume: res });
       })
       .catch(async () => {
         // Consultation seule hors-ligne (créances/historique déjà chargés) —
@@ -59,6 +73,7 @@ export default function Ventes() {
         if (cache?.donnees) {
           setFermes(cache.donnees.fermes); setClients(cache.donnees.clients);
           setFactures(cache.donnees.factures); setVentesManuelles(cache.donnees.ventesManuelles);
+          setCreances(cache.donnees.creances || []); setResume(cache.donnees.resume || null);
         }
         setHorsLigneDepuis(cache?.sauvegardeLe || Date.now());
         setChargement(false);
@@ -74,12 +89,7 @@ export default function Ventes() {
   }, [rafraichir]);
 
   const fermesActives = fermes.filter((f) => !f.est_vide);
-  const totalOeufsManuel = ventesManuelles.reduce((s, v) => s + v.quantite, 0);
-  const totalOeufsFacture = factures.reduce((s, f) => s + f.lignes.reduce((s2, l) => {
-    const p = CATALOGUE_MAP[l.type_produit];
-    return s2 + (p.oeufsParUnite ? Number(l.quantite) * p.oeufsParUnite : 0);
-  }, 0), 0);
-  const totalVentesOeufs = totalOeufsManuel - totalOeufsFacture;
+  const totalVentesOeufs = resume?.oeufs_restant_a_facturer ?? 0;
 
   return (
     <div style={styles.page}>
@@ -116,7 +126,7 @@ export default function Ventes() {
         ) : onglet === "facture" ? (
           <NouvelleFacture fermes={fermesActives} clients={clients} onCreee={rafraichir} totalVentesOeufs={totalVentesOeufs} />
         ) : onglet === "creances" ? (
-          <Creances factures={factures} onEncaisse={rafraichir} />
+          <Creances creances={creances} onEncaisse={rafraichir} />
         ) : (
           <Historique factures={factures} ventesManuelles={ventesManuelles} onRafraichir={rafraichir} />
         )}
@@ -383,13 +393,13 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
   );
 }
 
-function Creances({ factures, onEncaisse }) {
+function Creances({ creances, onEncaisse }) {
   const [ouverte, setOuverte] = useState(null);
   const [montant, setMontant] = useState("");
   const [envoi, setEnvoi] = useState(false);
 
-  const creances = factures.filter((f) => Number(f.reste_du) > 0)
-    .sort((a, b) => joursDepuis(b.date) - joursDepuis(a.date));
+  // creances arrive déjà filtrée (reste_du > 0) et triée par date depuis le
+  // serveur (getFacturesCreances) — cf. audit du 30/07/2026.
   const total = creances.reduce((s, f) => s + Number(f.reste_du), 0);
   const nbEnRetard = creances.filter((f) => joursDepuis(f.date) > JOURS_CREANCE_RETARD).length;
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, Fragment } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import { Egg, TrendingUp, AlertTriangle, AlertCircle, Skull, Package, ChevronRight, Activity, Wheat, Droplet } from "lucide-react";
-import { getDashboard, getEmployes, getAbsences, getEvenementsSante, getFactures, getPointages, getRentabilite, getRapportMensuel } from "../api/client";
+import { getDashboard, getEmployes, getAbsences, getEvenementsSante, getFacturesCreances, getPointages, getRentabilite, getRapportMensuel } from "../api/client";
 import { GREEN, GREEN_DARK, INK, formatSacs, formatColis, AGE_REFORME_SEMAINES, KG_PAR_SAC } from "../theme";
 import { calculerAlertes, signatureAlertes, JOURS_CREANCE_RETARD, joursDepuis } from "../alertes";
 import { estDirectionOuAdmin as estDirectionOuAdminRole } from "../utils/auth";
@@ -49,10 +49,13 @@ export default function Dashboard() {
         if (annule) return;
         setEmployesSansSalaire(emps.filter((e) => e.actif && Number(e.salaire_mensuel) === 0));
       });
-      getFactures().then((factures) => {
+      // getFacturesCreances ne renvoie que les factures avec un solde restant
+      // (calculé côté serveur) plutôt que tout l'historique des factures —
+      // cf. audit du 30/07/2026.
+      getFacturesCreances().then((creances) => {
         if (annule) return;
-        setCreancesEnRetard(factures.filter((f) => Number(f.reste_du) > 0 && joursDepuis(f.date) > JOURS_CREANCE_RETARD));
-        setCreancesTotal(factures.reduce((s, f) => s + Number(f.reste_du || 0), 0));
+        setCreancesEnRetard(creances.filter((f) => joursDepuis(f.date) > JOURS_CREANCE_RETARD));
+        setCreancesTotal(creances.reduce((s, f) => s + Number(f.reste_du || 0), 0));
       });
       // Le badge de secours n'a aucun jeton personnel à vérifier — signaler
       // son usage récent (48 h) permet à la Direction de le remarquer sans
