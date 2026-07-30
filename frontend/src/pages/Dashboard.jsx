@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, Fragment } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import { Egg, TrendingUp, AlertTriangle, Skull, Package, ChevronRight, Activity, Wheat, Droplet } from "lucide-react";
-import { getDashboard, getEmployes, getAbsences, getEvenementsSante, getFactures, getPointages } from "../api/client";
+import { getDashboard, getEmployes, getAbsences, getEvenementsSante, getFactures, getPointages, getRentabilite, getRapportMensuel } from "../api/client";
 import { GREEN, GREEN_DARK, INK, formatSacs, formatColis, AGE_REFORME_SEMAINES, KG_PAR_SAC } from "../theme";
 import { calculerAlertes, signatureAlertes, JOURS_CREANCE_RETARD, joursDepuis } from "../alertes";
 
@@ -17,7 +17,10 @@ export default function Dashboard() {
   const [employesSansSalaire, setEmployesSansSalaire] = useState([]);
   const [evenementsSanteEnRetard, setEvenementsSanteEnRetard] = useState([]);
   const [creancesEnRetard, setCreancesEnRetard] = useState([]);
+  const [creancesTotal, setCreancesTotal] = useState(0);
   const [pointagesSecoursRecents, setPointagesSecoursRecents] = useState([]);
+  const [rentabilite, setRentabilite] = useState(null);
+  const [rapportMoisPrecedent, setRapportMoisPrecedent] = useState(null);
   const [sel, setSel] = useState(null);
   const [chargement, setChargement] = useState(true);
 
@@ -33,9 +36,10 @@ export default function Dashboard() {
     if (estDirectionOuAdmin) {
       getAbsences({ statut: "EN_ATTENTE" }).then(setAbsencesEnAttente);
       getEmployes().then((emps) => setEmployesSansSalaire(emps.filter((e) => e.actif && Number(e.salaire_mensuel) === 0)));
-      getFactures().then((factures) => setCreancesEnRetard(
-        factures.filter((f) => Number(f.reste_du) > 0 && joursDepuis(f.date) > JOURS_CREANCE_RETARD)
-      ));
+      getFactures().then((factures) => {
+        setCreancesEnRetard(factures.filter((f) => Number(f.reste_du) > 0 && joursDepuis(f.date) > JOURS_CREANCE_RETARD));
+        setCreancesTotal(factures.reduce((s, f) => s + Number(f.reste_du || 0), 0));
+      });
       // Le badge de secours n'a aucun jeton personnel à vérifier — signaler
       // son usage récent (48 h) permet à la Direction de le remarquer sans
       // avoir à parcourir tout l'historique des pointages (cf. conversation
@@ -44,6 +48,14 @@ export default function Dashboard() {
       getPointages({ date_debut: depuis }).then((pts) => setPointagesSecoursRecents(
         pts.filter((p) => p.arrivee_via_secours || p.depart_via_secours)
       ));
+      // Aperçu financier + tendances — réservé à la Direction/Admin (cf.
+      // conversation du 30/07/2026 : "ajoute les 3 mais ça doit être visible
+      // que par l'administration/direction").
+      getRentabilite().then(setRentabilite);
+      const premierJourMoisPrecedent = new Date();
+      premierJourMoisPrecedent.setDate(1);
+      premierJourMoisPrecedent.setMonth(premierJourMoisPrecedent.getMonth() - 1);
+      getRapportMensuel({ mois: premierJourMoisPrecedent.toISOString().slice(0, 10) }).then(setRapportMoisPrecedent);
     }
   }, []);
 
@@ -166,6 +178,13 @@ export default function Dashboard() {
     date: new Date(e.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
     morts: e.morts,
   }));
+  const dataPoidsChair = actives
+    .filter((f) => f.type === "CHAIR" && f.dernier_point?.poids_moyen_grammes != null)
+    .map((f) => ({
+      nom: f.nom.replace("Ayénou", "Ay."),
+      reel: Math.round(Number(f.dernier_point.poids_moyen_grammes)),
+      cible: f.dernier_point.poids_cible_grammes != null ? Math.round(Number(f.dernier_point.poids_cible_grammes)) : null,
+    }));
 
   if (chargement) return <div style={styles.page}><p style={{ padding: 20 }}>Chargement...</p></div>;
 
@@ -297,6 +316,48 @@ export default function Dashboard() {
             );
           })}
         </div>
+
+        {estDirectionOuAdmin && rentabilite && (
+          <div style={styles.directionRow}>
+            <Card titre="Aperçu financier — ce mois">
+              <div style={styles.finGrid}>
+                <FinItem label="Revenus" value={`${nf(Math.round(rentabilite.total.revenus))} FCFA`} />
+                <FinItem label="Coût aliment" value={`${nf(Math.round(rentabilite.total.cout_aliment))} FCFA`} />
+                <FinItem label="Coût paie" value={`${nf(Math.round(rentabilite.total.cout_paie))} FCFA`} />
+                <FinItem label="Marge" value={`${nf(Math.round(rentabilite.total.marge))} FCFA`} accent={rentabilite.total.marge >= 0 ? GREEN_DARK : "#9E4527"} />
+                <FinItem label="Créances totales" value={`${nf(Math.round(creancesTotal))} FCFA`} accent={creancesTotal > 0 ? "#9E4527" : undefined} />
+              </div>
+            </Card>
+
+            <Card titre="Tendance vs mois précédent">
+              {!rapportMoisPrecedent ? (
+                <p style={styles.noAlert}>Pas de données le mois précédent</p>
+              ) : (
+                <div style={styles.tendanceGrid}>
+                  <TendanceItem label="Marge" actuel={rentabilite.total.marge} precedent={rapportMoisPrecedent.total.marge} unite="FCFA" />
+                  <TendanceItem label="Mortalité totale" actuel={kpi.mortsMois} precedent={rapportMoisPrecedent.total.total_morts} unite="sujets" inverse />
+                  <TendanceItem label="Production totale" actuel={kpi.prodMois} precedent={rapportMoisPrecedent.total.total_production_oeufs} unite="œufs" />
+                </div>
+              )}
+            </Card>
+
+            {dataPoidsChair.length > 0 && (
+              <Card titre="Poids vif — réel vs cible (fermes chair)">
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={dataPoidsChair} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#EEEBE2" vertical={false} />
+                    <XAxis dataKey="nom" tickLine={false} axisLine={false} />
+                    <YAxis tickLine={false} axisLine={false} />
+                    <Tooltip cursor={{ fill: "#F4F1EA" }} contentStyle={tooltipStyle} formatter={(v, n) => [`${v} g`, n === "reel" ? "Réel" : "Cible"]} />
+                    <Bar dataKey="reel" name="reel" radius={[6, 6, 0, 0]} fill={GREEN} />
+                    <Bar dataKey="cible" name="cible" radius={[6, 6, 0, 0]} fill="#C6A15B" />
+                  </BarChart>
+                </ResponsiveContainer>
+                <p style={styles.legend}><span style={{ color: GREEN, fontWeight: 600 }}>● Réel</span> &nbsp; <span style={{ color: "#C6A15B", fontWeight: 600 }}>● Cible</span></p>
+              </Card>
+            )}
+          </div>
+        )}
 
         <div style={styles.grid}>
           <div style={styles.col}>
@@ -468,6 +529,34 @@ function DetailItem({ label, value }) {
     </div>
   );
 }
+function FinItem({ label, value, accent }) {
+  return (
+    <div style={styles.finItem}>
+      <span style={styles.kpiFermeLabel}>{label}</span>
+      <span style={{ ...styles.finValeur, ...(accent ? { color: accent } : {}) }}>{value}</span>
+    </div>
+  );
+}
+// "inverse" pour les indicateurs où une baisse est une bonne nouvelle
+// (la mortalité, par ex.) — la couleur du delta suit le sens réellement
+// favorable pour l'élevage, pas juste le signe de la variation.
+function TendanceItem({ label, actuel, precedent, unite, inverse }) {
+  const delta = actuel - precedent;
+  const pct = precedent ? (delta / Math.abs(precedent)) * 100 : null;
+  const hausse = delta > 0;
+  const favorable = delta === 0 ? null : inverse ? !hausse : hausse;
+  const couleur = favorable === null ? "#8A948D" : favorable ? GREEN_DARK : "#9E4527";
+  const fleche = delta === 0 ? "→" : hausse ? "↑" : "↓";
+  return (
+    <div style={styles.tendanceItem}>
+      <span style={styles.kpiFermeLabel}>{label}</span>
+      <span style={styles.finValeur}>{nf(Math.round(actuel))} {unite}</span>
+      <span style={{ ...styles.tendanceDelta, color: couleur }}>
+        {fleche} {nf(Math.round(Math.abs(delta)))} {unite}{pct !== null && ` (${pct >= 0 ? "+" : ""}${pct.toFixed(0)} %)`} vs mois précédent
+      </span>
+    </div>
+  );
+}
 
 const tooltipStyle = { background: "#fff", border: "1px solid #ECE9DF", borderRadius: 10, fontSize: 12, boxShadow: "0 6px 20px rgba(0,0,0,.1)" };
 const styles = {
@@ -496,6 +585,13 @@ const styles = {
   kpiFermeLabel: { fontSize: 10, color: "#8A948D", textTransform: "uppercase", letterSpacing: .3 },
   kpiFermeValeur: { fontSize: 15, fontWeight: 700, color: INK },
   kpiFermeMois: { fontSize: 9.5, color: "#8A948D" },
+  directionRow: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, marginBottom: 16 },
+  finGrid: { display: "flex", flexWrap: "wrap", gap: "10px 20px" },
+  finItem: { display: "flex", flexDirection: "column", gap: 3, minWidth: 100 },
+  finValeur: { fontSize: 16, fontWeight: 700, color: INK },
+  tendanceGrid: { display: "flex", flexDirection: "column", gap: 12 },
+  tendanceItem: { display: "flex", flexDirection: "column", gap: 3 },
+  tendanceDelta: { fontSize: 11.5, fontWeight: 500 },
   grid: { display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 16 },
   col: { display: "flex", flexDirection: "column", gap: 16 },
   card: { background: "#fff", borderRadius: 16, padding: "16px 18px", border: "1px solid #ECE9DF" },
