@@ -1,4 +1,5 @@
 import uuid
+from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -268,6 +269,16 @@ class AppareilPointage(models.Model):
 
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     cree_le = models.DateTimeField(auto_now_add=True)
+    # Un jeton volé/perdu restait valide indéfiniment jusqu'à régénération
+    # manuelle par la Direction — une validité bornée dans le temps limite
+    # les dégâts d'un vol non remarqué. derniere_utilisation permet à la
+    # Direction de repérer un appareil resté inactif (perdu ?) avant même
+    # l'expiration.
+    VALIDITE_JOURS = 180
+    derniere_utilisation = models.DateTimeField(null=True, blank=True)
+
+    def est_expire(self):
+        return timezone.now() > self.cree_le + timedelta(days=self.VALIDITE_JOURS)
 
     def __str__(self):
         return f"Appareil de pointage ({self.token})"

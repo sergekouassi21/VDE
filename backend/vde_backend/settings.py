@@ -15,6 +15,12 @@ from pathlib import Path
 
 import dj_database_url
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -22,14 +28,26 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-57h-_$rna68qo^)n2!gwe&x2#ut3gtptz@g+kiv6vy1s_*wsdj',
-)
+# SECURITY WARNING: don't run with debug turned on in production! Le défaut
+# est False (contrairement au défaut historique Django) : un déploiement où
+# la variable d'env est oubliée doit tomber en mode strict plutôt qu'exposer
+# les stack traces/requêtes SQL à n'importe quel visiteur.
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
+# SECURITY WARNING: keep the secret key used in production secret! En debug
+# local, une valeur par défaut est tolérée pour ne pas bloquer le
+# développement sans .env. En production (DEBUG=False), la variable d'env
+# DJANGO_SECRET_KEY est obligatoire — on échoue au démarrage plutôt que de
+# tourner silencieusement avec une clé connue de tous (committée dans git).
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-57h-_$rna68qo^)n2!gwe&x2#ut3gtptz@g+kiv6vy1s_*wsdj'
+    else:
+        raise RuntimeError(
+            "DJANGO_SECRET_KEY doit être définie en production (DEBUG=False). "
+            "Génère-en une et ajoute-la aux variables d'environnement de Render."
+        )
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',') if h.strip()]
 if DEBUG:
@@ -168,6 +186,15 @@ CORS_ALLOWED_ORIGINS = [
 
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()]
 
+# Render (comme la plupart des PaaS) termine le TLS sur son proxy et transmet
+# la requête en HTTP en interne — sans ce header, Django croit que toutes les
+# requêtes sont en clair et ne peut pas savoir qu'il doit exiger le flag
+# Secure sur les cookies de session/CSRF (utilisés par /admin/).
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
 # Base publique du frontend, utilisée pour générer l'URL encodée dans les QR
 # codes de pointage (le backend n'a sinon aucun moyen de connaître l'adresse
 # du frontend Netlify).
@@ -201,4 +228,13 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    # Limite le bruteforce sur le login/2FA (cf. exploitation/deux_facteurs.py) :
+    # sans ça, rien n'empêchait un script de tenter des mots de passe ou des
+    # codes TOTP à 6 chiffres en boucle.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'connexion': '10/min',
+    },
 }

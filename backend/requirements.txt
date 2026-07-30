@@ -7,6 +7,7 @@ Django==6.0.7
 django-cloudinary-storage==0.3.0
 django-cors-headers==4.9.0
 djangorestframework==3.17.1
+python-dotenv==1.1.1
 gunicorn==26.0.0
 idna==3.18
 packaging==26.2

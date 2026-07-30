@@ -1,7 +1,7 @@
 import calendar
 import os
 import uuid
-from datetime import date as date_cls
+from datetime import date as date_cls, timedelta
 from decimal import Decimal
 from io import BytesIO
 
@@ -15,12 +15,12 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 
 from exploitation.audit import AuditMixin, journaliser, journaliser_objet
 from exploitation.calculs import prix_moyen_sac_aliment
 from exploitation.models import ActionAudit, Ferme, LigneFacture, PointJournalier, RoleUtilisateur
+from exploitation.permissions import EstDirectionOuAdmin
 
 from .models import (
     Absence, AppareilPointage, BadgeAbsence, BadgeTemporaire, DocumentEmploye, Employe, LignePaie, Pointage,
@@ -68,20 +68,6 @@ def _composer_badge(url, texte):
     buffer = BytesIO()
     badge.save(buffer, format="PNG")
     return buffer.getvalue()
-
-
-class EstDirectionOuAdmin(BasePermission):
-    """Seule la direction/l'administration gère les employés, les taux
-    horaires et consulte l'historique des pointages (même règle que pour
-    les Ventes) — les écrans de scan, eux, sont publics (cf. scan_info/
-    scan_valider), l'employé n'ayant pas de compte utilisateur."""
-
-    def has_permission(self, request, view):
-        user = request.user
-        if not (user and user.is_authenticated):
-            return False
-        profil = getattr(user, "profil", None)
-        return not profil or profil.role in (RoleUtilisateur.DIRECTION, RoleUtilisateur.ADMIN)
 
 
 class EmployeViewSet(AuditMixin, viewsets.ModelViewSet):
@@ -338,13 +324,21 @@ class LignePaieViewSet(AuditMixin, viewsets.ModelViewSet):
 def _appareil_autorise(request):
     """True si aucun AppareilPointage n'est encore configuré (transition en
     douceur), ou si le jeton présenté dans l'en-tête X-Appareil-Token
-    correspond à celui du téléphone unique autorisé (cf. conversation du
-    28/07/2026 avec Serge : empêcher qu'un autre téléphone valide un
-    pointage à partir d'un QR d'employé photographié/partagé)."""
+    correspond à celui du téléphone unique autorisé et que ce jeton n'a pas
+    expiré (cf. conversation du 28/07/2026 avec Serge : empêcher qu'un autre
+    téléphone valide un pointage à partir d'un QR d'employé photographié/
+    partagé — et limiter la fenêtre d'exploitation d'un téléphone volé non
+    remarqué)."""
     appareil = AppareilPointage.objects.first()
     if not appareil:
         return True
-    return request.headers.get("X-Appareil-Token") == str(appareil.token)
+    if appareil.est_expire():
+        return False
+    autorise = request.headers.get("X-Appareil-Token") == str(appareil.token)
+    if autorise:
+        appareil.derniere_utilisation = timezone.now()
+        appareil.save(update_fields=["derniere_utilisation"])
+    return autorise
 
 
 def _etat_pointage(request, employe):
@@ -396,6 +390,30 @@ def utilisateurs_disponibles(request):
     return Response(resultats)
 
 
+# Bornes du selfie anti-fraude accepté aux endpoints publics de pointage —
+# sans ça, un appel direct à l'API (hors app) pouvait poster n'importe quel
+# fichier (vidéo volumineuse, binaire renommé) sans aucune vérification,
+# ces vues n'exigeant ni compte utilisateur ni permission DRF.
+TAILLE_MAX_SELFIE_OCTETS = 8 * 1024 * 1024
+
+
+def _erreur_photo_invalide(photo):
+    """Renvoie un message d'erreur si `photo` n'est pas exploitable comme
+    selfie, sinon None. Vérifie la taille puis que le contenu est une
+    image décodable (pas seulement l'extension/le content-type déclarés,
+    facilement falsifiables)."""
+    if photo.size > TAILLE_MAX_SELFIE_OCTETS:
+        return "Photo trop volumineuse (8 Mo maximum)."
+    try:
+        image = Image.open(photo)
+        image.verify()
+    except Exception:
+        return "Fichier image invalide."
+    finally:
+        photo.seek(0)
+    return None
+
+
 @api_view(["GET"])
 @permission_classes([])
 def scan_info(request, token):
@@ -424,6 +442,9 @@ def scan_valider(request, token):
     photo = request.FILES.get("photo")
     if not photo:
         return Response({"detail": "Une photo est requise pour valider le pointage."}, status=status.HTTP_400_BAD_REQUEST)
+    erreur = _erreur_photo_invalide(photo)
+    if erreur:
+        return Response({"detail": erreur}, status=status.HTTP_400_BAD_REQUEST)
     employe = get_object_or_404(Employe, qr_token=token, actif=True)
     aujourdhui = timezone.localdate()
     pointage, _ = Pointage.objects.get_or_create(employe=employe, date=aujourdhui)
@@ -479,7 +500,15 @@ def appareil_pointage_statut(request):
     juste le QR (cf. conversation du 28/07/2026 avec Serge : le téléphone
     désigné n'était pas encore disponible pour scanner le QR, ce qui
     bloquait tous les pointages dès que la protection était activée)."""
-    return Response({"actif": AppareilPointage.objects.exists()})
+    appareil = AppareilPointage.objects.first()
+    if not appareil:
+        return Response({"actif": False})
+    return Response({
+        "actif": True,
+        "expire": appareil.est_expire(),
+        "derniere_utilisation": appareil.derniere_utilisation,
+        "expire_le": appareil.cree_le + timedelta(days=AppareilPointage.VALIDITE_JOURS),
+    })
 
 
 @api_view(["POST"])
@@ -534,6 +563,9 @@ def badge_temporaire_valider(request, token, employe_id):
     photo = request.FILES.get("photo")
     if not photo:
         return Response({"detail": "Une photo est requise pour valider le pointage."}, status=status.HTTP_400_BAD_REQUEST)
+    erreur = _erreur_photo_invalide(photo)
+    if erreur:
+        return Response({"detail": erreur}, status=status.HTTP_400_BAD_REQUEST)
     get_object_or_404(BadgeTemporaire, token=token)
     employe = get_object_or_404(Employe, id=employe_id, actif=True)
     aujourdhui = timezone.localdate()
