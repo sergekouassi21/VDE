@@ -16,11 +16,15 @@ export default function Login() {
     try {
       const moi = await getMoi();
       localStorage.setItem("vde_role", moi.role || "");
+      localStorage.setItem("vde_role_display", moi.role_display || "");
       localStorage.setItem("vde_nom", moi.nom_complet || "");
+      localStorage.setItem("vde_telephone", moi.telephone || "");
       localStorage.setItem("vde_photo", moi.photo || "");
     } catch {
       localStorage.setItem("vde_role", "");
+      localStorage.setItem("vde_role_display", "");
       localStorage.setItem("vde_nom", "");
+      localStorage.setItem("vde_telephone", "");
       localStorage.setItem("vde_photo", "");
     }
     navigate("/");

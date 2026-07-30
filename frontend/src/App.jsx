@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp, Wheat, Syringe, Search, ScrollText, Lock } from "lucide-react";
+import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp, Wheat, Syringe, Search, ScrollText, Lock, Phone } from "lucide-react";
 import Login from "./pages/Login";
 import PointJournalier from "./pages/PointJournalier";
 import Dashboard from "./pages/Dashboard";
@@ -164,6 +164,78 @@ function GlobalSearch() {
   );
 }
 
+function initiales(nomComplet) {
+  const mots = (nomComplet || "").trim().split(/\s+/).filter(Boolean);
+  if (mots.length === 0) return "?";
+  return (mots[0][0] + (mots[1]?.[0] || "")).toUpperCase();
+}
+
+// Profil de l'utilisateur connecté, visible sur chaque page (rendu dans
+// NavBar, partagée par tout l'appli via Layout) — lu depuis les infos
+// stockées à la connexion (Login.jsx), pas un nouvel appel réseau à chaque
+// page, pour rester disponible même hors-ligne (cf. conversation du
+// 30/07/2026 avec Serge : "on ne voit aucune info" sur qui est connecté).
+function ProfilMenu() {
+  const [ouvert, setOuvert] = useState(false);
+  const wrapRef = useRef(null);
+  const nom = localStorage.getItem("vde_nom") || "";
+  const roleAffiche = localStorage.getItem("vde_role_display") || "";
+  const telephone = localStorage.getItem("vde_telephone") || "";
+  const photo = localStorage.getItem("vde_photo") || "";
+
+  useEffect(() => {
+    function surClicExterieur(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOuvert(false);
+    }
+    document.addEventListener("mousedown", surClicExterieur);
+    return () => document.removeEventListener("mousedown", surClicExterieur);
+  }, []);
+
+  if (!nom) return null;
+
+  return (
+    <div ref={wrapRef} style={profilStyles.wrap}>
+      <button style={profilStyles.btn} onClick={() => setOuvert((o) => !o)} aria-label="Profil">
+        {photo ? <img src={photo} alt="" style={profilStyles.avatar} /> : <span style={profilStyles.avatarVide}>{initiales(nom)}</span>}
+      </button>
+      {ouvert && (
+        <div style={profilStyles.panel}>
+          {photo ? <img src={photo} alt="" style={profilStyles.avatarGrand} /> : <span style={profilStyles.avatarGrandVide}>{initiales(nom)}</span>}
+          <p style={profilStyles.nom}>{nom}</p>
+          {roleAffiche && <span style={profilStyles.role}>{roleAffiche}</span>}
+          {telephone && <p style={profilStyles.telephone}><Phone size={13} /> {telephone}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const profilStyles = {
+  wrap: { position: "relative" },
+  btn: { background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" },
+  avatar: { width: 30, height: 30, borderRadius: "50%", objectFit: "cover", border: "1.5px solid rgba(255,255,255,.5)" },
+  avatarVide: {
+    width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,.18)", border: "1.5px solid rgba(255,255,255,.5)",
+    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff",
+  },
+  panel: {
+    position: "fixed", top: NAV_HEIGHT + 8, right: 12, width: 220,
+    background: "#fff", borderRadius: 14, boxShadow: "0 16px 44px rgba(0,0,0,.28)", padding: "18px 16px", zIndex: 200,
+    fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 4,
+  },
+  avatarGrand: { width: 56, height: 56, borderRadius: "50%", objectFit: "cover", marginBottom: 4 },
+  avatarGrandVide: {
+    width: 56, height: 56, borderRadius: "50%", background: "#EAF3EE", color: GREEN_DARK,
+    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, marginBottom: 4,
+  },
+  nom: { fontSize: 14.5, fontWeight: 700, color: "#1A2420", margin: 0 },
+  role: {
+    fontSize: 10.5, fontWeight: 600, color: GREEN_DARK, background: "#EAF3EE", borderRadius: 6,
+    padding: "2px 8px", textTransform: "uppercase", letterSpacing: .4,
+  },
+  telephone: { display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, color: "#6B756E", margin: "6px 0 0" },
+};
+
 function ResultGroup({ titre, children }) {
   return (
     <div style={searchStyles.group}>
@@ -244,7 +316,10 @@ function NavBar() {
     <nav className="nav-bar" style={navStyles.nav}>
       <div className="nav-top">
         <img src="/logo.png" alt="Volailles de l'Est" style={navStyles.brand} />
-        <GlobalSearch />
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <GlobalSearch />
+          <ProfilMenu />
+        </div>
         <button className="nav-hamburger" style={navStyles.hamburger} onClick={() => setOuvert((o) => !o)} aria-label="Menu">
           {ouvert ? <X size={22} /> : <Menu size={22} />}
         </button>
