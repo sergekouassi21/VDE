@@ -218,7 +218,38 @@ else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 DEFAULT_FROM_EMAIL = os.environ.get('DJANGO_DEFAULT_FROM_EMAIL', 'alertes@volailles-de-lest.local')
+# Django utilise SERVER_EMAIL (pas DEFAULT_FROM_EMAIL) comme expéditeur des
+# emails d'erreur — sans ça, l'expéditeur par défaut est root@localhost, que
+# Brevo refuse (adresse non vérifiée).
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
 ALERTES_EMAILS_DESTINATAIRES = [e.strip() for e in os.environ.get('DJANGO_ALERTES_EMAILS', '').split(',') if e.strip()]
+
+# Suivi d'erreurs en production, sans dépendre d'un service tiers (Sentry
+# alourdirait le bundle frontend, à contre-courant du travail de
+# code-splitting fait pour les zones à réseau faible) : réutilise l'email déjà
+# configuré (Brevo). Une exception serveur non gérée (ADMINS + LOGGING
+# Django par défaut) ET une erreur JS non interceptée côté client (logguée
+# via /api/erreurs-frontend/, cf. exploitation.views.signaler_erreur_frontend)
+# déclenchent toutes les deux un email à ADMINS — cf. conversation du
+# 30/07/2026 avec Serge : "aucun suivi d'erreurs en production".
+ADMINS = [(e.strip(), e.strip()) for e in os.environ.get('DJANGO_ADMINS_EMAILS', '').split(',') if e.strip()]
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'mail_admins': {
+            'level': 'ERROR',
+            'class': 'django.utils.log.AdminEmailHandler',
+        },
+    },
+    'loggers': {
+        'vde.frontend_errors': {
+            'handlers': ['mail_admins'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -236,5 +267,12 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_THROTTLE_RATES': {
         'connexion': '10/min',
+        # Endpoints publics du pointage (scan, badges de secours/absence,
+        # activation d'appareil) — aucun compte à vérifier, donc une limite
+        # par IP est le seul garde-fou contre un script qui les martèle.
+        # Généreux pour l'usage réel (un seul téléphone partagé scanne les
+        # employés un par un, plusieurs secondes par selfie).
+        'pointage_public': '60/min',
+        'erreurs_frontend': '20/min',
     },
 }

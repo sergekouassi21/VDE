@@ -14,13 +14,22 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 
 from exploitation.audit import AuditMixin, journaliser, journaliser_objet
 from exploitation.calculs import prix_moyen_sac_aliment
 from exploitation.models import ActionAudit, Ferme, LigneFacture, PointJournalier, RoleUtilisateur
 from exploitation.permissions import EstDirectionOuAdmin
+
+
+class ThrottlePointagePublic(ScopedRateThrottle):
+    """Applique la limite par IP aux endpoints publics du pointage (aucun
+    compte à vérifier) — cf. audit du 30/07/2026 : rien n'empêchait un
+    script de les marteler."""
+
+    scope = "pointage_public"
 
 from .models import (
     Absence, AppareilPointage, BadgeAbsence, BadgeTemporaire, DocumentEmploye, Employe, LignePaie, Pointage,
@@ -416,6 +425,7 @@ def _erreur_photo_invalide(photo):
 
 @api_view(["GET"])
 @permission_classes([])
+@throttle_classes([ThrottlePointagePublic])
 def scan_info(request, token):
     """Public — l'employé n'a pas de compte. Le token du QR (non-devinable)
     joue le rôle d'identifiant/autorisation."""
@@ -425,6 +435,7 @@ def scan_info(request, token):
 
 @api_view(["POST"])
 @permission_classes([])
+@throttle_classes([ThrottlePointagePublic])
 def scan_valider(request, token):
     """Premier scan du jour = heure de début, second = heure de fin (avec
     calcul heures/montant). Un scan supplémentaire une fois la journée
@@ -483,6 +494,7 @@ def appareil_pointage_regenerer(request):
 
 @api_view(["GET"])
 @permission_classes([])
+@throttle_classes([ThrottlePointagePublic])
 def appareil_pointage_verifier(request, token):
     """Public — la page d'activation appelle ceci avant d'enregistrer le
     jeton dans le navigateur du téléphone, pour ne pas stocker un jeton
@@ -538,6 +550,7 @@ def badge_temporaire_qr(request):
 
 @api_view(["GET"])
 @permission_classes([])
+@throttle_classes([ThrottlePointagePublic])
 def badge_temporaire_employes(request, token):
     """Public — sert de repli pour un employé qui a oublié/perdu son badge.
     Liste tous les employés actifs avec leur état du jour, pour que le
@@ -552,6 +565,7 @@ def badge_temporaire_employes(request, token):
 
 @api_view(["POST"])
 @permission_classes([])
+@throttle_classes([ThrottlePointagePublic])
 def badge_temporaire_valider(request, token, employe_id):
     """Valide l'arrivée/le départ de l'employé choisi manuellement sur
     l'écran du badge temporaire — même logique idempotente, même selfie
@@ -589,6 +603,7 @@ def badge_absence_qr(request):
 
 @api_view(["GET"])
 @permission_classes([])
+@throttle_classes([ThrottlePointagePublic])
 def badge_absence_employes(request, token):
     """Public — liste des employés actifs pour que le superviseur choisisse
     qui est absent avant de saisir le motif."""
@@ -605,6 +620,7 @@ def badge_absence_employes(request, token):
 
 @api_view(["POST"])
 @permission_classes([])
+@throttle_classes([ThrottlePointagePublic])
 def badge_absence_declarer(request, token):
     """Public — le superviseur signale l'absence d'un employé avec un
     motif obligatoire. Reste EN_ATTENTE jusqu'à validation par
