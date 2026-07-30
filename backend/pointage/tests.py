@@ -1,4 +1,6 @@
 import tempfile
+from datetime import date
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -7,9 +9,10 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from exploitation.models import Ferme, Magasin, ProfilUtilisateur, RoleUtilisateur, TypeFerme
 
-from .models import AppareilPointage, BadgeTemporaire, Employe, Pointage
+from .models import Absence, AppareilPointage, BadgeTemporaire, Employe, LignePaie, Pointage, StatutAbsence
 from .views import (
     EmployeViewSet,
+    _calculer_rentabilite_bruts,
     appareil_pointage_desactiver,
     appareil_pointage_qr,
     appareil_pointage_regenerer,
@@ -292,3 +295,37 @@ class OrigineSecoursPointageTests(TestCase):
         pointage = Pointage.objects.get(employe=self.employe)
         self.assertFalse(pointage.arrivee_via_secours)
         self.assertTrue(pointage.depart_via_secours)
+
+
+class RentabiliteEmployeMultiFermeTests(TestCase):
+    """_calculer_rentabilite_bruts répartit le coût d'un employé qui couvre
+    plusieurs fermes (absences validées + ajustements LignePaie) à parts
+    égales entre elles — jamais testé directement (cf. audit du 30/07/2026)."""
+
+    def setUp(self):
+        self.magasinA = Magasin.objects.create(nom="Magasin Rentab A")
+        self.magasinB = Magasin.objects.create(nom="Magasin Rentab B")
+        self.fermeA = Ferme.objects.create(nom="Ferme Rentab A", type=TypeFerme.PONTE, nombre_chambres=1, magasin=self.magasinA)
+        self.fermeB = Ferme.objects.create(nom="Ferme Rentab B", type=TypeFerme.PONTE, nombre_chambres=1, magasin=self.magasinB)
+        self.employe = Employe.objects.create(nom="Superviseur Test", salaire_mensuel=Decimal("260000"))
+        self.employe.fermes.set([self.fermeA, self.fermeB])
+        self.debut = date(2026, 7, 1)
+        self.fin = date(2026, 7, 31)
+
+    def test_absence_validee_et_ligne_paie_reparties_a_parts_egales(self):
+        Absence.objects.create(employe=self.employe, date=date(2026, 7, 15), statut=StatutAbsence.VALIDEE)
+        LignePaie.objects.create(employe=self.employe, mois=self.debut, primes=Decimal("2000"))
+
+        resultats = _calculer_rentabilite_bruts([self.fermeA, self.fermeB], self.debut, self.fin)
+
+        cout_attendu_par_ferme = (self.employe.salaire_journalier + Decimal("2000")) / 2
+        self.assertEqual(resultats[self.fermeA.id]["cout_paie"], cout_attendu_par_ferme)
+        self.assertEqual(resultats[self.fermeB.id]["cout_paie"], cout_attendu_par_ferme)
+
+    def test_absence_en_attente_n_est_pas_comptee(self):
+        Absence.objects.create(employe=self.employe, date=date(2026, 7, 15), statut=StatutAbsence.EN_ATTENTE)
+
+        resultats = _calculer_rentabilite_bruts([self.fermeA, self.fermeB], self.debut, self.fin)
+
+        self.assertEqual(resultats[self.fermeA.id]["cout_paie"], Decimal("0"))
+        self.assertEqual(resultats[self.fermeB.id]["cout_paie"], Decimal("0"))
