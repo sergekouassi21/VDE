@@ -77,10 +77,18 @@ export default function PointageBadgeTemporaire() {
     setCaptureOuverte(false);
     setEnvoi(true);
     if (!navigator.onLine) {
-      await ajouterPointageEnAttente({ type: "temporaire", token, employeId, photo });
-      await rafraichirEnAttente();
-      setEnvoyeHorsLigne(true);
-      setEnvoi(false);
+      try {
+        await ajouterPointageEnAttente({ type: "temporaire", token, employeId, photo });
+        await rafraichirEnAttente();
+        setEnvoyeHorsLigne(true);
+      } catch {
+        // Écriture IndexedDB impossible (quota dépassé, navigation privée...)
+        // — sans ce catch, le selfie disparaissait silencieusement et le
+        // bouton restait bloqué indéfiniment (cf. audit du 30/07/2026).
+        setErreur("Impossible d'enregistrer hors-ligne sur cet appareil — réessaie ou repasse en ligne.");
+      } finally {
+        setEnvoi(false);
+      }
       return;
     }
     try {
@@ -89,9 +97,13 @@ export default function PointageBadgeTemporaire() {
       charger();
     } catch (err) {
       if (!err.response) {
-        await ajouterPointageEnAttente({ type: "temporaire", token, employeId, photo });
-        await rafraichirEnAttente();
-        setEnvoyeHorsLigne(true);
+        try {
+          await ajouterPointageEnAttente({ type: "temporaire", token, employeId, photo });
+          await rafraichirEnAttente();
+          setEnvoyeHorsLigne(true);
+        } catch {
+          setErreur("Impossible d'enregistrer hors-ligne sur cet appareil — réessaie ou repasse en ligne.");
+        }
       } else {
         setErreur(err.response?.data?.detail || "Une erreur est survenue. Réessaie.");
       }

@@ -73,10 +73,18 @@ export default function PointageScan() {
     setCaptureOuverte(false);
     setEnvoi(true);
     if (!navigator.onLine) {
-      await ajouterPointageEnAttente({ type: "scan", token, photo });
-      await rafraichirEnAttente();
-      setEnvoyeHorsLigne(true);
-      setEnvoi(false);
+      try {
+        await ajouterPointageEnAttente({ type: "scan", token, photo });
+        await rafraichirEnAttente();
+        setEnvoyeHorsLigne(true);
+      } catch {
+        // Écriture IndexedDB impossible (quota dépassé, navigation privée...)
+        // — sans ce catch, le selfie disparaissait silencieusement et le
+        // bouton restait bloqué indéfiniment (cf. audit du 30/07/2026).
+        setErreur("Impossible d'enregistrer hors-ligne sur cet appareil — réessaie ou repasse en ligne.");
+      } finally {
+        setEnvoi(false);
+      }
       return;
     }
     try {
@@ -88,9 +96,13 @@ export default function PointageScan() {
       if (!err.response) {
         // Coupure réseau pendant l'envoi (pas juste au chargement) — on met
         // en file plutôt que d'afficher une erreur, comme au-dessus.
-        await ajouterPointageEnAttente({ type: "scan", token, photo });
-        await rafraichirEnAttente();
-        setEnvoyeHorsLigne(true);
+        try {
+          await ajouterPointageEnAttente({ type: "scan", token, photo });
+          await rafraichirEnAttente();
+          setEnvoyeHorsLigne(true);
+        } catch {
+          setErreur("Impossible d'enregistrer hors-ligne sur cet appareil — réessaie ou repasse en ligne.");
+        }
       } else {
         setErreur(err.response?.data?.detail || "Une erreur est survenue. Réessaie.");
       }

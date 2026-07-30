@@ -8,6 +8,7 @@ import {
 import { GREEN, GREEN_DARK, INK, CLAY, formatSacs, formatColis } from "../theme";
 import { genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { mettreEnCache, lireCache } from "../offline/cache";
+import { estDirectionOuAdmin } from "../utils/auth";
 
 const CACHE_CLE_HISTORIQUE = "historique-points";
 
@@ -22,10 +23,7 @@ const LABEL_CAUSE_MORTS = {
 const NOMS_MOIS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-function peutSupprimer() {
-  const role = localStorage.getItem("vde_role");
-  return !role || role === "DIRECTION" || role === "ADMIN";
-}
+const peutSupprimer = estDirectionOuAdmin;
 // Un chef peut librement resoumettre le jour même (rattrapage), mais
 // corriger un jour déjà passé et déjà enregistré est réservé à
 // Direction/Admin — même règle appliquée côté serveur (point 15 du
@@ -152,8 +150,19 @@ export default function Historique() {
     // pas automatiquement sur les jours déjà enregistrés après coup.
     setEnvoi(true);
     try {
-      await corrigerPointJournalier(p.id, {});
+      // version_attendue permet au serveur de détecter qu'un autre appareil
+      // a modifié ce point entretemps (cf. le même verrouillage optimiste
+      // utilisé par le formulaire de correction) — sans ça, Recalculer
+      // pouvait écraser silencieusement une modification concurrente sans
+      // jamais déclencher le message de conflit (cf. audit du 30/07/2026).
+      await corrigerPointJournalier(p.id, { version_attendue: p.updated_at });
       rafraichir();
+    } catch (err) {
+      if (err.response?.status === 409) {
+        window.alert("Ce point a été modifié par quelqu'un d'autre entretemps — rechargez la page pour voir la dernière version.");
+      } else {
+        throw err;
+      }
     } finally {
       setEnvoi(false);
     }

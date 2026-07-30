@@ -9,22 +9,17 @@ import { GREEN, GREEN_DARK, CREAM, INK, CLAY, formatSacs, formatColis, AGE_REFOR
 import { genererPdfPointJournalier, genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { ajouterSoumissionEnAttente, listerSoumissionsEnAttente } from "../offline/queue";
 import { synchroniserSoumissionsEnAttente } from "../offline/sync";
+import { estDirectionOuAdmin } from "../utils/auth";
 
 const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
 
-function peutDeclarerBande() {
-  const role = localStorage.getItem("vde_role");
-  return !role || role === "DIRECTION" || role === "ADMIN";
-}
+const peutDeclarerBande = estDirectionOuAdmin;
 // Même règle que peutDeclarerBande — corriger un jour déjà passé (pas le
 // jour même) est réservé à Direction/Admin (point 15 du backlog, cf.
 // conversation du 27/07/2026 avec Serge). Le backend applique la même
 // restriction ; ce garde-fou côté client évite juste de laisser un chef
 // remplir un formulaire pour rien.
-function peutCorrigerPasse() {
-  const role = localStorage.getItem("vde_role");
-  return !role || role === "DIRECTION" || role === "ADMIN";
-}
+const peutCorrigerPasse = estDirectionOuAdmin;
 
 const CAUSES_MORTALITE = [
   { value: "MALADIE", label: "Maladie" },
@@ -337,11 +332,20 @@ export default function PointJournalier() {
     setPointEnregistre(null);
 
     if (!navigator.onLine) {
-      await ajouterSoumissionEnAttente(ferme.id, ferme.nom, payload);
-      await rafraichirEnAttente();
-      setHorsLigneEnvoi(true);
-      setEnvoye(true);
-      setEnvoiEnCours(false);
+      try {
+        await ajouterSoumissionEnAttente(ferme.id, ferme.nom, payload);
+        await rafraichirEnAttente();
+        setHorsLigneEnvoi(true);
+        setEnvoye(true);
+      } catch {
+        // Écriture IndexedDB impossible (quota dépassé, navigation privée...)
+        // — sans ce catch, la saisie du chef disparaissait silencieusement
+        // et le bouton restait bloqué sur "Envoi..." indéfiniment (cf. audit
+        // du 30/07/2026).
+        setErreur("Impossible d'enregistrer hors-ligne sur cet appareil (stockage plein ou navigation privée) — réessayez ou repassez en ligne pour envoyer directement.");
+      } finally {
+        setEnvoiEnCours(false);
+      }
       return;
     }
 
@@ -362,10 +366,14 @@ export default function PointJournalier() {
       if (!err.response) {
         // Pas de réponse serveur = coupure réseau pendant l'envoi : on met en file
         // plutôt que d'afficher une erreur, la fiche sera synchronisée plus tard.
-        await ajouterSoumissionEnAttente(ferme.id, ferme.nom, payload);
-        await rafraichirEnAttente();
-        setHorsLigneEnvoi(true);
-        setEnvoye(true);
+        try {
+          await ajouterSoumissionEnAttente(ferme.id, ferme.nom, payload);
+          await rafraichirEnAttente();
+          setHorsLigneEnvoi(true);
+          setEnvoye(true);
+        } catch {
+          setErreur("Impossible d'enregistrer hors-ligne sur cet appareil (stockage plein ou navigation privée) — réessayez ou repassez en ligne pour envoyer directement.");
+        }
       } else if (err.response.status === 409) {
         setConflitVersion(true);
       } else {
@@ -779,7 +787,7 @@ function Section({ icon, titre, children }) {
 }
 function FieldNum({ label, value, onChange, unit, big, step }) {
   return (<label style={styles.field}><span style={styles.fieldLabel}>{label}</span><div style={styles.inputWrap}>
-    <input type="number" inputMode="decimal" step={step || "1"} style={{ ...styles.input, ...(big ? { fontSize: 22, fontWeight: 700 } : {}) }}
+    <input type="number" inputMode="decimal" step={step || "1"} min="0" style={{ ...styles.input, ...(big ? { fontSize: 22, fontWeight: 700 } : {}) }}
       value={value} onChange={(e) => onChange(e.target.value)} placeholder="0" />{unit && <span style={styles.unit}>{unit}</span>}</div></label>);
 }
 function FieldText({ label, value, onChange, placeholder }) {
