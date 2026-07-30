@@ -373,7 +373,7 @@ export default function Historique() {
                                 <DetailItem label="Aliment reçu" value={`${p.aliment_recu_sacs} sacs`} />
                                 <DetailItem label="Stock aliment après" value={formatSacs(Number(p.stock_aliment_apres_sacs))} />
                                 <DetailItem label="Alvéole reçu" value={`${nf(p.alveole_recu_unites)} unités`} />
-                                <DetailItem label="Alvéole consommé (auto)" value={`${nf(p.alveole_conso_unites)} unités`} />
+                                <DetailItem label="Alvéole consommé" value={`${nf(p.alveole_conso_unites)} unités`} />
                                 <DetailItem label="Stock alvéole après" value={formatColis(p.stock_alveole_apres_unites)} />
                                 <DetailItem label="Cassé" value={`${nf(p.casse)} œufs`} />
                                 <DetailItem label="Brisé" value={`${nf(p.brise)} œufs`} />

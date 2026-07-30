@@ -48,7 +48,7 @@ function veilleISO(dateISOStr) {
 }
 const FORM_VIDE = {
   morts: "", cause_morts: "", conso_aliment_sacs: "", aliment_recu_sacs: "", traitement: "", eau_consommee_litres: "",
-  alveole_recu_unites: "", production_oeufs: "", casse: "", brise: "", poids_moyen_grammes: "", observation: "", urgent: false,
+  alveole_recu_unites: "", alveole_conso_unites: "", production_oeufs: "", casse: "", brise: "", poids_moyen_grammes: "", observation: "", urgent: false,
 };
 const NOUVELLE_SORTIE_VIDE = { quantite: "", type_sortie: "VENTE", responsable: "", responsable_employe: "" };
 const AUTRE_RESPONSABLE = "__autre__";
@@ -188,6 +188,7 @@ export default function PointJournalier() {
             traitement: point.traitement,
             eau_consommee_litres: String(point.eau_consommee_litres),
             alveole_recu_unites: String(point.alveole_recu_unites),
+            alveole_conso_unites: String(point.alveole_conso_unites),
             production_oeufs: String(point.production_oeufs),
             casse: String(point.casse),
             brise: String(point.brise),
@@ -289,9 +290,13 @@ export default function PointJournalier() {
     const stockTotal = stockOeufVeille + stockOeufJour - totalSorties;
     const tauxPonte = resteEffectif > 0 ? (n(form.production_oeufs) / resteEffectif) * 100 : 0;
     const stockAlimentSacs = Number(magasin.stock_aliment_sacs) + n(form.aliment_recu_sacs) - n(form.conso_aliment_sacs);
-    const alveoleConsoAuto = Math.floor(n(form.production_oeufs) / 30);
-    const stockAlveole = magasin.stock_alveoles_unites + n(form.alveole_recu_unites) - alveoleConsoAuto;
-    return { resteEffectif, stockOeufJour, stockTotal, tauxPonte, stockAlimentSacs, alveoleConsoAuto, stockAlveole };
+    // L'alvéole consommée est saisie librement par le chef (les alvéoles ne
+    // sont pas toujours remplies pile à 30 œufs en pratique) — la suggestion
+    // production ÷ 30 reste affichée comme simple repère, cf. conversation
+    // du 29/07/2026 avec Serge.
+    const alveoleConsoSuggestion = Math.floor(n(form.production_oeufs) / 30);
+    const stockAlveole = magasin.stock_alveoles_unites + n(form.alveole_recu_unites) - n(form.alveole_conso_unites);
+    return { resteEffectif, stockOeufJour, stockTotal, tauxPonte, stockAlimentSacs, alveoleConsoSuggestion, stockAlveole };
   }, [form, ferme, bande, magasin, totalSorties, pointVeille, pointVeilleErreur]);
 
   const tauxAlerte = ferme?.type === "PONTE" && n(form.production_oeufs) > 0 && calc && calc.tauxPonte < 60;
@@ -320,7 +325,8 @@ export default function PointJournalier() {
       morts: n(form.morts), cause_morts: form.cause_morts, conso_aliment_sacs: n(form.conso_aliment_sacs),
       aliment_recu_sacs: n(form.aliment_recu_sacs), traitement: form.traitement,
       eau_consommee_litres: n(form.eau_consommee_litres),
-      alveole_recu_unites: n(form.alveole_recu_unites), production_oeufs: n(form.production_oeufs),
+      alveole_recu_unites: n(form.alveole_recu_unites), alveole_conso_unites: n(form.alveole_conso_unites),
+      production_oeufs: n(form.production_oeufs),
       casse: n(form.casse), brise: n(form.brise),
       sorties: sorties.map((s) => ({ ...s, responsable_employe: s.responsable_employe || null })),
       poids_moyen_grammes: form.poids_moyen_grammes === "" ? null : n(form.poids_moyen_grammes),
@@ -559,10 +565,11 @@ export default function PointJournalier() {
           {ferme.type === "PONTE" && (
             <Section icon={<Package size={15} />} titre="Alvéoles">
               <FieldNum label="Alvéole reçu" value={form.alveole_recu_unites} onChange={(v) => set("alveole_recu_unites", v)} unit="unités" />
-              <FieldCalc label="Conso alvéoles (auto)" value={calc.alveoleConsoAuto.toLocaleString("fr-FR")} unit="unités" hint="production ÷ 30" />
+              <FieldNum label="Alvéole consommé" value={form.alveole_conso_unites} onChange={(v) => set("alveole_conso_unites", v)} unit="unités" />
+              <p style={styles.magasinNote}>Suggestion : {calc.alveoleConsoSuggestion.toLocaleString("fr-FR")} unités (production ÷ 30) — à corriger si les alvéoles n'étaient pas remplies pile à 30 œufs.</p>
               <FieldCalc label="Stock alvéole restant" value={formatColis(calc.stockAlveole)}
                 unit={`≈ ${calc.stockAlveole.toLocaleString("fr-FR")} unités`}
-                hint="report + reçu − conso auto" strong danger={alveoleAlerte} />
+                hint="report + reçu − conso saisie" strong danger={alveoleAlerte} />
               {alveoleAlerte && <Alerte txt={`Stock alvéole bas (seuil ${formatColis(magasin.seuil_alerte_alveoles_unites)}) — réapprovisionner`} />}
             </Section>
           )}
