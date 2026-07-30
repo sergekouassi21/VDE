@@ -194,7 +194,7 @@ function ProfilMenu() {
   if (!nom) return null;
 
   return (
-    <div ref={wrapRef} style={profilStyles.wrap}>
+    <div ref={wrapRef} className="profil-menu" style={profilStyles.wrap}>
       <button style={profilStyles.btn} onClick={() => setOuvert((o) => !o)} aria-label="Profil">
         {photo ? <img src={photo} alt="" style={profilStyles.avatar} /> : <span style={profilStyles.avatarVide}>{initiales(nom)}</span>}
       </button>
@@ -211,7 +211,12 @@ function ProfilMenu() {
 }
 
 const profilStyles = {
-  wrap: { position: "relative" },
+  // La position (fixe, en haut à droite) vient de la classe CSS
+  // .profil-menu (index.css) plutôt que d'un style inline : il faut un
+  // décalage différent sur mobile pour ne pas chevaucher le bouton
+  // hamburger, ce qu'une media query permet et un style inline React non
+  // (cf. conversation du 30/07/2026 avec Serge).
+  wrap: {},
   btn: { background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" },
   avatar: { width: 30, height: 30, borderRadius: "50%", objectFit: "cover", border: "1.5px solid rgba(255,255,255,.5)" },
   avatarVide: {
@@ -316,14 +321,12 @@ function NavBar() {
     <nav className="nav-bar" style={navStyles.nav}>
       <div className="nav-top">
         <img src="/logo.png" alt="Volailles de l'Est" style={navStyles.brand} />
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <GlobalSearch />
-          <ProfilMenu />
-        </div>
+        <GlobalSearch />
         <button className="nav-hamburger" style={navStyles.hamburger} onClick={() => setOuvert((o) => !o)} aria-label="Menu">
           {ouvert ? <X size={22} /> : <Menu size={22} />}
         </button>
       </div>
+      <ProfilMenu />
       <div className={`nav-links${ouvert ? " open" : ""}`}>
         <Link to="/tableau-de-bord" style={navStyles.link}>
           <LayoutDashboard size={16} /> Tableau de bord

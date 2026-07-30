@@ -45,6 +45,23 @@ input:focus, textarea:focus, button:focus {
   flex: 1;
 }
 
+/* Avatar de profil — toujours en haut à droite de l'écran, sur chaque
+   page, quelle que soit la disposition (desktop en ligne, mobile avec
+   menu hamburger). Décalage plus grand sur mobile pour ne pas chevaucher
+   le bouton hamburger (cf. conversation du 30/07/2026 avec Serge). */
+.profil-menu {
+  position: fixed;
+  top: 11px;
+  right: 16px;
+  z-index: 150;
+}
+
+@media (max-width: 720px) {
+  .profil-menu {
+    right: 58px;
+  }
+}
+
 @media (max-width: 720px) {
   .nav-bar {
     flex-direction: column;
