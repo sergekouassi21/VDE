@@ -175,37 +175,23 @@ function initiales(nomComplet) {
 // stockées à la connexion (Login.jsx), pas un nouvel appel réseau à chaque
 // page, pour rester disponible même hors-ligne (cf. conversation du
 // 30/07/2026 avec Serge : "on ne voit aucune info" sur qui est connecté).
+// Carte toujours affichée (pas un menu à ouvrir) — Serge veut voir qui est
+// connecté d'un coup d'œil sur chaque page, sans avoir à cliquer (cf.
+// conversation du 30/07/2026).
 function ProfilMenu() {
-  const [ouvert, setOuvert] = useState(false);
-  const wrapRef = useRef(null);
   const nom = localStorage.getItem("vde_nom") || "";
   const roleAffiche = localStorage.getItem("vde_role_display") || "";
   const telephone = localStorage.getItem("vde_telephone") || "";
   const photo = localStorage.getItem("vde_photo") || "";
 
-  useEffect(() => {
-    function surClicExterieur(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOuvert(false);
-    }
-    document.addEventListener("mousedown", surClicExterieur);
-    return () => document.removeEventListener("mousedown", surClicExterieur);
-  }, []);
-
   if (!nom) return null;
 
   return (
-    <div ref={wrapRef} className="profil-menu" style={profilStyles.wrap}>
-      <button style={profilStyles.btn} onClick={() => setOuvert((o) => !o)} aria-label="Profil">
-        {photo ? <img src={photo} alt="" style={profilStyles.avatar} /> : <span style={profilStyles.avatarVide}>{initiales(nom)}</span>}
-      </button>
-      {ouvert && (
-        <div style={profilStyles.panel}>
-          {photo ? <img src={photo} alt="" style={profilStyles.avatarGrand} /> : <span style={profilStyles.avatarGrandVide}>{initiales(nom)}</span>}
-          <p style={profilStyles.nom}>{nom}</p>
-          {roleAffiche && <span style={profilStyles.role}>{roleAffiche}</span>}
-          {telephone && <p style={profilStyles.telephone}><Phone size={13} /> {telephone}</p>}
-        </div>
-      )}
+    <div className="profil-menu" style={profilStyles.panel}>
+      {photo ? <img src={photo} alt="" style={profilStyles.avatarGrand} /> : <span style={profilStyles.avatarGrandVide}>{initiales(nom)}</span>}
+      <p style={profilStyles.nom}>{nom}</p>
+      {roleAffiche && <span style={profilStyles.role}>{roleAffiche}</span>}
+      {telephone && <p style={profilStyles.telephone}><Phone size={13} /> {telephone}</p>}
     </div>
   );
 }
@@ -216,16 +202,9 @@ const profilStyles = {
   // décalage différent sur mobile pour ne pas chevaucher le bouton
   // hamburger, ce qu'une media query permet et un style inline React non
   // (cf. conversation du 30/07/2026 avec Serge).
-  wrap: {},
-  btn: { background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" },
-  avatar: { width: 30, height: 30, borderRadius: "50%", objectFit: "cover", border: "1.5px solid rgba(255,255,255,.5)" },
-  avatarVide: {
-    width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,.18)", border: "1.5px solid rgba(255,255,255,.5)",
-    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff",
-  },
   panel: {
-    position: "fixed", top: NAV_HEIGHT + 8, right: 12, width: 220,
-    background: "#fff", borderRadius: 14, boxShadow: "0 16px 44px rgba(0,0,0,.28)", padding: "18px 16px", zIndex: 200,
+    width: 200,
+    background: "#fff", borderRadius: 14, boxShadow: "0 12px 32px rgba(0,0,0,.22)", padding: "14px 16px",
     fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 4,
   },
   avatarGrand: { width: 56, height: 56, borderRadius: "50%", objectFit: "cover", marginBottom: 4 },
