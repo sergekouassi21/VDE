@@ -37,6 +37,10 @@ export default function PointageEmployes() {
   const [formDoc, setFormDoc] = useState(TYPE_DOCUMENT_VIDE);
   const [envoiDoc, setEnvoiDoc] = useState(false);
   const [erreurDoc, setErreurDoc] = useState("");
+  // Empêche un double-clic sur une action irréversible (régénérer un badge/
+  // le téléphone invalide immédiatement l'ancien) d'envoyer deux requêtes à
+  // la suite — cf. audit du 30/07/2026.
+  const [actionEnCours, setActionEnCours] = useState(false);
 
   useEffect(() => { getFermes().then(setFermes); }, []);
   useEffect(() => { if (formOuvert) getUtilisateursDisponibles().then(setUtilisateurs); }, [formOuvert]);
@@ -60,10 +64,18 @@ export default function PointageEmployes() {
     setChargement(true);
     const params = {};
     if (fermeFiltre) params.ferme = fermeFiltre;
-    getEmployes(params).then((data) => { setEmployes(data); setChargement(false); });
+    let annule = false;
+    getEmployes(params).then((data) => {
+      if (annule) return;
+      setEmployes(data);
+      setChargement(false);
+    });
+    return () => { annule = true; };
   }, [fermeFiltre]);
 
-  useEffect(() => { rafraichir(); }, [rafraichir]);
+  // Empêche une réponse obsolète (changement rapide de filtre pendant le
+  // chargement) d'écraser un state plus récent — cf. audit du 30/07/2026.
+  useEffect(() => rafraichir(), [rafraichir]);
 
   function fermerForm() {
     setFormOuvert(false); setEditionId(null);
@@ -103,8 +115,16 @@ export default function PointageEmployes() {
   }
 
   async function basculerActif(emp) {
-    await modifierEmploye(emp.id, { actif: !emp.actif });
-    rafraichir();
+    if (actionEnCours) return;
+    setActionEnCours(true);
+    try {
+      await modifierEmploye(emp.id, { actif: !emp.actif });
+      rafraichir();
+    } catch {
+      window.alert("Impossible de modifier cet employé.");
+    } finally {
+      setActionEnCours(false);
+    }
   }
 
   async function supprimer(emp) {
@@ -125,10 +145,16 @@ export default function PointageEmployes() {
   }
 
   async function regenererBadgeEmploye(emp) {
+    if (actionEnCours) return;
     if (!window.confirm(`Régénérer le badge de ${emp.nom} ? L'ancienne carte imprimée ne fonctionnera plus — il faudra réimprimer/redistribuer le nouveau QR.`)) return;
+    setActionEnCours(true);
     setQrUrl("");
-    const url = await regenererQrEmployeBlob(emp.id);
-    setQrUrl(url);
+    try {
+      const url = await regenererQrEmployeBlob(emp.id);
+      setQrUrl(url);
+    } finally {
+      setActionEnCours(false);
+    }
   }
 
   async function ouvrirDocuments(emp) {
@@ -207,17 +233,29 @@ export default function PointageEmployes() {
   }
 
   async function regenererAppareil() {
+    if (actionEnCours) return;
     if (!window.confirm("Régénérer invalide immédiatement l'ancien téléphone — il ne pourra plus valider aucun pointage tant qu'il n'aura pas re-scanné le nouveau QR. Continuer ?")) return;
+    setActionEnCours(true);
     setQrUrl("");
-    const url = await regenererAppareilPointageBlob();
-    setQrUrl(url);
+    try {
+      const url = await regenererAppareilPointageBlob();
+      setQrUrl(url);
+    } finally {
+      setActionEnCours(false);
+    }
   }
 
   async function desactiverAppareil() {
+    if (actionEnCours) return;
     if (!window.confirm("Désactiver la protection ? N'importe quel téléphone pourra de nouveau valider un pointage, sans jeton particulier.")) return;
-    await desactiverAppareilPointage();
-    setAppareilInfo({ actif: false });
-    setQrUrl("");
+    setActionEnCours(true);
+    try {
+      await desactiverAppareilPointage();
+      setAppareilInfo({ actif: false });
+      setQrUrl("");
+    } finally {
+      setActionEnCours(false);
+    }
   }
 
   return (
@@ -317,7 +355,7 @@ export default function PointageEmployes() {
                         <button style={styles.iconBtn} onClick={() => ouvrirDocuments(emp)} title="Documents (CNI, contrat...)">
                           <FileText size={16} />
                         </button>
-                        <button style={styles.iconBtn} onClick={() => basculerActif(emp)} title={emp.actif ? "Désactiver" : "Réactiver"}>
+                        <button style={styles.iconBtn} onClick={() => basculerActif(emp)} disabled={actionEnCours} title={emp.actif ? "Désactiver" : "Réactiver"}>
                           {emp.actif ? <UserX size={16} /> : <UserCheck size={16} />}
                         </button>
                         <button style={styles.iconBtn} onClick={() => commencerEdition(emp)} title="Modifier (ex: changer de ferme)">
@@ -356,10 +394,10 @@ export default function PointageEmployes() {
                   <a href={qrUrl} download="appareil-pointage.png" style={styles.downloadBtn}>
                     <Download size={15} /> Télécharger le badge
                   </a>
-                  <button type="button" style={styles.regenererBtn} onClick={regenererAppareil}>
+                  <button type="button" style={styles.regenererBtn} onClick={regenererAppareil} disabled={actionEnCours}>
                     <RefreshCw size={14} /> Régénérer (invalide l'ancien téléphone)
                   </button>
-                  <button type="button" style={{ ...styles.regenererBtn, marginTop: 8 }} onClick={desactiverAppareil}>
+                  <button type="button" style={{ ...styles.regenererBtn, marginTop: 8 }} onClick={desactiverAppareil} disabled={actionEnCours}>
                     <UserX size={14} /> Désactiver la protection
                   </button>
                 </>
@@ -373,7 +411,7 @@ export default function PointageEmployes() {
                   <Download size={15} /> Télécharger le badge
                 </a>
                 {qrOuvert.id && (
-                  <button type="button" style={styles.regenererBtn} onClick={() => regenererBadgeEmploye(qrOuvert)}>
+                  <button type="button" style={styles.regenererBtn} onClick={() => regenererBadgeEmploye(qrOuvert)} disabled={actionEnCours}>
                     <RefreshCw size={14} /> Régénérer (invalide l'ancienne carte)
                   </button>
                 )}

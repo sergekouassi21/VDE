@@ -27,12 +27,20 @@ export default function Vaccinations() {
   }, []);
 
   const rafraichir = useCallback(() => {
-    if (!fermeId) { setEvenements([]); setChargement(false); return; }
+    if (!fermeId) { setEvenements([]); setChargement(false); return () => {}; }
     setChargement(true);
-    getEvenementsSante({ ferme: fermeId }).then((data) => { setEvenements(data); setChargement(false); });
+    let annule = false;
+    getEvenementsSante({ ferme: fermeId }).then((data) => {
+      if (annule) return;
+      setEvenements(data);
+      setChargement(false);
+    });
+    return () => { annule = true; };
   }, [fermeId]);
 
-  useEffect(() => { rafraichir(); }, [rafraichir]);
+  // Empêche une réponse obsolète (changement rapide de ferme pendant le
+  // chargement) d'écraser un state plus récent — cf. audit du 30/07/2026.
+  useEffect(() => rafraichir(), [rafraichir]);
 
   const ferme = fermes.find((f) => f.id === Number(fermeId));
   const bande = ferme?.bande_active;

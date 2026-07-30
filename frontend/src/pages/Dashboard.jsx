@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, Fragment } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
-import { Egg, TrendingUp, AlertTriangle, Skull, Package, ChevronRight, Activity, Wheat, Droplet } from "lucide-react";
+import { Egg, TrendingUp, AlertTriangle, AlertCircle, Skull, Package, ChevronRight, Activity, Wheat, Droplet } from "lucide-react";
 import { getDashboard, getEmployes, getAbsences, getEvenementsSante, getFactures, getPointages, getRentabilite, getRapportMensuel } from "../api/client";
 import { GREEN, GREEN_DARK, INK, formatSacs, formatColis, AGE_REFORME_SEMAINES, KG_PAR_SAC } from "../theme";
 import { calculerAlertes, signatureAlertes, JOURS_CREANCE_RETARD, joursDepuis } from "../alertes";
+import { estDirectionOuAdmin as estDirectionOuAdminRole } from "../utils/auth";
 
 const nf = (v) => (v ?? 0).toLocaleString("fr-FR");
 
@@ -27,16 +28,29 @@ export default function Dashboard() {
   // Le pointage/la paie sont confidentiels à Direction/Admin (mêmes règles
   // que partout ailleurs dans l'appli) — le tableau de bord, lui, est
   // ouvert à tous les rôles, donc on ne tente ces appels que si autorisé.
-  const role = localStorage.getItem("vde_role");
-  const estDirectionOuAdmin = !role || role === "DIRECTION" || role === "ADMIN";
+  const estDirectionOuAdmin = estDirectionOuAdminRole();
 
   useEffect(() => {
-    getDashboard().then((data) => { setFermes(data.fermes); setEvolutionMois(data.evolution_mois); setChargement(false); });
-    getEvenementsSante({ non_faits: "true" }).then((evts) => setEvenementsSanteEnRetard(evts.filter((e) => e.statut === "EN_RETARD")));
+    // annule évite d'appliquer une réponse tardive après que le composant se
+    // soit démonté (navigation rapide vers une autre page) — cf. audit du
+    // 30/07/2026.
+    let annule = false;
+    getDashboard().then((data) => {
+      if (annule) return;
+      setFermes(data.fermes); setEvolutionMois(data.evolution_mois); setChargement(false);
+    });
+    getEvenementsSante({ non_faits: "true" }).then((evts) => {
+      if (annule) return;
+      setEvenementsSanteEnRetard(evts.filter((e) => e.statut === "EN_RETARD"));
+    });
     if (estDirectionOuAdmin) {
-      getAbsences({ statut: "EN_ATTENTE" }).then(setAbsencesEnAttente);
-      getEmployes().then((emps) => setEmployesSansSalaire(emps.filter((e) => e.actif && Number(e.salaire_mensuel) === 0)));
+      getAbsences({ statut: "EN_ATTENTE" }).then((data) => { if (!annule) setAbsencesEnAttente(data); });
+      getEmployes().then((emps) => {
+        if (annule) return;
+        setEmployesSansSalaire(emps.filter((e) => e.actif && Number(e.salaire_mensuel) === 0));
+      });
       getFactures().then((factures) => {
+        if (annule) return;
         setCreancesEnRetard(factures.filter((f) => Number(f.reste_du) > 0 && joursDepuis(f.date) > JOURS_CREANCE_RETARD));
         setCreancesTotal(factures.reduce((s, f) => s + Number(f.reste_du || 0), 0));
       });
@@ -45,18 +59,22 @@ export default function Dashboard() {
       // avoir à parcourir tout l'historique des pointages (cf. conversation
       // du 29/07/2026 avec Serge).
       const depuis = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
-      getPointages({ date_debut: depuis }).then((pts) => setPointagesSecoursRecents(
-        pts.filter((p) => p.arrivee_via_secours || p.depart_via_secours)
-      ));
+      getPointages({ date_debut: depuis }).then((pts) => {
+        if (annule) return;
+        setPointagesSecoursRecents(pts.filter((p) => p.arrivee_via_secours || p.depart_via_secours));
+      });
       // Aperçu financier + tendances — réservé à la Direction/Admin (cf.
       // conversation du 30/07/2026 : "ajoute les 3 mais ça doit être visible
       // que par l'administration/direction").
-      getRentabilite().then(setRentabilite);
+      getRentabilite().then((data) => { if (!annule) setRentabilite(data); });
       const premierJourMoisPrecedent = new Date();
       premierJourMoisPrecedent.setDate(1);
       premierJourMoisPrecedent.setMonth(premierJourMoisPrecedent.getMonth() - 1);
-      getRapportMensuel({ mois: premierJourMoisPrecedent.toISOString().slice(0, 10) }).then(setRapportMoisPrecedent);
+      getRapportMensuel({ mois: premierJourMoisPrecedent.toISOString().slice(0, 10) }).then((data) => {
+        if (!annule) setRapportMoisPrecedent(data);
+      });
     }
+    return () => { annule = true; };
   }, []);
 
   const actives = fermes.filter((f) => !f.est_vide);
@@ -236,6 +254,9 @@ export default function Dashboard() {
                 <div style={styles.kpiFermeNom}>
                   {f.nom}
                   {gravite === "haut" && <AlertTriangle size={13} color="#9E4527" style={{ marginLeft: 6, verticalAlign: -2 }} />}
+                  {/* Forme différente (pas juste une couleur plus pâle) pour rester
+                      lisible en plein soleil ou pour un daltonien — cf. audit du 30/07/2026. */}
+                  {gravite === "moy" && <AlertCircle size={13} color="#B8860B" style={{ marginLeft: 6, verticalAlign: -2 }} />}
                 </div>
                 <div style={styles.kpiFermeStats}>
                   {f.type === "PONTE" && (

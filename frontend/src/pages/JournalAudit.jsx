@@ -25,10 +25,18 @@ export default function JournalAudit() {
     if (modele) params.modele = modele;
     if (dateDebut) params.date_debut = dateDebut;
     if (dateFin) params.date_fin = dateFin;
-    getJournalAudit(params).then((data) => { setEntrees(data); setChargement(false); });
+    let annule = false;
+    getJournalAudit(params).then((data) => {
+      if (annule) return;
+      setEntrees(data);
+      setChargement(false);
+    });
+    return () => { annule = true; };
   }, [action, modele, dateDebut, dateFin]);
 
-  useEffect(() => { rafraichir(); }, [rafraichir]);
+  // Empêche une réponse obsolète (changement rapide de filtre pendant le
+  // chargement) d'écraser un state plus récent — cf. audit du 30/07/2026.
+  useEffect(() => rafraichir(), [rafraichir]);
 
   return (
     <div style={styles.page}>

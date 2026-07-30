@@ -79,16 +79,21 @@ export default function PointageHistorique() {
     if (dateFin) params.date_fin = dateFin;
     const paieParams = { ...params };
     if (moisPremierJour) paieParams.mois = moisPremierJour;
+    let annule = false;
     Promise.all([
       getPointages(params),
       getAbsences(params),
       moisPremierJour ? getLignesPaie(paieParams) : Promise.resolve([]),
     ]).then(([pts, abs, paie]) => {
+      if (annule) return;
       setPointages(pts); setAbsences(abs); setLignesPaie(paie); setChargement(false);
     });
+    return () => { annule = true; };
   }, [fermeId, employeId, dateDebut, dateFin, moisPremierJour]);
 
-  useEffect(() => { rafraichir(); }, [rafraichir]);
+  // Empêche une réponse obsolète (changement rapide de filtre pendant le
+  // chargement) d'écraser un state plus récent — cf. audit du 30/07/2026.
+  useEffect(() => rafraichir(), [rafraichir]);
 
   const totaux = useMemo(() => ({
     heures: pointages.reduce((s, p) => s + Number(p.heures_travaillees || 0), 0),

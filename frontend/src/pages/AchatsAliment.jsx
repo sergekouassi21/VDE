@@ -35,13 +35,18 @@ export default function AchatsAliment() {
 
   const rafraichir = useCallback(() => {
     setChargement(true);
+    let annule = false;
     getCommandesAliment(magasinFiltre ? { magasin: magasinFiltre } : {}).then((data) => {
+      if (annule) return;
       setCommandes(data);
       setChargement(false);
     });
+    return () => { annule = true; };
   }, [magasinFiltre]);
 
-  useEffect(() => { rafraichir(); }, [rafraichir]);
+  // Empêche une réponse obsolète (changement rapide de filtre pendant le
+  // chargement) d'écraser un state plus récent — cf. audit du 30/07/2026.
+  useEffect(() => rafraichir(), [rafraichir]);
 
   const montantForm = (Number(form.quantite_sacs) || 0) * (Number(form.prix_unitaire_sac) || 0);
 

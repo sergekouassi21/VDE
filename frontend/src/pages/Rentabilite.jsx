@@ -20,13 +20,18 @@ export default function Rentabilite() {
 
   const rafraichir = useCallback(() => {
     setChargement(true);
+    let annule = false;
     getRentabilite({ mois: `${mois}-01` }).then((d) => {
+      if (annule) return;
       setDonnees(d);
       setChargement(false);
     });
+    return () => { annule = true; };
   }, [mois]);
 
-  useEffect(() => { rafraichir(); }, [rafraichir]);
+  // Empêche une réponse obsolète (changement rapide de mois pendant le
+  // chargement) d'écraser un state plus récent — cf. audit du 30/07/2026.
+  useEffect(() => rafraichir(), [rafraichir]);
 
   async function telechargerRapport() {
     setEnvoiRapport(true);

@@ -1,34 +1,35 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from "react-router-dom";
 import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp, Wheat, Syringe, Search, ScrollText, Lock, Phone } from "lucide-react";
-import Login from "./pages/Login";
-import PointJournalier from "./pages/PointJournalier";
-import Dashboard from "./pages/Dashboard";
-import Ventes from "./pages/Ventes";
-import Historique from "./pages/Historique";
-import PointageScan from "./pages/PointageScan";
-import PointageBadgeTemporaire from "./pages/PointageBadgeTemporaire";
-import PointageBadgeAbsence from "./pages/PointageBadgeAbsence";
-import PointageActiverAppareil from "./pages/PointageActiverAppareil";
-import PointageEmployes from "./pages/PointageEmployes";
-import PointageHistorique from "./pages/PointageHistorique";
-import Rentabilite from "./pages/Rentabilite";
-import AchatsAliment from "./pages/AchatsAliment";
-import Vaccinations from "./pages/Vaccinations";
-import JournalAudit from "./pages/JournalAudit";
-import Securite from "./pages/Securite";
+// Chargées à la demande (par route) plutôt qu'au premier accès : sans ça, un
+// chef de ferme qui n'ouvre que Point Journalier téléchargeait aussi
+// Recharts (Dashboard), jsPDF (plusieurs pages) et tout le reste — pénalisant
+// sur le réseau faible d'une zone rurale, justement le contexte visé par le
+// mode hors-ligne de cette appli (cf. audit du 30/07/2026).
+const Login = lazy(() => import("./pages/Login"));
+const PointJournalier = lazy(() => import("./pages/PointJournalier"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Ventes = lazy(() => import("./pages/Ventes"));
+const Historique = lazy(() => import("./pages/Historique"));
+const PointageScan = lazy(() => import("./pages/PointageScan"));
+const PointageBadgeTemporaire = lazy(() => import("./pages/PointageBadgeTemporaire"));
+const PointageBadgeAbsence = lazy(() => import("./pages/PointageBadgeAbsence"));
+const PointageActiverAppareil = lazy(() => import("./pages/PointageActiverAppareil"));
+const PointageEmployes = lazy(() => import("./pages/PointageEmployes"));
+const PointageHistorique = lazy(() => import("./pages/PointageHistorique"));
+const Rentabilite = lazy(() => import("./pages/Rentabilite"));
+const AchatsAliment = lazy(() => import("./pages/AchatsAliment"));
+const Vaccinations = lazy(() => import("./pages/Vaccinations"));
+const JournalAudit = lazy(() => import("./pages/JournalAudit"));
+const Securite = lazy(() => import("./pages/Securite"));
 import { isAuthenticated, logout, ADMIN_URL, getRechercheGlobale, getDashboard, getEvenementsSante, getAbsences, getEmployes, getFactures } from "./api/client";
 import { GREEN_DARK } from "./theme";
 import { calculerAlertes, signatureAlertes, joursDepuis, JOURS_CREANCE_RETARD } from "./alertes";
+import { estDirectionOuAdmin } from "./utils/auth";
 
 function RequireAuth({ children }) {
   if (!isAuthenticated()) return <Navigate to="/connexion" replace />;
   return children;
-}
-
-function estDirectionOuAdmin() {
-  const role = localStorage.getItem("vde_role");
-  return !role || role === "DIRECTION" || role === "ADMIN";
 }
 
 // Ventes reserve a Direction/Admin — chef, sous-chef et superviseur n'y ont
@@ -250,8 +251,7 @@ function useBadgeAlertes() {
   useEffect(() => {
     let annule = false;
     async function charger() {
-      const role = localStorage.getItem("vde_role");
-      const autoriseRole = !role || role === "DIRECTION" || role === "ADMIN";
+      const autoriseRole = estDirectionOuAdmin();
       try {
         const [dashboard, evenementsSante, absences, employes, factures] = await Promise.all([
           getDashboard(),
@@ -379,6 +379,7 @@ const searchStyles = {
 export default function App() {
   return (
     <BrowserRouter>
+      <Suspense fallback={<div style={{ padding: 20 }}>Chargement...</div>}>
       <Routes>
         <Route path="/connexion" element={<Login />} />
         <Route path="/pointage/:token" element={<PointageScan />} />
@@ -422,6 +423,7 @@ export default function App() {
           <RequireAuth><RequireDirectionOuAdmin><Layout><Securite /></Layout></RequireDirectionOuAdmin></RequireAuth>
         } />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }
