@@ -129,6 +129,25 @@ export default function Dashboard() {
     [fermes, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard, creancesEnRetard, pointagesSecoursRecents],
   );
 
+  // Gravité la plus haute par ferme concernée — sert à mettre en avant les
+  // fermes à problème dans la grille (bordure colorée + tri en premier),
+  // plutôt que de les laisser noyées au même niveau que les autres (cf.
+  // conversation du 30/07/2026 avec Serge : "l'important n'est pas assez
+  // mis en avant").
+  const graviteParFerme = useMemo(() => {
+    const map = {};
+    alertes.forEach((a) => {
+      if (map[a.ferme] === "haut") return;
+      map[a.ferme] = a.grav;
+    });
+    return map;
+  }, [alertes]);
+
+  const activesTriees = useMemo(() => {
+    const rang = (f) => (graviteParFerme[f.nom] === "haut" ? 0 : graviteParFerme[f.nom] === "moy" ? 1 : 2);
+    return [...actives].sort((a, b) => rang(a) - rang(b));
+  }, [actives, graviteParFerme]);
+
   // Marque ces alertes comme "vues" — cf. badge de notification dans la
   // nav (App.jsx), qui compare sa propre lecture à cette signature pour
   // savoir si de nouvelles alertes sont apparues depuis la dernière visite.
@@ -161,6 +180,23 @@ export default function Dashboard() {
           <div style={styles.date}>{new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</div>
         </header>
 
+        <div style={styles.alertesTop}>
+          <Card titre={`Alertes (${alertes.length})`} danger>
+            {alertes.length === 0 ? (
+              <p style={styles.noAlert}>Aucune alerte — tout est nominal ✓</p>
+            ) : (
+              <div style={styles.alertList}>
+                {alertes.map((a, i) => (
+                  <div key={i} style={{ ...styles.alertItem, ...(a.grav === "haut" ? styles.alertHaut : {}) }}>
+                    <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <div><strong style={{ fontWeight: 600 }}>{a.ferme}</strong> — {a.txt}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+
         <div style={styles.kpiRow}>
           <Kpi icon={<Activity size={16} />} label="Taux de ponte moyen" value={`${kpi.tauxMoyen.toFixed(1)} %`} accent />
           <Kpi icon={<Egg size={16} />} label="Production" value={nf(kpi.prod)} sub="œufs/jour" mois={`${nf(kpi.prodMois)} œufs ce mois`} />
@@ -173,11 +209,15 @@ export default function Dashboard() {
         </div>
 
         <div style={styles.kpiFermeGrid}>
-          {actives.map((f) => {
+          {activesTriees.map((f) => {
             const t = tauxPonte(f);
+            const gravite = graviteParFerme[f.nom];
             return (
-              <div key={f.id} style={styles.kpiFermeCard}>
-                <div style={styles.kpiFermeNom}>{f.nom}</div>
+              <div key={f.id} style={{ ...styles.kpiFermeCard, ...(gravite === "haut" ? styles.kpiFermeCardHaut : gravite === "moy" ? styles.kpiFermeCardMoy : {}) }}>
+                <div style={styles.kpiFermeNom}>
+                  {f.nom}
+                  {gravite === "haut" && <AlertTriangle size={13} color="#9E4527" style={{ marginLeft: 6, verticalAlign: -2 }} />}
+                </div>
                 <div style={styles.kpiFermeStats}>
                   {f.type === "PONTE" && (
                     <div style={styles.kpiFermeStat}>
@@ -329,21 +369,6 @@ export default function Dashboard() {
           </div>
 
           <div style={styles.col}>
-            <Card titre={`Alertes (${alertes.length})`} danger>
-              {alertes.length === 0 ? (
-                <p style={styles.noAlert}>Aucune alerte — tout est nominal ✓</p>
-              ) : (
-                <div style={styles.alertList}>
-                  {alertes.map((a, i) => (
-                    <div key={i} style={{ ...styles.alertItem, ...(a.grav === "haut" ? styles.alertHaut : {}) }}>
-                      <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                      <div><strong style={{ fontWeight: 600 }}>{a.ferme}</strong> — {a.txt}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-
             <Card titre="Fermes">
               <div style={styles.fermeList}>
                 {fermes.map((f) => {
@@ -452,6 +477,7 @@ const styles = {
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 30, fontWeight: 700, margin: 0, letterSpacing: -.5 },
   date: { fontSize: 13, color: "#7A857F", textTransform: "capitalize" },
+  alertesTop: { marginBottom: 18 },
   kpiRow: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 18 },
   kpi: { background: "#fff", borderRadius: 14, padding: "14px 16px", border: "1px solid #ECE9DF" },
   kpiAccent: { background: `linear-gradient(150deg, ${GREEN}, ${GREEN_DARK})`, color: "#fff", border: "none" },
@@ -461,7 +487,9 @@ const styles = {
   kpiLabel: { fontSize: 11.5, opacity: .78, marginTop: 2 },
   kpiMois: { fontSize: 10.5, opacity: .65, marginTop: 4, borderTop: "1px solid rgba(0,0,0,.06)", paddingTop: 4 },
   kpiFermeGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12, marginBottom: 18 },
-  kpiFermeCard: { background: "#fff", borderRadius: 14, padding: "13px 15px", border: "1px solid #ECE9DF" },
+  kpiFermeCard: { background: "#fff", borderRadius: 14, padding: "13px 15px", border: "1px solid #ECE9DF", borderLeft: "4px solid transparent" },
+  kpiFermeCardHaut: { borderLeftColor: "#C6603A", background: "#FFF9F6" },
+  kpiFermeCardMoy: { borderLeftColor: "#E8A93B", background: "#FFFCF3" },
   kpiFermeNom: { fontSize: 13.5, fontWeight: 700, color: GREEN_DARK, marginBottom: 8 },
   kpiFermeStats: { display: "flex", flexWrap: "wrap", gap: "6px 14px" },
   kpiFermeStat: { display: "flex", flexDirection: "column", gap: 1, minWidth: 60 },
