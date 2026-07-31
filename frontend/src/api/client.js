@@ -83,6 +83,12 @@ export const getCommandesAliment = (params) => api.get("/commandes-aliment/", { 
 export const creerCommandeAliment = (payload) => api.post("/commandes-aliment/", payload).then((r) => r.data);
 export const supprimerCommandeAliment = (id) => api.delete(`/commandes-aliment/${id}/`);
 
+// --- Transferts de stock entre fermes (aliment, alvéoles, œufs) ---
+export const getTransfertsStock = (params) => api.get("/transferts-stock/", { params }).then((r) => r.data);
+export const creerTransfertStock = (payload) => api.post("/transferts-stock/", payload).then((r) => r.data);
+export const modifierTransfertStock = (id, payload) => api.patch(`/transferts-stock/${id}/`, payload).then((r) => r.data);
+export const supprimerTransfertStock = (id) => api.delete(`/transferts-stock/${id}/`);
+
 // --- Pointage des employés (heures de travail) ---
 export const getEmployes = (params) => api.get("/pointage/employes/", { params }).then((r) => r.data);
 export const getUtilisateursDisponibles = () => api.get("/pointage/utilisateurs-disponibles/").then((r) => r.data);

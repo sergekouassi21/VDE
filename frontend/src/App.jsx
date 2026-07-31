@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp, Wheat, Syringe, Search, ScrollText, Lock, Phone } from "lucide-react";
+import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp, Wheat, Syringe, Search, ScrollText, Lock, Phone, ArrowRightLeft } from "lucide-react";
 // Chargées à la demande (par route) plutôt qu'au premier accès : sans ça, un
 // chef de ferme qui n'ouvre que Point Journalier téléchargeait aussi
 // Recharts (Dashboard), jsPDF (plusieurs pages) et tout le reste — pénalisant
@@ -19,6 +19,7 @@ const PointageEmployes = lazy(() => import("./pages/PointageEmployes"));
 const PointageHistorique = lazy(() => import("./pages/PointageHistorique"));
 const Rentabilite = lazy(() => import("./pages/Rentabilite"));
 const AchatsAliment = lazy(() => import("./pages/AchatsAliment"));
+const Transferts = lazy(() => import("./pages/Transferts"));
 const Vaccinations = lazy(() => import("./pages/Vaccinations"));
 const JournalAudit = lazy(() => import("./pages/JournalAudit"));
 const Securite = lazy(() => import("./pages/Securite"));
@@ -314,6 +315,7 @@ function NavBar() {
         <Link to="/point-journalier" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
         <Link to="/historique" style={navStyles.link}><History size={16} /> Historique</Link>
         <Link to="/vaccinations" style={navStyles.link}><Syringe size={16} /> Vaccins & traitements</Link>
+        <Link to="/transferts" style={navStyles.link}><ArrowRightLeft size={16} /> Transferts</Link>
         {autorise && (
           <>
             <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>
@@ -403,6 +405,9 @@ export default function App() {
         } />
         <Route path="/vaccinations" element={
           <RequireAuth><Layout><Vaccinations /></Layout></RequireAuth>
+        } />
+        <Route path="/transferts" element={
+          <RequireAuth><Layout><Transferts /></Layout></RequireAuth>
         } />
         <Route path="/employes" element={
           <RequireAuth><RequireDirectionOuAdmin><Layout><PointageEmployes /></Layout></RequireDirectionOuAdmin></RequireAuth>
