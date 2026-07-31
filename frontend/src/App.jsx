@@ -189,38 +189,14 @@ function ProfilMenu() {
   if (!nom) return null;
 
   return (
-    <div className="profil-menu" style={profilStyles.panel}>
-      {photo ? <img src={photo} alt="" style={profilStyles.avatarGrand} /> : <span style={profilStyles.avatarGrandVide}>{initiales(nom)}</span>}
-      <p style={profilStyles.nom}>{nom}</p>
-      {roleAffiche && <span style={profilStyles.role}>{roleAffiche}</span>}
-      {telephone && <p style={profilStyles.telephone}><Phone size={13} /> {telephone}</p>}
+    <div className="profil-menu profil-panel">
+      {photo ? <img src={photo} alt="" className="profil-avatar" /> : <span className="profil-avatar-vide">{initiales(nom)}</span>}
+      <p className="profil-nom">{nom}</p>
+      {roleAffiche && <span className="profil-role">{roleAffiche}</span>}
+      {telephone && <p className="profil-telephone"><Phone size={13} /> {telephone}</p>}
     </div>
   );
 }
-
-const profilStyles = {
-  // La position (fixe, en haut à droite) vient de la classe CSS
-  // .profil-menu (index.css) plutôt que d'un style inline : il faut un
-  // décalage différent sur mobile pour ne pas chevaucher le bouton
-  // hamburger, ce qu'une media query permet et un style inline React non
-  // (cf. conversation du 30/07/2026 avec Serge).
-  panel: {
-    width: 200,
-    background: "#fff", borderRadius: 14, boxShadow: "0 12px 32px rgba(0,0,0,.22)", padding: "14px 16px",
-    fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 4,
-  },
-  avatarGrand: { width: 56, height: 56, borderRadius: "50%", objectFit: "cover", marginBottom: 4 },
-  avatarGrandVide: {
-    width: 56, height: 56, borderRadius: "50%", background: "#EAF3EE", color: GREEN_DARK,
-    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, marginBottom: 4,
-  },
-  nom: { fontSize: 14.5, fontWeight: 700, color: "#1A2420", margin: 0 },
-  role: {
-    fontSize: 10.5, fontWeight: 600, color: GREEN_DARK, background: "#EAF3EE", borderRadius: 6,
-    padding: "2px 8px", textTransform: "uppercase", letterSpacing: .4,
-  },
-  telephone: { display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, color: "#6B756E", margin: "6px 0 0" },
-};
 
 function ResultGroup({ titre, children }) {
   return (
