@@ -210,10 +210,14 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
   // Disponible total agrégé sur toutes les fermes éligibles à chaque
   // produit groupé — remplace l'ancien contrôle "par ferme sélectionnée"
   // puisque la ferme n'est plus choisie à la main pour ces produits.
-  const stockOeufDispoTotal = useMemo(
-    () => fermes.filter((f) => f.type === "PONTE").reduce((s, f) => s + (f.bande_active?.stock_oeuf_actuel ?? 0), 0),
-    [fermes],
-  );
+  //
+  // Les œufs déjà vendus à la main sur le Point Journalier sont déjà partis
+  // physiquement — facturer ne fait que leur donner un papier officiel, ça
+  // ne touche plus le stock. Le stock physique des fermes n'a donc plus
+  // rien à voir avec la disponibilité pour facturer des œufs (cf.
+  // creer_facture/_oeufs_restant_a_facturer, conversation du 31/07/2026
+  // avec Serge) — seul totalVentesOeufs (= reste à facturer, prop reçue du
+  // parent) compte ici.
   const effectifChairDispoTotal = useMemo(
     () => fermes.filter((f) => f.type === "CHAIR").reduce((s, f) => s + (f.bande_active?.effectif_actuel ?? 0), 0),
     [fermes],
@@ -228,14 +232,14 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
     const chairDemandee = detail.filter((d) => d.type_produit === "CHAIR_UNITE").reduce((s, d) => s + d.effectifVendu, 0);
     const reformeDemandee = detail.filter((d) => d.type_produit === "REFORME").reduce((s, d) => s + d.effectifVendu, 0);
     const alertes = [];
-    if (oeufsDemandes > stockOeufDispoTotal) alertes.push(`Stock d'œufs insuffisant, toutes fermes confondues (${formatCartons(oeufsDemandes)} demandés, ${formatCartons(stockOeufDispoTotal)} disponibles)`);
+    if (oeufsDemandes > totalVentesOeufs) alertes.push(`Œufs restant à facturer insuffisant, toutes fermes confondues (${formatCartons(oeufsDemandes)} demandés, ${formatCartons(totalVentesOeufs)} restant à facturer)`);
     if (chairDemandee > effectifChairDispoTotal) alertes.push(`Effectif chair insuffisant, toutes fermes confondues (${nf(chairDemandee)} demandés, ${nf(effectifChairDispoTotal)} disponibles)`);
     if (reformeDemandee > effectifPonteDispoTotal) alertes.push(`Effectif réforme insuffisant, toutes fermes confondues (${nf(reformeDemandee)} demandés, ${nf(effectifPonteDispoTotal)} disponibles)`);
     detail.filter((d) => d.type_produit === "CHAIR_KG" && !d.ferme && d.qte > 0).forEach(() => {
       alertes.push("Chair au kilo : choisis la ferme d'origine.");
     });
     return alertes;
-  }, [detail, stockOeufDispoTotal, effectifChairDispoTotal, effectifPonteDispoTotal]);
+  }, [detail, totalVentesOeufs, effectifChairDispoTotal, effectifPonteDispoTotal]);
 
   const clientTrouve = useMemo(
     () => clients.find((c) => c.nom.trim().toLowerCase() === clientNom.trim().toLowerCase()),
