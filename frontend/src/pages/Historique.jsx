@@ -381,9 +381,18 @@ export default function Historique() {
                                 <DetailItem label="Aliment consommé" value={`${p.conso_aliment_sacs} sacs`} />
                                 <DetailItem label="Aliment reçu" value={`${p.aliment_recu_sacs} sacs`} />
                                 <DetailItem label="Stock aliment après" value={formatSacs(Number(p.stock_aliment_apres_sacs))} />
+                                {/* N'apparaît que si un transfert de stock a touché ce point ce
+                                    jour-là — explique un saut de stock qui ne vient ni d'un achat
+                                    ni de la consommation (cf. conversation du 31/07/2026). */}
+                                {Number(p.aliment_transfert_entree_sacs) > 0 && <DetailItem label="Aliment reçu (transfert)" value={`${p.aliment_transfert_entree_sacs} sacs`} />}
+                                {Number(p.aliment_transfert_sortie_sacs) > 0 && <DetailItem label="Aliment envoyé (transfert)" value={`${p.aliment_transfert_sortie_sacs} sacs`} />}
                                 <DetailItem label="Alvéole reçu" value={`${nf(p.alveole_recu_unites)} unités`} />
                                 <DetailItem label="Alvéole consommé" value={`${nf(p.alveole_conso_unites)} unités`} />
                                 <DetailItem label="Stock alvéole après" value={formatColis(p.stock_alveole_apres_unites)} />
+                                {p.alveole_transfert_entree_unites > 0 && <DetailItem label="Alvéole reçu (transfert)" value={`${nf(p.alveole_transfert_entree_unites)} unités`} />}
+                                {p.alveole_transfert_sortie_unites > 0 && <DetailItem label="Alvéole envoyé (transfert)" value={`${nf(p.alveole_transfert_sortie_unites)} unités`} />}
+                                {p.oeuf_transfert_entree_unites > 0 && <DetailItem label="Œufs reçus (transfert)" value={`${nf(p.oeuf_transfert_entree_unites)} œufs`} />}
+                                {p.oeuf_transfert_sortie_unites > 0 && <DetailItem label="Œufs envoyés (transfert)" value={`${nf(p.oeuf_transfert_sortie_unites)} œufs`} />}
                                 <DetailItem label="Cassé" value={`${nf(p.casse)} œufs`} />
                                 <DetailItem label="Brisé" value={`${nf(p.brise)} œufs`} />
                                 <DetailItem label="Sorties d'œufs" value={`${nf(p.sortie_oeuf)} œufs`} />
