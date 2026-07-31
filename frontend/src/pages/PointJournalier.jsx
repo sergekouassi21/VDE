@@ -5,7 +5,7 @@ import {
   getFermes, soumettrePointJournalier, declarerBande, terminerBande, getBilanBande, getPointJournalier,
   getPointsJournaliers, getEmployesFerme, getCommandesAliment, creerEvenementSante,
 } from "../api/client";
-import { GREEN, GREEN_DARK, CREAM, INK, CLAY, formatSacs, formatColis, AGE_REFORME_SEMAINES } from "../theme";
+import { GREEN, GREEN_DARK, CREAM, INK, CLAY, formatSacs, formatColis, AGE_REFORME_SEMAINES, UNITES_PAR_COLIS } from "../theme";
 import { genererPdfPointJournalier, genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { ajouterSoumissionEnAttente, listerSoumissionsEnAttente } from "../offline/queue";
 import { synchroniserSoumissionsEnAttente } from "../offline/sync";
@@ -32,6 +32,13 @@ const CAUSES_MORTALITE = [
 ];
 
 const n = (v) => (v === "" || v === null || v === undefined || isNaN(v) ? 0 : Number(v));
+// L'aliment reçu se compte déjà en sacs (l'unité native du champ backend),
+// mais les alvéoles arrivent du fournisseur par colis de 100 unités — plus
+// naturel pour le chef d'y saisir "3 colis" que "300 unités" (cf.
+// conversation du 31/07/2026 avec Serge). Le champ backend reste en unités
+// brutes ; seule cette conversion d'affichage/saisie change.
+const colisVersUnites = (colis) => Math.round(n(colis) * UNITES_PAR_COLIS);
+const unitesVersColis = (unites) => n(unites) / UNITES_PAR_COLIS;
 const todayISO = () => new Date().toISOString().slice(0, 10);
 // Jour calendaire précédent une date ISO ("YYYY-MM-DD"), en local (pas UTC) —
 // sert à retrouver le vrai "jour d'avant" d'une date arbitraire (pas
@@ -182,7 +189,7 @@ export default function PointJournalier() {
             aliment_recu_sacs: String(point.aliment_recu_sacs),
             traitement: point.traitement,
             eau_consommee_litres: String(point.eau_consommee_litres),
-            alveole_recu_unites: String(point.alveole_recu_unites),
+            alveole_recu_unites: String(unitesVersColis(point.alveole_recu_unites)),
             alveole_conso_unites: String(point.alveole_conso_unites),
             production_oeufs: String(point.production_oeufs),
             casse: String(point.casse),
@@ -290,7 +297,7 @@ export default function PointJournalier() {
     // production ÷ 30 reste affichée comme simple repère, cf. conversation
     // du 29/07/2026 avec Serge.
     const alveoleConsoSuggestion = Math.floor(n(form.production_oeufs) / 30);
-    const stockAlveole = magasin.stock_alveoles_unites + n(form.alveole_recu_unites) - n(form.alveole_conso_unites);
+    const stockAlveole = magasin.stock_alveoles_unites + colisVersUnites(form.alveole_recu_unites) - n(form.alveole_conso_unites);
     return { resteEffectif, stockOeufJour, stockTotal, tauxPonte, stockAlimentSacs, alveoleConsoSuggestion, stockAlveole };
   }, [form, ferme, bande, magasin, totalSorties, pointVeille, pointVeilleErreur]);
 
@@ -320,7 +327,7 @@ export default function PointJournalier() {
       morts: n(form.morts), cause_morts: form.cause_morts, conso_aliment_sacs: n(form.conso_aliment_sacs),
       aliment_recu_sacs: n(form.aliment_recu_sacs), traitement: form.traitement,
       eau_consommee_litres: n(form.eau_consommee_litres),
-      alveole_recu_unites: n(form.alveole_recu_unites), alveole_conso_unites: n(form.alveole_conso_unites),
+      alveole_recu_unites: colisVersUnites(form.alveole_recu_unites), alveole_conso_unites: n(form.alveole_conso_unites),
       production_oeufs: n(form.production_oeufs),
       casse: n(form.casse), brise: n(form.brise),
       sorties: sorties.map((s) => ({ ...s, responsable_employe: s.responsable_employe || null })),
@@ -572,7 +579,10 @@ export default function PointJournalier() {
 
           {ferme.type === "PONTE" && (
             <Section icon={<Package size={15} />} titre="Alvéoles">
-              <FieldNum label="Alvéole reçu" value={form.alveole_recu_unites} onChange={(v) => set("alveole_recu_unites", v)} unit="unités" />
+              <FieldNum label="Alvéole reçu" value={form.alveole_recu_unites} onChange={(v) => set("alveole_recu_unites", v)} unit="colis" step="0.1" />
+              {n(form.alveole_recu_unites) > 0 && (
+                <p style={styles.magasinNote}>≈ {colisVersUnites(form.alveole_recu_unites).toLocaleString("fr-FR")} unités (1 colis = {UNITES_PAR_COLIS} unités)</p>
+              )}
               <FieldNum label="Alvéole consommé" value={form.alveole_conso_unites} onChange={(v) => set("alveole_conso_unites", v)} unit="unités" />
               <p style={styles.magasinNote}>Suggestion : {calc.alveoleConsoSuggestion.toLocaleString("fr-FR")} unités (production ÷ 30) — à corriger si les alvéoles n'étaient pas remplies pile à 30 œufs.</p>
               <FieldCalc label="Stock alvéole restant" value={formatColis(calc.stockAlveole)}

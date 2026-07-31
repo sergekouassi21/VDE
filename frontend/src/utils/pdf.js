@@ -203,7 +203,7 @@ export function genererPdfPointJournalier({ ferme, bande, dateJour, form, calc, 
 
   if (ferme.type === "PONTE") {
     y = bandeauSection(doc, y + 2, "Alvéoles");
-    y = ligneCle(doc, y, "Reçu", `${nf(form.alveole_recu_unites || 0)} unités`);
+    y = ligneCle(doc, y, "Reçu", `${form.alveole_recu_unites || 0} colis`);
     y = ligneCle(doc, y, "Consommé", `${nf(form.alveole_conso_unites || 0)} unités`);
     y = ligneCle(doc, y, "Stock restant", formatColis(calc.stockAlveole));
 
@@ -277,7 +277,7 @@ export function genererPdfHistoriquePoint(p) {
   if (Number(p.eau_consommee_litres) > 0) y = ligneCle(doc, y, "Eau consommée", `${p.eau_consommee_litres} litres`);
 
   y = bandeauSection(doc, y + 2, "Alvéoles");
-  y = ligneCle(doc, y, "Reçu", `${nf(p.alveole_recu_unites)} unités`);
+  y = ligneCle(doc, y, "Reçu", formatColis(p.alveole_recu_unites));
   y = ligneCle(doc, y, "Consommé", `${nf(p.alveole_conso_unites)} unités`);
   y = ligneCle(doc, y, "Stock après", formatColis(p.stock_alveole_apres_unites));
 

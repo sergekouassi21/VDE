@@ -386,7 +386,7 @@ export default function Historique() {
                                     ni de la consommation (cf. conversation du 31/07/2026). */}
                                 {Number(p.aliment_transfert_entree_sacs) > 0 && <DetailItem label="Aliment reçu (transfert)" value={`${p.aliment_transfert_entree_sacs} sacs`} />}
                                 {Number(p.aliment_transfert_sortie_sacs) > 0 && <DetailItem label="Aliment envoyé (transfert)" value={`${p.aliment_transfert_sortie_sacs} sacs`} />}
-                                <DetailItem label="Alvéole reçu" value={`${nf(p.alveole_recu_unites)} unités`} />
+                                <DetailItem label="Alvéole reçu" value={formatColis(p.alveole_recu_unites)} />
                                 <DetailItem label="Alvéole consommé" value={`${nf(p.alveole_conso_unites)} unités`} />
                                 <DetailItem label="Stock alvéole après" value={formatColis(p.stock_alveole_apres_unites)} />
                                 {p.alveole_transfert_entree_unites > 0 && <DetailItem label="Alvéole reçu (transfert)" value={`${nf(p.alveole_transfert_entree_unites)} unités`} />}
