@@ -480,18 +480,23 @@ function Historique({ factures, ventesManuelles, onRafraichir }) {
   const [edition, setEdition] = useState(null);
   const [brouillon, setBrouillon] = useState({ quantite: "", responsable: "" });
   const [envoi, setEnvoi] = useState(false);
+  const [erreur, setErreur] = useState("");
 
   function commencerEdition(v) {
     setEdition(v.id);
     setBrouillon({ quantite: String(v.quantite), responsable: v.responsable });
+    setErreur("");
   }
 
   async function enregistrerEdition(id) {
     setEnvoi(true);
+    setErreur("");
     try {
       await updateSortieOeuf(id, { quantite: Number(brouillon.quantite) || 0, responsable: brouillon.responsable });
       setEdition(null);
       onRafraichir();
+    } catch (e) {
+      setErreur(e.response?.data?.detail || "Erreur lors de la modification de cette vente.");
     } finally {
       setEnvoi(false);
     }
@@ -500,9 +505,12 @@ function Historique({ factures, ventesManuelles, onRafraichir }) {
   async function supprimer(v) {
     if (!window.confirm(`Supprimer la sortie de ${nf(v.quantite)} œufs (${v.ferme}, ${v.responsable}) ?`)) return;
     setEnvoi(true);
+    setErreur("");
     try {
       await deleteSortieOeuf(v.id);
       onRafraichir();
+    } catch (e) {
+      setErreur(e.response?.data?.detail || "Erreur lors de la suppression de cette vente.");
     } finally {
       setEnvoi(false);
     }
@@ -543,6 +551,7 @@ function Historique({ factures, ventesManuelles, onRafraichir }) {
       </section>
 
       <div style={styles.sectionLabel}>Sorties d'œufs saisies sur le Point Journalier</div>
+      {erreur && <p style={styles.erreur}>{erreur}</p>}
       <section style={styles.card}>
         {ventesManuelles.length === 0 ? (
           <p style={styles.empty}>Aucune vente saisie manuellement.</p>
