@@ -579,6 +579,7 @@ function Historique({ factures, ventesManuelles, onRafraichir, resume }) {
                 <th style={{ ...styles.th, textAlign: "right" }}>Total</th>
                 <th style={styles.th}>Paiement</th>
                 <th style={{ ...styles.th, textAlign: "right" }}>Reste dû</th>
+                <th style={{ ...styles.th, textAlign: "right" }}>PDF</th>
               </tr>
             </thead>
             <tbody>
@@ -590,6 +591,18 @@ function Historique({ factures, ventesManuelles, onRafraichir, resume }) {
                   <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>{fcfa(f.montant_total)}</td>
                   <td style={styles.td}>{f.mode_paiement === "COMPTANT" ? "Comptant" : f.mode_paiement === "DOIT" ? "Doit" : "Partiel"}</td>
                   <td style={{ ...styles.td, textAlign: "right", color: Number(f.reste_du) > 0 ? CLAY : "inherit" }}>{fcfa(f.reste_du)}</td>
+                  <td style={{ ...styles.td, textAlign: "right" }}>
+                    <div style={styles.actionsRow}>
+                      <button style={styles.actionBtn} title="Télécharger le PDF" onClick={() => telechargerPdf(genererPdfFacture(f), nomFichierFacture(f))}>
+                        <Download size={14} />
+                      </button>
+                      {partageDisponible && (
+                        <button style={styles.actionBtn} title="Partager" onClick={() => partagerPdf(genererPdfFacture(f), nomFichierFacture(f))}>
+                          <Share2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
