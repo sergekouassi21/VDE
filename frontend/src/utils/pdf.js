@@ -11,12 +11,42 @@ function separeMilliers(n) {
 }
 const fcfa = (v) => separeMilliers(Number(v) || 0) + " F";
 const nf = (v) => separeMilliers(Number(v) || 0);
+// "plateau" a un pluriel irrégulier (plateaux, pas plateaus) — trouvé en
+// vérifiant visuellement la facture PDF redessinée, cf. conversation du
+// 31/07/2026 avec Serge.
+const pluriel = (unite, qte) => (qte > 1 && unite === "plateau" ? "plateaux" : qte > 1 && unite !== "kg" ? unite + "s" : unite);
 
 const GREEN_DARK = [18, 61, 38];
+const GREEN = [30, 90, 56];
+const GOLD = [232, 169, 59];
+const ORANGE = [224, 123, 42];
 const INK = [26, 36, 32];
 const GRAY = [122, 133, 127];
 const CLAY = [198, 96, 58];
 const ROW_ALT = [244, 241, 234];
+
+// jsPDF n'a pas de remplissage dégradé natif — on l'imite avec des bandes
+// verticales fines dont la couleur est interpolée entre plusieurs teintes de
+// repère (cf. refonte de la facture, conversation du 31/07/2026 avec Serge :
+// direction "Aurore", qui reprend le dégradé vert → or → orange du logo).
+function degradeHorizontal(doc, x, y, w, h, teintes) {
+  const BANDES = 140;
+  const largeur = w / BANDES + 0.25; // léger chevauchement pour éviter les liserés blancs
+  const segments = teintes.length - 1;
+  for (let i = 0; i < BANDES; i++) {
+    const t = (i / (BANDES - 1)) * segments;
+    const seg = Math.min(Math.floor(t), segments - 1);
+    const local = t - seg;
+    const [r0, g0, b0] = teintes[seg];
+    const [r1, g1, b1] = teintes[seg + 1];
+    doc.setFillColor(
+      Math.round(r0 + (r1 - r0) * local),
+      Math.round(g0 + (g1 - g0) * local),
+      Math.round(b0 + (b1 - b0) * local),
+    );
+    doc.rect(x + i * (w / BANDES), y, largeur, h, "F");
+  }
+}
 
 const LABEL_PRODUIT = {
   OEUF_CARTON: "Œufs — carton (14 plateaux)",
@@ -91,77 +121,122 @@ function ligneCle(doc, y, label, valeur) {
   return y + 7;
 }
 
+// Design "Aurore" — bandeau dégradé vert → or → orange qui reprend le motif
+// lever-de-soleil/œuf du logo (cf. refonte de la facture, conversation du
+// 31/07/2026 avec Serge). Le dégradé reste concentré sur le tiers droit,
+// purement décoratif : tout le texte du bandeau (marque, n° de facture,
+// date) reste sur la portion vert foncé pour garder un contraste sûr sur
+// blanc, sans dépendre de la couleur exacte sous chaque élément.
 export function genererPdfFacture(facture) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  entete(doc, "Agnibilékrou — La fraîcheur de l'Est, de notre ferme à votre table");
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.setTextColor(...INK);
-  doc.text(`Facture N° ${String(facture.numero).padStart(7, "0")}`, 15, 42);
+  degradeHorizontal(doc, 0, 0, 210, 56, [GREEN_DARK, GREEN, GOLD, ORANGE]);
+
+  doc.setFillColor(255, 255, 255);
+  doc.circle(23, 18, 11, "F");
+  try {
+    doc.addImage(LOGO_BASE64, "PNG", 15, 10, 16, 16);
+  } catch {
+    // pas bloquant si l'image ne peut pas être décodée
+  }
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10.5);
-  doc.setTextColor(...GRAY);
-  doc.text(`Date : ${new Date(facture.date).toLocaleDateString("fr-FR")}`, 15, 49);
-  doc.text(`Client : ${facture.client.nom}`, 15, 55);
-  if (facture.client.telephone) doc.text(`Téléphone : ${facture.client.telephone}`, 15, 61);
+  doc.setFontSize(8.5);
+  doc.setTextColor(225, 235, 228);
+  doc.text("F A C T U R E", 35, 14);
 
-  const lignesConsolidees = consoliderLignesFacture(facture.lignes);
-
-  let y = 74;
-  doc.setFillColor(...GREEN_DARK);
-  doc.rect(15, y - 5.5, 180, 8, "F");
-  doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
-  doc.text("Désignation", 18, y);
-  doc.text("P.U.", 150, y, { align: "right" });
-  doc.text("Total", 192, y, { align: "right" });
-  y += 8;
+  doc.setFontSize(13.5);
+  doc.setTextColor(255, 255, 255);
+  doc.text("VOLAILLES DE L'EST", 35, 20.5);
+
+  doc.setFontSize(25);
+  doc.text(`N° ${String(facture.numero).padStart(7, "0")}`, 15, 39);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  lignesConsolidees.forEach((l, i) => {
-    if (i % 2 === 1) {
-      doc.setFillColor(...ROW_ALT);
-      doc.rect(15, y - 5, 180, 7, "F");
-    }
+  doc.setTextColor(225, 235, 228);
+  doc.text(new Date(facture.date).toLocaleDateString("fr-FR"), 15, 44);
+
+  // Fiche client blanche, en surimpression sur le bas du bandeau — un
+  // rectangle gris clair légèrement décalé simule une ombre portée (jsPDF
+  // n'a pas de flou natif). Décalée à y=48 (et non 46) pour ne pas chevaucher
+  // la date juste au-dessus.
+  doc.setFillColor(225, 222, 213);
+  doc.roundedRect(16.3, 49.5, 95, 25, 3, 3, "F");
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(15, 48, 95, 25, 3, 3, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12.5);
+  doc.setTextColor(...INK);
+  doc.text(facture.client.nom, 22, 59, { maxWidth: 82 });
+  if (facture.client.telephone) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(...GRAY);
+    doc.text(facture.client.telephone, 22, 66);
+  }
+
+  const lignesConsolidees = consoliderLignesFacture(facture.lignes);
+
+  let y = 86;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY);
+  doc.text("DÉSIGNATION", 15, y);
+  doc.text("P.U.", 150, y, { align: "right" });
+  doc.text("TOTAL", 195, y, { align: "right" });
+  y += 3;
+  doc.setDrawColor(...GREEN_DARK);
+  doc.setLineWidth(0.6);
+  doc.line(15, y, 195, y);
+  y += 13;
+
+  doc.setLineWidth(0.2);
+  lignesConsolidees.forEach((l) => {
+    if (y > 255) { doc.addPage(); entete(doc, `Facture N° ${String(facture.numero).padStart(7, "0")} — suite`); y = 45; }
     const unite = UNITE_PRODUIT[l.type_produit];
     const qte = Number(l.quantite);
-    const desig = `${nf(qte)} ${unite}${qte > 1 && unite !== "kg" ? "s" : ""} — ${LABEL_PRODUIT[l.type_produit]}`;
+    const desig = `${nf(qte)} ${pluriel(unite, qte)} — ${LABEL_PRODUIT[l.type_produit]}`;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10.5);
     doc.setTextColor(...INK);
-    doc.text(desig, 18, y, { maxWidth: 124 });
+    doc.text(desig, 15, y, { maxWidth: 124 });
+    doc.setTextColor(...GRAY);
+    doc.setFontSize(9.5);
     doc.text(`${fcfa(l.prix_unitaire)}/${PRIX_UNITE_PRODUIT[l.type_produit]}`, 150, y, { align: "right" });
-    doc.text(fcfa(l.montant), 192, y, { align: "right" });
-    y += 7;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10.5);
+    doc.setTextColor(...INK);
+    doc.text(fcfa(l.montant), 195, y, { align: "right" });
+    doc.setDrawColor(237, 233, 220);
+    doc.line(15, y + 3.3, 195, y + 3.3);
+    y += 11;
   });
 
-  y += 3;
-  doc.setDrawColor(...GRAY);
-  doc.line(15, y, 195, y);
-  y += 9;
-
+  y += 4;
+  degradeHorizontal(doc, 15, y, 180, 18, [GOLD, ORANGE]);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.setTextColor(...INK);
-  doc.text("Total", 150, y, { align: "right" });
-  doc.text(fcfa(facture.montant_total), 192, y, { align: "right" });
-  y += 10;
-
-  const statut = facture.mode_paiement === "COMPTANT" ? "PAYÉ COMPTANT"
-    : facture.mode_paiement === "DOIT" ? "CRÉDIT (DOIT)"
-    : `PARTIEL — versé ${fcfa(facture.montant_verse)}`;
   doc.setFontSize(11);
   doc.setTextColor(...GREEN_DARK);
-  doc.text(statut, 15, y);
+  doc.text("TOTAL", 24, y + 11.5);
+  doc.setFontSize(18);
+  doc.text(fcfa(facture.montant_total), 186, y + 12.5, { align: "right" });
+  y += 18 + 11;
 
-  if (Number(facture.reste_du) > 0) {
-    y += 8;
-    doc.setTextColor(...CLAY);
-    doc.setFont("helvetica", "bold");
-    doc.text(`Reste dû : ${fcfa(facture.reste_du)}`, 15, y);
-  }
+  const resteDu = Number(facture.reste_du);
+  const statutBase = facture.mode_paiement === "COMPTANT" ? "Payé comptant"
+    : facture.mode_paiement === "DOIT" ? "Crédit (doit)"
+    : `Partiel — versé ${fcfa(facture.montant_verse)}`;
+  const texteStatut = resteDu > 0 ? `${statutBase} — reste dû ${fcfa(resteDu)}` : statutBase;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  const largeurTexte = doc.getTextWidth(texteStatut);
+  const largeurPastille = largeurTexte + 16;
+  doc.setFillColor(...(resteDu > 0 ? CLAY : GREEN_DARK));
+  doc.roundedRect(15, y - 6.5, largeurPastille, 9, 4.5, 4.5, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.text(texteStatut, 15 + largeurPastille / 2, y - 0.7, { align: "center" });
 
   doc.setFont("helvetica", "italic");
   doc.setFontSize(9);

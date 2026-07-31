@@ -15,6 +15,10 @@ const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
 const fcfa = (v) => (Number(v) || 0).toLocaleString("fr-FR") + " F";
 const nf = (v) => (Number(v) || 0).toLocaleString("fr-FR");
 const today = () => new Date().toISOString().slice(0, 10);
+// "plateau" a un pluriel irrégulier (plateaux, pas plateaus) — trouvé en
+// vérifiant visuellement la facture PDF redessinée, cf. conversation du
+// 31/07/2026 avec Serge.
+const pluriel = (unite, qte) => (qte > 1 && unite === "plateau" ? "plateaux" : qte > 1 && unite !== "kg" ? unite + "s" : unite);
 const JOURS_CREANCE_RETARD = 15; // cf. conversation du 27/07/2026 avec Serge
 const joursDepuis = (iso) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 
@@ -344,7 +348,7 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
           </div>
           <div style={styles.ligneGrid}>
             <label style={styles.miniField}>
-              <span style={styles.miniLabel}>Quantité ({d.produit.unite}{d.qte > 1 && d.produit.unite !== "kg" ? "s" : ""})</span>
+              <span style={styles.miniLabel}>Quantité ({pluriel(d.produit.unite, d.qte)})</span>
               <input type="number" inputMode="decimal" style={styles.miniInput} placeholder="0" value={d.quantite} onChange={(e) => setLigne(i, "quantite", e.target.value)} />
             </label>
             <label style={styles.miniField}>
