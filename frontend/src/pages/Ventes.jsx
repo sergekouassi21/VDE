@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Plus, Trash2, Pencil, Check, X, Receipt, CreditCard, Wallet, ChevronRight, AlertTriangle, Download, Share2, WifiOff } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X, Receipt, CreditCard, Wallet, ChevronRight, AlertTriangle, Download, Share2, WifiOff, MessageCircle } from "lucide-react";
 import {
   getFermes, getClients, getFactures, getFacturesCreances, getVentes, getVentesResume,
   creerFacture, encaisserVersement, updateSortieOeuf, deleteSortieOeuf, getHistoriquePrixClient,
 } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY, formatCartons } from "../theme";
-import { genererPdfFacture, telechargerPdf, partagerPdf } from "../utils/pdf";
+import { genererPdfFacture, genererPdfCreances, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { mettreEnCache, lireCache } from "../offline/cache";
 
 const CACHE_CLE_VENTES = "ventes-donnees";
@@ -17,6 +17,29 @@ const nf = (v) => (Number(v) || 0).toLocaleString("fr-FR");
 const today = () => new Date().toISOString().slice(0, 10);
 const JOURS_CREANCE_RETARD = 15; // cf. conversation du 27/07/2026 avec Serge
 const joursDepuis = (iso) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+
+// Numéro de téléphone client saisi en local (10 chiffres, avec ou sans le 0
+// initial) — converti au format international attendu par un lien wa.me
+// (indicatif Côte d'Ivoire 225). Retourne null si le champ est vide/invalide
+// plutôt que de générer un lien qui ne mènerait nulle part.
+function numeroWhatsapp(telephone) {
+  const chiffres = (telephone || "").replace(/\D/g, "");
+  if (!chiffres) return null;
+  if (chiffres.startsWith("225")) return chiffres;
+  if (chiffres.startsWith("00225")) return chiffres.slice(2);
+  if (chiffres.length === 10) return "225" + (chiffres.startsWith("0") ? chiffres.slice(1) : chiffres);
+  return null;
+}
+
+function lienRelanceWhatsapp(facture) {
+  const numero = numeroWhatsapp(facture.client.telephone);
+  if (!numero) return null;
+  const message =
+    `Bonjour ${facture.client.nom}, nous vous rappelons que la facture n°${String(facture.numero).padStart(7, "0")} ` +
+    `du ${new Date(facture.date).toLocaleDateString("fr-FR")} reste à régler (reste dû : ${fcfa(facture.reste_du)}). ` +
+    `Merci de votre compréhension. — Volailles de l'Est`;
+  return `https://wa.me/${numero}?text=${encodeURIComponent(message)}`;
+}
 
 // Catalogue produits — pour les œufs, le prix se saisit AU PLATEAU (= 1 alvéole
 // = 30 œufs). 1 carton = 14 plateaux, donc montant = qte × 14 × prix du plateau.
@@ -416,12 +439,19 @@ function Creances({ creances, onEncaisse }) {
     }
   }
 
+  function exporter() {
+    telechargerPdf(genererPdfCreances(creances, JOURS_CREANCE_RETARD), `creances-${today()}.pdf`);
+  }
+
   return (
     <div style={styles.body}>
       <div style={styles.creanceHead}>
         <span style={styles.creanceLabel}>Total créances clients</span>
         <span style={styles.creanceTotal}>{fcfa(total)}</span>
       </div>
+      <button style={styles.printBtn} onClick={exporter}>
+        <Download size={17} /> Exporter les créances (PDF)
+      </button>
       <div style={styles.sectionLabel}>Clients qui doivent ({creances.length})</div>
       {nbEnRetard > 0 && (
         <p style={styles.retardWarn}><AlertTriangle size={13} /> {nbEnRetard} créance{nbEnRetard > 1 ? "s" : ""} en retard depuis plus de {JOURS_CREANCE_RETARD} jours</p>
@@ -458,6 +488,13 @@ function Creances({ creances, onEncaisse }) {
                       <div key={v.id} style={styles.histoLigne}><span>{new Date(v.date).toLocaleDateString("fr-FR")}</span><span>{fcfa(v.montant)}</span></div>
                     ))}
                   </div>
+                )}
+                {lienRelanceWhatsapp(f) ? (
+                  <a href={lienRelanceWhatsapp(f)} target="_blank" rel="noopener noreferrer" style={styles.relanceBtn}>
+                    <MessageCircle size={16} /> Relancer via WhatsApp
+                  </a>
+                ) : (
+                  <p style={styles.relanceIndispo}>Aucun téléphone enregistré pour ce client — impossible de relancer par WhatsApp.</p>
                 )}
                 <div style={styles.encaisseInputRow}>
                   <input type="number" inputMode="numeric" style={styles.miniInput} placeholder="Montant reçu" value={montant} onChange={(e) => setMontant(e.target.value)} />
@@ -680,6 +717,8 @@ const styles = {
   venduHead: { background: `linear-gradient(135deg, ${GREEN}, ${GREEN_DARK})`, color: "#fff", borderRadius: 16, padding: "18px 20px", marginBottom: 4 },
   venduLabel: { fontSize: 13, opacity: .9, display: "block", marginBottom: 4 },
   venduTotal: { fontWeight: 700, fontSize: 22 },
+  relanceBtn: { marginTop: 12, width: "100%", background: "#25D366", color: "#fff", border: "none", borderRadius: 13, padding: "13px", fontSize: 14.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, textDecoration: "none", boxSizing: "border-box" },
+  relanceIndispo: { marginTop: 12, fontSize: 12.5, color: "#8A9088", textAlign: "center" },
   creanceCard: { background: "#fff", borderRadius: 12, border: "1px solid #ECE9DF", marginBottom: 8, overflow: "hidden" },
   creanceRowBtn: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", padding: "13px 14px", cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
   encaisseZone: { padding: "4px 14px 14px", borderTop: "1px solid #F2F0E8" },

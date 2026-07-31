@@ -598,6 +598,90 @@ export function genererFichePaie(employe, periodeLabel, lignes, absencesJustifie
   return doc;
 }
 
+// Relevé imprimable des créances clients en cours (reste dû > 0) — pour
+// archivage ou envoi à un tiers (comptable, etc.), cf. conversation du
+// 31/07/2026 avec Serge.
+export function genererPdfCreances(creances, joursCreanceRetard = 15) {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  entete(doc, "Relevé des créances clients");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(...INK);
+  doc.text("Créances clients en cours", 15, 42);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(...GRAY);
+  doc.text(
+    `Édité le ${new Date().toLocaleDateString("fr-FR")} · ${creances.length} facture${creances.length > 1 ? "s" : ""}`,
+    15, 49,
+  );
+
+  if (creances.length === 0) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(11);
+    doc.text("Aucune créance en cours — tout est soldé.", 15, 62);
+    return doc;
+  }
+
+  let y = 62;
+  const enTeteTableau = () => {
+    doc.setFillColor(...GREEN_DARK);
+    doc.rect(15, y - 5.5, 180, 8, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("Client", 18, y);
+    doc.text("Facture", 90, y);
+    doc.text("Date", 115, y);
+    doc.text("Total", 150, y, { align: "right" });
+    doc.text("Reste dû", 192, y, { align: "right" });
+    y += 8;
+  };
+  enTeteTableau();
+
+  const joursDepuis = (iso) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  let total = 0;
+  creances.forEach((f, i) => {
+    if (y > 265) { doc.addPage(); entete(doc, "Relevé des créances clients"); y = 42; enTeteTableau(); }
+    const enRetard = joursDepuis(f.date) > joursCreanceRetard;
+    if (i % 2 === 1) {
+      doc.setFillColor(...ROW_ALT);
+      doc.rect(15, y - 5, 180, 7, "F");
+    }
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(...(enRetard ? CLAY : INK));
+    doc.text(f.client.nom, 18, y, { maxWidth: 68 });
+    doc.text(String(f.numero).padStart(7, "0"), 90, y);
+    doc.text(new Date(f.date).toLocaleDateString("fr-FR"), 115, y);
+    doc.setFont("helvetica", "bold");
+    doc.text(fcfa(f.montant_total), 150, y, { align: "right" });
+    doc.text(fcfa(f.reste_du), 192, y, { align: "right" });
+    total += Number(f.reste_du);
+    y += 7;
+  });
+
+  y += 3;
+  doc.setDrawColor(...GRAY);
+  doc.line(15, y, 195, y);
+  y += 9;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12.5);
+  doc.setTextColor(...CLAY);
+  doc.text("Total créances", 150, y, { align: "right" });
+  doc.text(fcfa(total), 192, y, { align: "right" });
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY);
+  doc.text("Volailles de l'Est", 105, 285, { align: "center" });
+
+  return doc;
+}
+
 // Tente le partage natif (mobile/PWA) ; retombe sur un téléchargement classique
 // si l'API Web Share n'est pas disponible ou si le partage échoue.
 export async function partagerPdf(doc, nomFichier) {
