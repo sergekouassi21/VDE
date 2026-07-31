@@ -128,7 +128,7 @@ export default function Ventes() {
         ) : onglet === "creances" ? (
           <Creances creances={creances} onEncaisse={rafraichir} />
         ) : (
-          <Historique factures={factures} ventesManuelles={ventesManuelles} onRafraichir={rafraichir} />
+          <Historique factures={factures} ventesManuelles={ventesManuelles} onRafraichir={rafraichir} resume={resume} />
         )}
       </div>
     </div>
@@ -476,7 +476,7 @@ function Creances({ creances, onEncaisse }) {
   );
 }
 
-function Historique({ factures, ventesManuelles, onRafraichir }) {
+function Historique({ factures, ventesManuelles, onRafraichir, resume }) {
   const [edition, setEdition] = useState(null);
   const [brouillon, setBrouillon] = useState({ quantite: "", responsable: "" });
   const [envoi, setEnvoi] = useState(false);
@@ -518,6 +518,12 @@ function Historique({ factures, ventesManuelles, onRafraichir }) {
 
   return (
     <div style={styles.body}>
+      {resume && (
+        <div style={styles.venduHead}>
+          <span style={styles.venduLabel}>Total œufs vendus (historique, manuel + facturé)</span>
+          <span style={styles.venduTotal}>{formatCartons(resume.oeufs_vendus_total)}</span>
+        </div>
+      )}
       <div style={styles.sectionLabel}>Factures</div>
       <section style={styles.card}>
         {factures.length === 0 ? (
@@ -671,6 +677,9 @@ const styles = {
   creanceHead: { background: `linear-gradient(135deg, ${CLAY}, #9E4527)`, color: "#fff", borderRadius: 16, padding: "18px 20px", marginBottom: 4 },
   creanceLabel: { fontSize: 13, opacity: .9, display: "block", marginBottom: 4 },
   creanceTotal: { fontWeight: 700, fontSize: 28 },
+  venduHead: { background: `linear-gradient(135deg, ${GREEN}, ${GREEN_DARK})`, color: "#fff", borderRadius: 16, padding: "18px 20px", marginBottom: 4 },
+  venduLabel: { fontSize: 13, opacity: .9, display: "block", marginBottom: 4 },
+  venduTotal: { fontWeight: 700, fontSize: 22 },
   creanceCard: { background: "#fff", borderRadius: 12, border: "1px solid #ECE9DF", marginBottom: 8, overflow: "hidden" },
   creanceRowBtn: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", padding: "13px 14px", cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
   encaisseZone: { padding: "4px 14px 14px", borderTop: "1px solid #F2F0E8" },
