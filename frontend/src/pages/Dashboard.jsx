@@ -464,7 +464,15 @@ export default function Dashboard() {
                     </div>
                   );
                   const t = tauxPonte(f);
-                  const alerte = t < 60 || Number(f.magasin.stock_aliment_sacs) <= Number(f.magasin.seuil_alerte_aliment_sacs) || f.bande_active.age.valeur >= AGE_REFORME_SEMAINES;
+                  const stockAlimentBas = Number(f.magasin.stock_aliment_sacs) <= Number(f.magasin.seuil_alerte_aliment_sacs);
+                  // Le taux de ponte et l'âge de réforme ne concernent que les
+                  // pondeuses — une ferme chair ne produit jamais d'œufs, donc
+                  // son taux_ponte calculé côté serveur est toujours à 0 %,
+                  // ce qui déclenchait ici un badge d'alerte "0%" trompeur en
+                  // permanence (cf. conversation du 01/08/2026 avec Serge).
+                  const alerte = f.type === "PONTE"
+                    ? (t < 60 || stockAlimentBas || f.bande_active.age.valeur >= AGE_REFORME_SEMAINES)
+                    : stockAlimentBas;
                   const ouvert = sel === f.id;
                   return (
                     <Fragment key={f.id}>
@@ -474,7 +482,11 @@ export default function Dashboard() {
                           <div style={styles.fermeMeta}>{f.bande_active.age.label} · {nf(effectifActuel(f))} sujets · {formatSacs(Number(f.magasin.stock_aliment_sacs))}</div>
                         </div>
                         <div style={styles.fermeRight}>
-                          <span style={{ ...styles.tauxBadge, ...(alerte ? styles.tauxBadgeAlert : {}) }}>{t.toFixed(0)}%</span>
+                          {f.type === "PONTE" ? (
+                            <span style={{ ...styles.tauxBadge, ...(alerte ? styles.tauxBadgeAlert : {}) }}>{t.toFixed(0)}%</span>
+                          ) : alerte ? (
+                            <span style={{ ...styles.tauxBadge, ...styles.tauxBadgeAlert }}>Stock bas</span>
+                          ) : null}
                           <ChevronRight size={16} color="#B5BBB2" style={{ transform: ouvert ? "rotate(90deg)" : "none", transition: ".2s" }} />
                         </div>
                       </button>
