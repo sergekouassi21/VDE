@@ -9,6 +9,7 @@ import qrcode
 from PIL import Image, ImageDraw, ImageFont
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import ProtectedError, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -19,9 +20,21 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
 from exploitation.audit import AuditMixin, journaliser, journaliser_objet
-from exploitation.calculs import prix_moyen_sac_aliment
+from exploitation.calculs import _verrou_consultatif, _verrou_consultatif_texte, prix_moyen_sac_aliment
 from exploitation.models import ActionAudit, Ferme, LigneFacture, PointJournalier, RoleUtilisateur
 from exploitation.permissions import EstDirectionOuAdmin
+
+# Espaces de noms pour pg_advisory_xact_lock (cf. exploitation/calculs.py,
+# _LOCK_CLASSID_*) — classid 1 à 3 y sont déjà pris (numéro de facture, nom
+# client, nom fournisseur), celui-ci continue la numérotation pour rester
+# unique à l'échelle de toute la base (un seul espace de verrous
+# consultatifs par connexion Postgres, partagé par toute l'appli). Cf.
+# conversation du 01/08/2026 avec Serge.
+_LOCK_CLASSID_APPAREIL_POINTAGE = 4
+_LOCK_CLASSID_BADGE_TEMPORAIRE = 5
+_LOCK_CLASSID_BADGE_ABSENCE = 6
+_LOCK_CLASSID_ABSENCE_DECLARATION = 7
+_LOCK_CLASSID_LIGNE_PAIE = 8
 
 
 class ThrottlePointagePublic(ScopedRateThrottle):
@@ -252,9 +265,18 @@ class AbsenceViewSet(AuditMixin, viewsets.ModelViewSet):
 
         return qs.order_by("-date")
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
         employe_id = request.data.get("employe")
         date = request.data.get("date")
+        # Verrou consultatif avant les contrôles "pas déjà déclaré" : sans
+        # lui, deux déclarations concurrentes pour le même employé/jour (un
+        # superviseur via badge + Direction manuellement, ou deux
+        # superviseurs) pouvaient toutes les deux passer ces contrôles, et
+        # la seconde plantait avec une IntegrityError non gérée (500) sur la
+        # contrainte unique employe+date au lieu de ce message clair (cf.
+        # conversation du 01/08/2026 avec Serge).
+        _verrou_consultatif_texte(_LOCK_CLASSID_ABSENCE_DECLARATION, f"{employe_id}:{date}")
         if Pointage.objects.filter(employe_id=employe_id, date=date).exists():
             return Response(
                 {"detail": "Cet employé a déjà un pointage à cette date — ce n'est pas une absence."},
@@ -316,7 +338,14 @@ class LignePaieViewSet(AuditMixin, viewsets.ModelViewSet):
 
         return qs.order_by("-mois")
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
+        # Verrou consultatif avant de décider créer vs mettre à jour : sans
+        # lui, deux upserts concurrents pour le même employé/mois pouvaient
+        # tous les deux se voir sans instance existante et tenter chacun une
+        # création, la seconde plantant sur la contrainte unique employe+mois
+        # (cf. conversation du 01/08/2026 avec Serge).
+        _verrou_consultatif_texte(_LOCK_CLASSID_LIGNE_PAIE, f"{request.data.get('employe')}:{request.data.get('mois')}")
         instance = LignePaie.objects.filter(
             employe_id=request.data.get("employe"), mois=request.data.get("mois")
         ).first()
@@ -468,11 +497,19 @@ def scan_valider(request, token):
 
 @api_view(["GET"])
 @permission_classes([EstDirectionOuAdmin])
+@transaction.atomic
 def appareil_pointage_qr(request):
     """Image PNG du QR d'activation du téléphone unique autorisé à valider
     les pointages — à faire scanner UNE FOIS par le téléphone désigné (cf.
     conversation du 28/07/2026 avec Serge). Une seule instance
-    d'AppareilPointage existe en pratique (créée à la demande si absente)."""
+    d'AppareilPointage existe en pratique (créée à la demande si absente) —
+    le verrou consultatif ci-dessous évite que deux appels concurrents (page
+    ouverte deux fois avant la toute première activation) n'en créent
+    chacun une, ce qui désynchroniserait le jeton réellement vérifié partout
+    (_appareil_autorise ne regarde que le premier, par pk) de celui imprimé
+    sur le QR généré par le second appel (cf. conversation du 01/08/2026
+    avec Serge)."""
+    _verrou_consultatif(_LOCK_CLASSID_APPAREIL_POINTAGE, 1)
     appareil = AppareilPointage.objects.first() or AppareilPointage.objects.create()
     url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/appareil/{appareil.token}"
     return HttpResponse(_composer_badge(url, "Téléphone de pointage"), content_type="image/png")
@@ -480,11 +517,14 @@ def appareil_pointage_qr(request):
 
 @api_view(["POST"])
 @permission_classes([EstDirectionOuAdmin])
+@transaction.atomic
 def appareil_pointage_regenerer(request):
     """Invalide immédiatement le téléphone actuellement autorisé (perte,
     vol, remplacement) en générant un nouveau jeton — l'ancien téléphone ne
     pourra plus valider aucun pointage tant qu'il n'aura pas re-scanné le
-    nouveau QR."""
+    nouveau QR. Même verrou que appareil_pointage_qr : deux régénérations
+    concurrentes ne doivent pas pouvoir laisser deux instances vivantes."""
+    _verrou_consultatif(_LOCK_CLASSID_APPAREIL_POINTAGE, 1)
     AppareilPointage.objects.all().delete()
     appareil = AppareilPointage.objects.create()
     journaliser(request.user, ActionAudit.MODIFICATION, "AppareilPointage", appareil.pk, str(appareil), details="Régénération du jeton")
@@ -539,10 +579,14 @@ def appareil_pointage_desactiver(request):
 
 @api_view(["GET"])
 @permission_classes([EstDirectionOuAdmin])
+@transaction.atomic
 def badge_temporaire_qr(request):
     """Image PNG du badge de secours (imprimé une seule fois) — réservée à
     Direction/Admin. Une seule instance de BadgeTemporaire existe en
-    pratique (créée à la demande si absente)."""
+    pratique (créée à la demande si absente) — même verrou consultatif que
+    appareil_pointage_qr, même raison (cf. conversation du 01/08/2026 avec
+    Serge)."""
+    _verrou_consultatif(_LOCK_CLASSID_BADGE_TEMPORAIRE, 1)
     badge = BadgeTemporaire.objects.first() or BadgeTemporaire.objects.create()
     url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/temporaire/{badge.token}"
     return HttpResponse(_composer_badge(url, "Badge temporaire"), content_type="image/png")
@@ -593,9 +637,13 @@ def badge_temporaire_valider(request, token, employe_id):
 
 @api_view(["GET"])
 @permission_classes([EstDirectionOuAdmin])
+@transaction.atomic
 def badge_absence_qr(request):
     """Image PNG du badge dédié aux signalements d'absence (distinct du
-    badge de secours pointage) — réservée à Direction/Admin."""
+    badge de secours pointage) — réservée à Direction/Admin. Même verrou
+    consultatif que appareil_pointage_qr, même raison (cf. conversation du
+    01/08/2026 avec Serge)."""
+    _verrou_consultatif(_LOCK_CLASSID_BADGE_ABSENCE, 1)
     badge = BadgeAbsence.objects.first() or BadgeAbsence.objects.create()
     url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/absence/{badge.token}"
     return HttpResponse(_composer_badge(url, "Badge absence"), content_type="image/png")
@@ -621,11 +669,14 @@ def badge_absence_employes(request, token):
 @api_view(["POST"])
 @permission_classes([])
 @throttle_classes([ThrottlePointagePublic])
+@transaction.atomic
 def badge_absence_declarer(request, token):
     """Public — le superviseur signale l'absence d'un employé avec un
     motif obligatoire. Reste EN_ATTENTE jusqu'à validation par
     Direction/Admin (payée si validée, pas payée sinon) — mêmes règles de
-    conflit que la déclaration directe (AbsenceViewSet.create)."""
+    conflit que la déclaration directe (AbsenceViewSet.create), même verrou
+    consultatif contre une double déclaration concurrente (cf. conversation
+    du 01/08/2026 avec Serge)."""
     get_object_or_404(BadgeAbsence, token=token)
     employe_id = request.data.get("employe")
     date = request.data.get("date")
@@ -634,6 +685,7 @@ def badge_absence_declarer(request, token):
         return Response({"detail": "Employé et date requis."}, status=status.HTTP_400_BAD_REQUEST)
     if not motif:
         return Response({"detail": "Le motif est obligatoire."}, status=status.HTTP_400_BAD_REQUEST)
+    _verrou_consultatif_texte(_LOCK_CLASSID_ABSENCE_DECLARATION, f"{employe_id}:{date}")
     employe = get_object_or_404(Employe, id=employe_id, actif=True)
     if Pointage.objects.filter(employe=employe, date=date).exists():
         return Response(

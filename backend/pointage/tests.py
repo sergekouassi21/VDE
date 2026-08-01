@@ -11,7 +11,9 @@ from exploitation.models import Ferme, Magasin, ProfilUtilisateur, RoleUtilisate
 
 from .models import Absence, AppareilPointage, BadgeTemporaire, Employe, LignePaie, Pointage, StatutAbsence
 from .views import (
+    AbsenceViewSet,
     EmployeViewSet,
+    LignePaieViewSet,
     _calculer_rentabilite_bruts,
     appareil_pointage_desactiver,
     appareil_pointage_qr,
@@ -329,3 +331,71 @@ class RentabiliteEmployeMultiFermeTests(TestCase):
 
         self.assertEqual(resultats[self.fermeA.id]["cout_paie"], Decimal("0"))
         self.assertEqual(resultats[self.fermeB.id]["cout_paie"], Decimal("0"))
+
+
+class AbsenceDeclarationRaceTests(TestCase):
+    """AbsenceViewSet.create pose désormais un verrou consultatif Postgres
+    (no-op sur SQLite, donc la course elle-même n'est pas vérifiable ici —
+    cf. les mises en garde équivalentes ailleurs dans ce fichier/session)
+    avant les contrôles "pas déjà déclaré", pour qu'une double déclaration
+    concurrente échoue proprement (400) plutôt que de planter (500) sur la
+    contrainte unique employe+date. Ce test couvre la logique métier
+    inchangée : une deuxième déclaration EN SÉRIE reste rejetée avec un
+    message clair. Cf. conversation du 01/08/2026 avec Serge."""
+
+    def setUp(self):
+        magasin = Magasin.objects.create(nom="Magasin Absence Race")
+        ferme = Ferme.objects.create(nom="Ferme Absence Race", type=TypeFerme.PONTE, nombre_chambres=1, magasin=magasin)
+        self.employe = Employe.objects.create(nom="Employe Absence Race")
+        self.employe.fermes.add(ferme)
+        self.factory = APIRequestFactory()
+        self.direction = User.objects.create(username="direction_absence_race")
+        ProfilUtilisateur.objects.create(user=self.direction, role=RoleUtilisateur.DIRECTION)
+
+    def test_seconde_declaration_pour_le_meme_employe_et_jour_est_rejetee_proprement(self):
+        view = AbsenceViewSet.as_view({"post": "create"})
+        payload = {"employe": self.employe.id, "date": "2026-07-20", "motif": "Maladie"}
+
+        req1 = self.factory.post("/api/pointage/absences/", payload)
+        force_authenticate(req1, user=self.direction)
+        resp1 = view(req1)
+        self.assertEqual(resp1.status_code, 201)
+
+        req2 = self.factory.post("/api/pointage/absences/", payload)
+        force_authenticate(req2, user=self.direction)
+        resp2 = view(req2)
+        self.assertEqual(resp2.status_code, 400)
+        self.assertEqual(Absence.objects.filter(employe=self.employe, date="2026-07-20").count(), 1)
+
+
+class LignePaieUpsertTests(TestCase):
+    """LignePaieViewSet.create pose désormais un verrou consultatif avant de
+    décider créer vs mettre à jour (même raison que AbsenceDeclarationRaceTests
+    — non vérifiable en soi sur SQLite). Ce test couvre la logique métier
+    inchangée : un deuxième appel pour le même employé/mois met à jour la
+    ligne existante au lieu d'en créer une seconde."""
+
+    def setUp(self):
+        magasin = Magasin.objects.create(nom="Magasin Paie Upsert")
+        ferme = Ferme.objects.create(nom="Ferme Paie Upsert", type=TypeFerme.PONTE, nombre_chambres=1, magasin=magasin)
+        self.employe = Employe.objects.create(nom="Employe Paie Upsert")
+        self.employe.fermes.add(ferme)
+        self.factory = APIRequestFactory()
+        self.direction = User.objects.create(username="direction_paie_upsert")
+        ProfilUtilisateur.objects.create(user=self.direction, role=RoleUtilisateur.DIRECTION)
+
+    def test_deuxieme_appel_met_a_jour_au_lieu_de_dupliquer(self):
+        view = LignePaieViewSet.as_view({"post": "create"})
+
+        req1 = self.factory.post("/api/pointage/lignes-paie/", {"employe": self.employe.id, "mois": "2026-07-01", "primes": "1000"})
+        force_authenticate(req1, user=self.direction)
+        resp1 = view(req1)
+        self.assertEqual(resp1.status_code, 201)
+
+        req2 = self.factory.post("/api/pointage/lignes-paie/", {"employe": self.employe.id, "mois": "2026-07-01", "primes": "2500"})
+        force_authenticate(req2, user=self.direction)
+        resp2 = view(req2)
+        self.assertEqual(resp2.status_code, 200)
+
+        self.assertEqual(LignePaie.objects.filter(employe=self.employe, mois="2026-07-01").count(), 1)
+        self.assertEqual(LignePaie.objects.get(employe=self.employe, mois="2026-07-01").primes, Decimal("2500"))
