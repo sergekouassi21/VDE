@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Check, Trash2, Syringe, AlertTriangle } from "lucide-react";
+import { Check, Trash2, Syringe, AlertTriangle, List, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { getFermes, getEvenementsSante, creerEvenementSante, supprimerEvenementSante, marquerFaitEvenementSante } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 
@@ -8,6 +8,42 @@ const FORM_VIDE = { type: "VACCIN", nom: "", date_prevue: todayISO(), notes: "" 
 
 const LABEL_STATUT = { EN_RETARD: "En retard", A_VENIR: "À venir", FAIT: "Fait" };
 const COULEUR_STATUT = { EN_RETARD: CLAY, A_VENIR: GREEN_DARK, FAIT: "#8A948D" };
+
+const JOURS_SEMAINE = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
+// Date locale au format ISO (pas toISOString, qui bascule en UTC et peut
+// décaler d'un jour selon le fuseau) — les cases du calendrier doivent
+// correspondre exactement au jour affiché.
+function isoLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Début de semaine = lundi (convention française), pour que la grille du
+// mois s'aligne avec les en-têtes Lun...Dim.
+function debutSemaine(d) {
+  const decalage = (d.getDay() + 6) % 7;
+  const r = new Date(d);
+  r.setDate(d.getDate() - decalage);
+  return r;
+}
+
+// Grille complète du mois affiché : du lundi de la semaine du 1er au
+// dimanche de la semaine du dernier jour, pour ne jamais couper une semaine
+// à moitié.
+function genererGrilleMois(mois) {
+  const premier = new Date(mois.getFullYear(), mois.getMonth(), 1);
+  const dernier = new Date(mois.getFullYear(), mois.getMonth() + 1, 0);
+  const debut = debutSemaine(premier);
+  const fin = debutSemaine(dernier);
+  fin.setDate(fin.getDate() + 6);
+  const jours = [];
+  const cur = new Date(debut);
+  while (cur <= fin) {
+    jours.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return jours;
+}
 
 export default function Vaccinations() {
   const [fermes, setFermes] = useState([]);
@@ -18,6 +54,9 @@ export default function Vaccinations() {
   const [form, setForm] = useState(FORM_VIDE);
   const [erreur, setErreur] = useState("");
   const [envoi, setEnvoi] = useState(false);
+  const [vue, setVue] = useState("calendrier");
+  const [mois, setMois] = useState(() => { const d = new Date(); d.setDate(1); return d; });
+  const [jourSelectionne, setJourSelectionne] = useState(null);
 
   useEffect(() => {
     getFermes().then((data) => {
@@ -51,6 +90,12 @@ export default function Vaccinations() {
     faits: evenements.filter((e) => e.statut === "FAIT"),
   }), [evenements]);
 
+  const evenementsParDate = useMemo(() => {
+    const m = {};
+    evenements.forEach((e) => { (m[e.date_prevue] ||= []).push(e); });
+    return m;
+  }, [evenements]);
+
   async function soumettre(e) {
     e.preventDefault();
     if (!form.nom.trim() || !bande) return;
@@ -79,6 +124,8 @@ export default function Vaccinations() {
     rafraichir();
   }
 
+  const evenementsDuJour = jourSelectionne ? (evenementsParDate[jourSelectionne] || []) : [];
+
   return (
     <div style={styles.page}>
       <div style={styles.wrap}>
@@ -88,10 +135,18 @@ export default function Vaccinations() {
         </header>
 
         <div style={styles.filters}>
-          <select style={styles.select} value={fermeId} onChange={(e) => setFermeId(e.target.value)}>
+          <select style={styles.select} value={fermeId} onChange={(e) => { setFermeId(e.target.value); setJourSelectionne(null); }}>
             <option value="">Sélectionner une ferme...</option>
             {fermes.map((f) => <option key={f.id} value={f.id} disabled={!f.bande_active}>{f.nom}{!f.bande_active ? " (vide)" : ""}</option>)}
           </select>
+          <div style={styles.vueToggle}>
+            <button style={{ ...styles.vueBtn, ...(vue === "calendrier" ? styles.vueBtnOn : {}) }} onClick={() => setVue("calendrier")}>
+              <Calendar size={14} /> Calendrier
+            </button>
+            <button style={{ ...styles.vueBtn, ...(vue === "liste" ? styles.vueBtnOn : {}) }} onClick={() => setVue("liste")}>
+              <List size={14} /> Liste
+            </button>
+          </div>
           {bande && (
             <button style={styles.addBtn} onClick={() => setFormOuvert((o) => !o)}>
               <Syringe size={15} /> Ajouter un évènement
@@ -117,6 +172,23 @@ export default function Vaccinations() {
           <p style={styles.empty}>{fermeId ? "Cette ferme n'a pas de bande active." : "Sélectionne une ferme."}</p>
         ) : chargement ? (
           <p style={styles.empty}>Chargement...</p>
+        ) : vue === "calendrier" ? (
+          <>
+            <CalendrierMois
+              mois={mois}
+              onMoisChange={(m) => { setMois(m); setJourSelectionne(null); }}
+              evenementsParDate={evenementsParDate}
+              jourSelectionne={jourSelectionne}
+              onSelectJour={setJourSelectionne}
+            />
+            {jourSelectionne && (
+              <Section titre={`${new Date(jourSelectionne).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}`}>
+                {evenementsDuJour.map((e) => (
+                  <Ligne key={e.id} evenement={e} onFait={e.statut !== "FAIT" ? marquerFait : undefined} onSupprimer={supprimer} fait={e.statut === "FAIT"} />
+                ))}
+              </Section>
+            )}
+          </>
         ) : (
           <>
             {groupes.enRetard.length > 0 && (
@@ -137,6 +209,66 @@ export default function Vaccinations() {
         )}
       </div>
     </div>
+  );
+}
+
+function CalendrierMois({ mois, onMoisChange, evenementsParDate, jourSelectionne, onSelectJour }) {
+  const jours = useMemo(() => genererGrilleMois(mois), [mois]);
+  const moisCourant = mois.getMonth();
+  const aujourdhui = todayISO();
+
+  return (
+    <section style={{ ...styles.card, marginBottom: 16 }}>
+      <div style={styles.calNav}>
+        <button style={styles.navBtn} onClick={() => onMoisChange(new Date(mois.getFullYear(), mois.getMonth() - 1, 1))}>
+          <ChevronLeft size={16} />
+        </button>
+        <span style={styles.calMoisLabel}>
+          {mois.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }).replace(/^./, (c) => c.toUpperCase())}
+        </span>
+        <button style={styles.navBtn} onClick={() => onMoisChange(new Date(mois.getFullYear(), mois.getMonth() + 1, 1))}>
+          <ChevronRight size={16} />
+        </button>
+        <button style={styles.ajourdhuiBtn} onClick={() => { const d = new Date(); d.setDate(1); onMoisChange(d); }}>
+          Aujourd'hui
+        </button>
+      </div>
+      <div style={styles.calGrilleEntetes}>
+        {JOURS_SEMAINE.map((j) => <div key={j} style={styles.calEntete}>{j}</div>)}
+      </div>
+      <div style={styles.calGrille}>
+        {jours.map((jour) => {
+          const iso = isoLocal(jour);
+          const evenementsJour = evenementsParDate[iso] || [];
+          const horsMois = jour.getMonth() !== moisCourant;
+          const estAujourdhui = iso === aujourdhui;
+          const selectionne = iso === jourSelectionne;
+          return (
+            <button
+              key={iso}
+              type="button"
+              style={{
+                ...styles.calJour,
+                ...(horsMois ? styles.calJourHorsMois : {}),
+                ...(estAujourdhui ? styles.calJourAujourdhui : {}),
+                ...(selectionne ? styles.calJourSelectionne : {}),
+              }}
+              onClick={() => onSelectJour(evenementsJour.length ? iso : null)}
+            >
+              <span style={styles.calJourNum}>{jour.getDate()}</span>
+              {evenementsJour.length > 0 && (
+                <div style={styles.calPastilles}>
+                  {evenementsJour.slice(0, 3).map((e) => (
+                    <span key={e.id} style={{ ...styles.calPastille, background: COULEUR_STATUT[e.statut] }} title={e.nom} />
+                  ))}
+                  {evenementsJour.length > 3 && <span style={styles.calPlus}>+{evenementsJour.length - 3}</span>}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -177,6 +309,9 @@ const styles = {
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
   filters: { display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" },
   select: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 13.5, fontFamily: "inherit", color: INK },
+  vueToggle: { display: "flex", gap: 4, background: "#ECE9DF", borderRadius: 10, padding: 3 },
+  vueBtn: { display: "flex", alignItems: "center", gap: 5, background: "transparent", color: "#8A948D", border: "none", borderRadius: 8, padding: "6px 11px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  vueBtnOn: { background: "#fff", color: GREEN_DARK, boxShadow: "0 1px 3px rgba(18,61,38,.12)" },
   addBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 10, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginLeft: "auto" },
   formCard: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 18, marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
   input: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK, flex: "1 1 160px" },
@@ -192,4 +327,23 @@ const styles = {
   ligneMeta: { fontSize: 11.5, color: "#8A948D" },
   badge: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: .3, whiteSpace: "nowrap" },
   iconBtn: { background: "#F4F1EA", border: "1px solid #ECE9DF", borderRadius: 8, padding: 6, cursor: "pointer", display: "flex" },
+  calNav: { display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", borderBottom: "1px solid #ECE9DF" },
+  navBtn: { background: "#F4F1EA", border: "1px solid #ECE9DF", borderRadius: 8, padding: 6, cursor: "pointer", display: "flex", color: INK },
+  calMoisLabel: { fontSize: 14.5, fontWeight: 700, color: GREEN_DARK, minWidth: 150, textAlign: "center" },
+  ajourdhuiBtn: { marginLeft: "auto", background: "transparent", border: `1px solid ${GREEN}`, color: GREEN_DARK, borderRadius: 8, padding: "6px 11px", fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  calGrilleEntetes: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid #ECE9DF" },
+  calEntete: { textAlign: "center", fontSize: 11, fontWeight: 700, color: "#8A948D", padding: "8px 0", textTransform: "uppercase", letterSpacing: .3 },
+  calGrille: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)" },
+  calJour: {
+    aspectRatio: "1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+    background: "#fff", border: "none", borderRight: "1px solid #F2F0E8", borderBottom: "1px solid #F2F0E8",
+    cursor: "pointer", fontFamily: "inherit", padding: 4, minWidth: 0,
+  },
+  calJourHorsMois: { background: "#FAF9F5", color: "#C7C2B4" },
+  calJourAujourdhui: { background: "#EAF2EC" },
+  calJourSelectionne: { boxShadow: `inset 0 0 0 2px ${GREEN}` },
+  calJourNum: { fontSize: 12.5, fontWeight: 600 },
+  calPastilles: { display: "flex", gap: 3, alignItems: "center", flexWrap: "wrap", justifyContent: "center" },
+  calPastille: { width: 6, height: 6, borderRadius: "50%" },
+  calPlus: { fontSize: 9, fontWeight: 700, color: "#8A948D" },
 };
