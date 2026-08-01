@@ -4,6 +4,7 @@ import {
   getFermes,
   getTransfertsStock, creerTransfertStock, modifierTransfertStock, supprimerTransfertStock,
   getTransfertsEquipement, creerTransfertEquipement, modifierTransfertEquipement, supprimerTransfertEquipement,
+  getInventaireEquipement,
 } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 import { estDirectionOuAdmin } from "../utils/auth";
@@ -16,7 +17,6 @@ const UNITE_TYPE = { ALIMENT: "sacs", ALVEOLES: "unités", OEUFS: "œufs" };
 const STEP_TYPE = { ALIMENT: "0.01", ALVEOLES: "1", OEUFS: "1" };
 
 const LABEL_EQUIPEMENT = { MANGEOIRES: "Mangeoires", ABREUVOIRS: "Abreuvoirs" };
-const CHAMP_EQUIPEMENT = { MANGEOIRES: "nombre_mangeoires", ABREUVOIRS: "nombre_abreuvoirs" };
 
 const FORM_VIDE = { date: todayISO(), type_transfert: "ALIMENT", ferme_source: "", ferme_destination: "", quantite: "", observation: "" };
 const FORM_VIDE_EQUIPEMENT = { date: todayISO(), type_equipement: "MANGEOIRES", ferme_source: "", ferme_destination: "", quantite: "", observation: "" };
@@ -53,7 +53,7 @@ export default function Transferts() {
           </button>
         </div>
 
-        {onglet === "stock" ? <TransfertsStock fermes={fermes} /> : <TransfertsEquipement fermes={fermes} onFermesMaj={setFermes} />}
+        {onglet === "stock" ? <TransfertsStock fermes={fermes} /> : <TransfertsEquipement fermes={fermes} />}
       </div>
     </div>
   );
@@ -260,8 +260,9 @@ function TransfertsStock({ fermes }) {
   );
 }
 
-function TransfertsEquipement({ fermes, onFermesMaj }) {
+function TransfertsEquipement({ fermes }) {
   const [transferts, setTransferts] = useState([]);
+  const [inventaire, setInventaire] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [form, setForm] = useState(FORM_VIDE_EQUIPEMENT);
   const [erreur, setErreur] = useState("");
@@ -285,11 +286,18 @@ function TransfertsEquipement({ fermes, onFermesMaj }) {
     return () => { annule = true; };
   }, []);
 
+  const rafraichirInventaire = useCallback(() => {
+    getInventaireEquipement().then(setInventaire);
+  }, []);
+
   useEffect(() => rafraichir(), [rafraichir]);
+  useEffect(() => rafraichirInventaire(), [rafraichirInventaire]);
 
   const fermesDestination = fermes.filter((f) => String(f.id) !== String(form.ferme_source));
-  const fermeSource = fermes.find((f) => String(f.id) === String(form.ferme_source));
-  const disponible = fermeSource ? fermeSource[CHAMP_EQUIPEMENT[form.type_equipement]] : null;
+  const ligneSource = inventaire.find(
+    (i) => String(i.ferme) === String(form.ferme_source) && i.type_equipement === form.type_equipement
+  );
+  const disponible = ligneSource ? ligneSource.bon_etat : null;
 
   async function soumettre(e) {
     e.preventDefault();
@@ -304,7 +312,7 @@ function TransfertsEquipement({ fermes, onFermesMaj }) {
       });
       setForm((f) => ({ ...FORM_VIDE_EQUIPEMENT, ferme_source: f.ferme_source, date: f.date }));
       rafraichir();
-      getFermes().then(onFermesMaj);
+      rafraichirInventaire();
     } catch (err) {
       setErreur(err.response?.data?.detail || "Impossible d'enregistrer ce transfert.");
     } finally {
@@ -324,7 +332,7 @@ function TransfertsEquipement({ fermes, onFermesMaj }) {
       await modifierTransfertEquipement(id, { quantite: Number(brouillon.quantite) || 0, observation: brouillon.observation });
       setEdition(null);
       rafraichir();
-      getFermes().then(onFermesMaj);
+      rafraichirInventaire();
     } catch (err) {
       window.alert(err.response?.data?.detail || "Impossible de modifier ce transfert.");
     } finally {
@@ -339,7 +347,7 @@ function TransfertsEquipement({ fermes, onFermesMaj }) {
     try {
       await supprimerTransfertEquipement(t.id);
       rafraichir();
-      getFermes().then(onFermesMaj);
+      rafraichirInventaire();
     } catch (err) {
       window.alert(err.response?.data?.detail || "Impossible de supprimer ce transfert.");
     }
