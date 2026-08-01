@@ -92,6 +92,12 @@ export const creerTransfertStock = (payload) => api.post("/transferts-stock/", p
 export const modifierTransfertStock = (id, payload) => api.patch(`/transferts-stock/${id}/`, payload).then((r) => r.data);
 export const supprimerTransfertStock = (id) => api.delete(`/transferts-stock/${id}/`);
 
+// --- Transferts d'équipement entre fermes (mangeoires, abreuvoirs) ---
+export const getTransfertsEquipement = (params) => api.get("/transferts-equipement/", { params }).then((r) => r.data);
+export const creerTransfertEquipement = (payload) => api.post("/transferts-equipement/", payload).then((r) => r.data);
+export const modifierTransfertEquipement = (id, payload) => api.patch(`/transferts-equipement/${id}/`, payload).then((r) => r.data);
+export const supprimerTransfertEquipement = (id) => api.delete(`/transferts-equipement/${id}/`);
+
 // --- Pointage des employés (heures de travail) ---
 export const getEmployes = (params) => api.get("/pointage/employes/", { params }).then((r) => r.data);
 export const getUtilisateursDisponibles = () => api.get("/pointage/utilisateurs-disponibles/").then((r) => r.data);
