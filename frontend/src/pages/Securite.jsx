@@ -5,9 +5,10 @@ import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 
 export default function Securite() {
   const [actif, setActif] = useState(null);
-  const [etape, setEtape] = useState("statut"); // statut | qr | confirmation
+  const [etape, setEtape] = useState("statut"); // statut | desactivation | qr | confirmation
   const [qrUrl, setQrUrl] = useState("");
   const [code, setCode] = useState("");
+  const [motDePasse, setMotDePasse] = useState("");
   const [erreur, setErreur] = useState("");
   const [envoi, setEnvoi] = useState(false);
 
@@ -43,11 +44,23 @@ export default function Securite() {
     }
   }
 
-  async function desactiver() {
-    if (!window.confirm("Désactiver la double authentification sur ce compte ?")) return;
-    await desactiver2FA();
-    setActif(false);
-    setEtape("statut");
+  // Redemande le mot de passe actuel avant de désactiver — sans ça, un
+  // jeton de session volé suffirait à lui seul à couper cette protection
+  // (cf. conversation du 01/08/2026 avec Serge).
+  async function confirmerDesactivation(e) {
+    e.preventDefault();
+    setErreur("");
+    setEnvoi(true);
+    try {
+      await desactiver2FA(motDePasse);
+      setActif(false);
+      setEtape("statut");
+      setMotDePasse("");
+    } catch (err) {
+      setErreur(err.response?.data?.detail || "Mot de passe incorrect.");
+    } finally {
+      setEnvoi(false);
+    }
   }
 
   return (
@@ -67,7 +80,9 @@ export default function Securite() {
                 <>
                   <div style={styles.statutHead}><ShieldCheck size={20} color={GREEN} /><span>Activée</span></div>
                   <p style={styles.texte}>Un code de ton application d'authentification est demandé à chaque connexion.</p>
-                  <button style={styles.dangerBtn} onClick={desactiver}><ShieldOff size={15} /> Désactiver</button>
+                  <button style={styles.dangerBtn} onClick={() => { setErreur(""); setEtape("desactivation"); }}>
+                    <ShieldOff size={15} /> Désactiver
+                  </button>
                 </>
               ) : (
                 <>
@@ -80,6 +95,19 @@ export default function Securite() {
               )}
               {erreur && <p style={styles.erreur}>{erreur}</p>}
             </div>
+          ) : etape === "desactivation" ? (
+            <form style={styles.qrBox} onSubmit={confirmerDesactivation}>
+              <p style={styles.texte}>Confirme ton mot de passe actuel pour désactiver la double authentification.</p>
+              <input
+                style={styles.input} type="password" placeholder="Mot de passe"
+                value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} autoFocus
+              />
+              {erreur && <p style={styles.erreur}>{erreur}</p>}
+              <button style={styles.dangerBtn} type="submit" disabled={envoi || !motDePasse}>
+                <ShieldOff size={15} /> {envoi ? "Vérification..." : "Confirmer la désactivation"}
+              </button>
+              <button type="button" style={styles.cancelBtn} onClick={() => { setEtape("statut"); setErreur(""); setMotDePasse(""); }}>Annuler</button>
+            </form>
           ) : (
             <form style={styles.qrBox} onSubmit={confirmer}>
               <p style={styles.texte}>1. Scanne ce QR avec Google Authenticator, Authy ou une app équivalente.</p>

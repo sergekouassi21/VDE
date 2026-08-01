@@ -35,10 +35,13 @@ export function isAuthenticated() {
 
 export const getMoi = () => api.get("/moi/").then((r) => r.data);
 export const getStatut2FA = () => api.get("/auth/2fa/statut/").then((r) => r.data);
-export const getQrConfigurer2FA = () =>
-  api.post("/auth/2fa/configurer/", {}, { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
+// Le mot de passe n'est exigé par le serveur que si une 2FA est déjà active
+// (reconfiguration) — la 1ère activation n'a rien à protéger et l'accepte
+// sans, cf. conversation du 01/08/2026 avec Serge.
+export const getQrConfigurer2FA = (password) =>
+  api.post("/auth/2fa/configurer/", { password }, { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
 export const confirmer2FA = (code) => api.post("/auth/2fa/confirmer/", { code }).then((r) => r.data);
-export const desactiver2FA = () => api.post("/auth/2fa/desactiver/").then((r) => r.data);
+export const desactiver2FA = (password) => api.post("/auth/2fa/desactiver/", { password }).then((r) => r.data);
 
 export const getRechercheGlobale = (q) => api.get("/recherche/", { params: { q } }).then((r) => r.data);
 export const getJournalAudit = (params) => api.get("/journal-audit/", { params }).then((r) => r.data);
