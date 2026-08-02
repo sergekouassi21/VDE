@@ -102,6 +102,12 @@ export const supprimerTransfertEquipement = (id) => api.delete(`/transferts-equi
 export const getInventaireEquipement = (params) => api.get("/inventaire-equipement/", { params }).then((r) => r.data);
 export const modifierInventaireEquipement = (id, payload) => api.patch(`/inventaire-equipement/${id}/`, payload).then((r) => r.data);
 
+// --- Réceptions de matériel neuf (achat, don...) par ferme ---
+export const getReceptionsEquipement = (params) => api.get("/receptions-equipement/", { params }).then((r) => r.data);
+export const creerReceptionEquipement = (payload) => api.post("/receptions-equipement/", payload).then((r) => r.data);
+export const modifierReceptionEquipement = (id, payload) => api.patch(`/receptions-equipement/${id}/`, payload).then((r) => r.data);
+export const supprimerReceptionEquipement = (id) => api.delete(`/receptions-equipement/${id}/`);
+
 // --- Pointage des employés (heures de travail) ---
 export const getEmployes = (params) => api.get("/pointage/employes/", { params }).then((r) => r.data);
 export const getUtilisateursDisponibles = () => api.get("/pointage/utilisateurs-disponibles/").then((r) => r.data);
