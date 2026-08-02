@@ -148,13 +148,27 @@ export default function Dashboard() {
     const rAlimentMois = pouleJours > 0 ? alimentMois / pouleJours : 0;
     const rEauMois = pouleJours > 0 ? eauMois / pouleJours : 0;
 
+    // Même principe (poule-jours), mais sur les pondeuses uniquement — le
+    // taux de ponte n'a de sens que pour elles, cf. conversation du
+    // 02/08/2026 avec Serge.
+    let pouleJoursPondeuses = 0;
+    pondeuses.forEach((f) => {
+      const e = effectifActuel(f), j = f.mois?.jours || 0;
+      if (!e || !j) return;
+      pouleJoursPondeuses += e * j;
+    });
+    const tauxMoyenMois = pouleJoursPondeuses > 0 ? (prodMois / pouleJoursPondeuses) * 100 : 0;
+
     // IC global = aliment total (g) / œufs totaux, sur les pondeuses uniquement
     const alimentGrammesJourPondeuses = pondeuses.reduce((s, f) => s + alimentGrammesJour(f), 0);
     const alimentGrammesMoisPondeuses = pondeuses.reduce((s, f) => s + Number(f.mois?.conso_aliment_sacs || 0) * KG_PAR_SAC * 1000, 0);
     const icJourGlobal = prod > 0 ? alimentGrammesJourPondeuses / prod : 0;
     const icMoisGlobal = prodMois > 0 ? alimentGrammesMoisPondeuses / prodMois : 0;
 
-    return { effectif, prod, prodMois, morts, mortsMois, stockOeuf, tauxMoyen, rAlimentJour, rAlimentMois, rEauJour, rEauMois, icJourGlobal, icMoisGlobal };
+    return {
+      effectif, prod, prodMois, morts, mortsMois, stockOeuf, tauxMoyen, tauxMoyenMois,
+      rAlimentJour, rAlimentMois, rEauJour, rEauMois, icJourGlobal, icMoisGlobal,
+    };
   }, [actives, pondeuses]);
 
   const alertes = useMemo(
@@ -238,7 +252,7 @@ export default function Dashboard() {
         </div>
 
         <div style={styles.kpiRow}>
-          <Kpi icon={<Activity size={16} />} label="Taux de ponte moyen" value={`${kpi.tauxMoyen.toFixed(1)} %`} accent />
+          <Kpi icon={<Activity size={16} />} label="Taux de ponte moyen" value={`${kpi.tauxMoyen.toFixed(1)} %`} mois={`${kpi.tauxMoyenMois.toFixed(1)} % moy. ce mois`} accent />
           <Kpi icon={<Egg size={16} />} label="Production" value={nf(kpi.prod)} sub="œufs/jour" mois={`${nf(kpi.prodMois)} œufs ce mois`} />
           <Kpi icon={<TrendingUp size={16} />} label="Effectif pondeuses" value={nf(kpi.effectif)} sub="sujets" />
           <Kpi icon={<Skull size={16} />} label="Mortalité" value={nf(kpi.morts)} sub="sujets/jour" mois={`${nf(kpi.mortsMois)} sujets ce mois`} />
