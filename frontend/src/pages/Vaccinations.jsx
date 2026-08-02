@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Check, Trash2, Syringe, AlertTriangle, List, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { Check, Trash2, Syringe, AlertTriangle, List, Calendar, ChevronLeft, ChevronRight, WifiOff } from "lucide-react";
 import { getFermes, getEvenementsSante, creerEvenementSante, supprimerEvenementSante, marquerFaitEvenementSante } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+import { ajouterEvenementFaitEnAttente, listerEvenementsFaitsEnAttente } from "../offline/queueVaccinations";
+import { synchroniserEvenementsFaitsEnAttente } from "../offline/syncVaccinations";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const FORM_VIDE = { type: "VACCIN", nom: "", date_prevue: todayISO(), notes: "" };
@@ -57,6 +59,13 @@ export default function Vaccinations() {
   const [vue, setVue] = useState("calendrier");
   const [mois, setMois] = useState(() => { const d = new Date(); d.setDate(1); return d; });
   const [jourSelectionne, setJourSelectionne] = useState(null);
+  const [enLigne, setEnLigne] = useState(navigator.onLine);
+  const [enAttenteCount, setEnAttenteCount] = useState(0);
+
+  const rafraichirEnAttente = useCallback(async () => {
+    const items = await listerEvenementsFaitsEnAttente();
+    setEnAttenteCount(items.length);
+  }, []);
 
   useEffect(() => {
     getFermes().then((data) => {
@@ -80,6 +89,25 @@ export default function Vaccinations() {
   // Empêche une réponse obsolète (changement rapide de ferme pendant le
   // chargement) d'écraser un state plus récent — cf. audit du 30/07/2026.
   useEffect(() => rafraichir(), [rafraichir]);
+
+  // Même câblage hors-ligne que Point Journalier (offline/sync.js) — dépend
+  // de `rafraichir` (qui dépend lui-même de fermeId), donc réabonné à chaque
+  // changement de ferme pour ne jamais rafraîchir la mauvaise sélection
+  // après une synchronisation. Cf. conversation du 02/08/2026 avec Serge.
+  useEffect(() => {
+    rafraichirEnAttente();
+    const synchroniser = () => synchroniserEvenementsFaitsEnAttente(() => { rafraichirEnAttente(); rafraichir(); });
+    function onOnline() { setEnLigne(true); synchroniser(); }
+    function onOffline() { setEnLigne(false); }
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    const interval = setInterval(() => { if (navigator.onLine) synchroniser(); }, 30000);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      clearInterval(interval);
+    };
+  }, [rafraichirEnAttente, rafraichir]);
 
   const ferme = fermes.find((f) => f.id === Number(fermeId));
   const bande = ferme?.bande_active;
@@ -114,8 +142,30 @@ export default function Vaccinations() {
   }
 
   async function marquerFait(e) {
-    await marquerFaitEvenementSante(e.id);
-    rafraichir();
+    if (!navigator.onLine) {
+      try {
+        await ajouterEvenementFaitEnAttente(e.id);
+        rafraichirEnAttente();
+      } catch {
+        window.alert("Impossible d'enregistrer hors-ligne sur cet appareil (stockage plein ou navigation privée).");
+      }
+      return;
+    }
+    try {
+      await marquerFaitEvenementSante(e.id);
+      rafraichir();
+    } catch (err) {
+      if (!err.response) {
+        try {
+          await ajouterEvenementFaitEnAttente(e.id);
+          rafraichirEnAttente();
+        } catch {
+          window.alert("Impossible d'enregistrer hors-ligne sur cet appareil (stockage plein ou navigation privée).");
+        }
+      } else {
+        window.alert("Impossible de marquer cet évènement comme fait.");
+      }
+    }
   }
 
   async function supprimer(e) {
@@ -133,6 +183,17 @@ export default function Vaccinations() {
           <div style={styles.eyebrow}>Volailles de l'Est · Santé</div>
           <h1 style={styles.h1}>Vaccins & traitements</h1>
         </header>
+
+        {(!enLigne || enAttenteCount > 0) && (
+          <div style={styles.offlineBanner}>
+            <WifiOff size={14} />
+            <span>
+              {!enLigne
+                ? "Hors-ligne — vos validations seront synchronisées automatiquement au retour du réseau"
+                : `${enAttenteCount} validation(s) en attente de synchronisation`}
+            </span>
+          </div>
+        )}
 
         <div style={styles.filters}>
           <select style={styles.select} value={fermeId} onChange={(e) => { setFermeId(e.target.value); setJourSelectionne(null); }}>
@@ -307,6 +368,7 @@ const styles = {
   head: { marginBottom: 20 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
   filters: { display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" },
   select: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 13.5, fontFamily: "inherit", color: INK },
   vueToggle: { display: "flex", gap: 4, background: "#ECE9DF", borderRadius: 10, padding: 3 },

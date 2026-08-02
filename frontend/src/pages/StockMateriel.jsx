@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Pencil, Check, X, Wrench, Plus, Trash2, ArrowLeftRight } from "lucide-react";
+import { Pencil, Check, X, Wrench, Plus, Trash2, ArrowLeftRight, WifiOff } from "lucide-react";
 import {
   getInventaireEquipement, modifierInventaireEquipement,
   getReceptionsEquipement, creerReceptionEquipement, modifierReceptionEquipement, supprimerReceptionEquipement,
@@ -7,6 +7,8 @@ import {
 } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 import { estDirectionOuAdmin } from "../utils/auth";
+import { ajouterMaterielEnAttente, listerMaterielEnAttente } from "../offline/queueMateriel";
+import { synchroniserMaterielEnAttente } from "../offline/syncMateriel";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const nf = (v) => (Number(v) || 0).toLocaleString("fr-FR");
@@ -65,6 +67,31 @@ export default function StockMateriel() {
   const [editionMouvement, setEditionMouvement] = useState(null);
   const [brouillonMouvement, setBrouillonMouvement] = useState({ quantite: "", observation: "" });
   const [envoiEditionMouvement, setEnvoiEditionMouvement] = useState(false);
+
+  const [enLigne, setEnLigne] = useState(navigator.onLine);
+  const [enAttenteCount, setEnAttenteCount] = useState(0);
+
+  const rafraichirEnAttente = useCallback(async () => {
+    const items = await listerMaterielEnAttente();
+    setEnAttenteCount(items.length);
+  }, []);
+
+  // Même câblage hors-ligne que Point Journalier (offline/sync.js), cf.
+  // conversation du 02/08/2026 avec Serge.
+  useEffect(() => {
+    rafraichirEnAttente();
+    const synchroniser = () => synchroniserMaterielEnAttente(() => rafraichirEnAttente());
+    function onOnline() { setEnLigne(true); synchroniser(); }
+    function onOffline() { setEnLigne(false); }
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    const interval = setInterval(() => { if (navigator.onLine) synchroniser(); }, 30000);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      clearInterval(interval);
+    };
+  }, [rafraichirEnAttente]);
 
   const rafraichir = useCallback(() => {
     setChargement(true);
@@ -145,16 +172,39 @@ export default function StockMateriel() {
     if (!formReception.ferme || !formReception.quantite) return;
     setEnvoiReception(true);
     setErreurReception("");
+    const payload = {
+      date: formReception.date, ferme: formReception.ferme, type_equipement: formReception.type_equipement,
+      quantite: formReception.quantite, observation: formReception.observation,
+    };
+    if (!navigator.onLine) {
+      try {
+        await ajouterMaterielEnAttente("reception", payload);
+        rafraichirEnAttente();
+        setFormReception((f) => ({ ...FORM_VIDE_RECEPTION, ferme: f.ferme, date: f.date }));
+      } catch {
+        setErreurReception("Impossible d'enregistrer hors-ligne sur cet appareil (stockage plein ou navigation privée).");
+      } finally {
+        setEnvoiReception(false);
+      }
+      return;
+    }
     try {
-      await creerReceptionEquipement({
-        date: formReception.date, ferme: formReception.ferme, type_equipement: formReception.type_equipement,
-        quantite: formReception.quantite, observation: formReception.observation,
-      });
+      await creerReceptionEquipement(payload);
       setFormReception((f) => ({ ...FORM_VIDE_RECEPTION, ferme: f.ferme, date: f.date }));
       rafraichirReceptions();
       rafraichir();
     } catch (err) {
-      setErreurReception(err.response?.data?.detail || "Impossible d'enregistrer cette réception.");
+      if (!err.response) {
+        try {
+          await ajouterMaterielEnAttente("reception", payload);
+          rafraichirEnAttente();
+          setFormReception((f) => ({ ...FORM_VIDE_RECEPTION, ferme: f.ferme, date: f.date }));
+        } catch {
+          setErreurReception("Impossible d'enregistrer hors-ligne sur cet appareil (stockage plein ou navigation privée).");
+        }
+      } else {
+        setErreurReception(err.response?.data?.detail || "Impossible d'enregistrer cette réception.");
+      }
     } finally {
       setEnvoiReception(false);
     }
@@ -199,17 +249,40 @@ export default function StockMateriel() {
     setErreurMouvement("");
     const etatSource = typeMouvement === "RETOUR" ? formMouvement.provenance : "BON_ETAT";
     const etatDestination = typeMouvement === "RETOUR" ? "BON_ETAT" : typeMouvement;
+    const payload = {
+      date: formMouvement.date, ferme: formMouvement.ferme, type_equipement: formMouvement.type_equipement,
+      etat_source: etatSource, etat_destination: etatDestination,
+      quantite: formMouvement.quantite, observation: formMouvement.observation,
+    };
+    if (!navigator.onLine) {
+      try {
+        await ajouterMaterielEnAttente("mouvement", payload);
+        rafraichirEnAttente();
+        setFormMouvement((f) => ({ ...FORM_VIDE_MOUVEMENT, ferme: f.ferme, date: f.date }));
+      } catch {
+        setErreurMouvement("Impossible d'enregistrer hors-ligne sur cet appareil (stockage plein ou navigation privée).");
+      } finally {
+        setEnvoiMouvement(false);
+      }
+      return;
+    }
     try {
-      await creerMouvementEquipement({
-        date: formMouvement.date, ferme: formMouvement.ferme, type_equipement: formMouvement.type_equipement,
-        etat_source: etatSource, etat_destination: etatDestination,
-        quantite: formMouvement.quantite, observation: formMouvement.observation,
-      });
+      await creerMouvementEquipement(payload);
       setFormMouvement((f) => ({ ...FORM_VIDE_MOUVEMENT, ferme: f.ferme, date: f.date }));
       rafraichirMouvements();
       rafraichir();
     } catch (err) {
-      setErreurMouvement(err.response?.data?.detail || "Impossible d'enregistrer ce mouvement.");
+      if (!err.response) {
+        try {
+          await ajouterMaterielEnAttente("mouvement", payload);
+          rafraichirEnAttente();
+          setFormMouvement((f) => ({ ...FORM_VIDE_MOUVEMENT, ferme: f.ferme, date: f.date }));
+        } catch {
+          setErreurMouvement("Impossible d'enregistrer hors-ligne sur cet appareil (stockage plein ou navigation privée).");
+        }
+      } else {
+        setErreurMouvement(err.response?.data?.detail || "Impossible d'enregistrer ce mouvement.");
+      }
     } finally {
       setEnvoiMouvement(false);
     }
@@ -257,6 +330,17 @@ export default function StockMateriel() {
           <h1 style={styles.h1}>Stock de matériel</h1>
           <p style={styles.sous}>Mangeoires et abreuvoirs, par état — stock = bon état + gâté + réserve - jeté.</p>
         </header>
+
+        {(!enLigne || enAttenteCount > 0) && (
+          <div style={styles.offlineBanner}>
+            <WifiOff size={14} />
+            <span>
+              {!enLigne
+                ? "Hors-ligne — vos réceptions/mouvements seront synchronisés automatiquement au retour du réseau"
+                : `${enAttenteCount} enregistrement(s) en attente de synchronisation`}
+            </span>
+          </div>
+        )}
 
         <form style={styles.formCard} onSubmit={soumettreReception}>
           <div style={styles.fieldRow}>
@@ -559,6 +643,7 @@ const styles = {
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
   h2: { fontSize: 16, fontWeight: 700, margin: "24px 0 12px", letterSpacing: -.2 },
   sous: { fontSize: 13, color: "#6B756E", margin: "6px 0 0" },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
   formCard: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 18, marginBottom: 16, display: "flex", flexDirection: "column", gap: 12 },
   tabs: { display: "flex", gap: 6 },
   tab: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#F4F1EA", border: "1px solid #ECE9DF", color: "#7A857F", padding: "8px 8px", borderRadius: 10, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" },

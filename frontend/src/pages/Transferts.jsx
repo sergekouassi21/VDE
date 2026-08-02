@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Trash2, Pencil, Check, X, ArrowRightLeft, Package, Wrench } from "lucide-react";
+import { Trash2, Pencil, Check, X, ArrowRightLeft, Package, Wrench, WifiOff } from "lucide-react";
 import {
   getFermes,
   getTransfertsStock, creerTransfertStock, modifierTransfertStock, supprimerTransfertStock,
@@ -8,6 +8,8 @@ import {
 } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY, UNITES_PAR_COLIS } from "../theme";
 import { estDirectionOuAdmin } from "../utils/auth";
+import { ajouterTransfertEnAttente, listerTransfertsEnAttente } from "../offline/queueTransferts";
+import { synchroniserTransfertsEnAttente } from "../offline/syncTransferts";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const nf = (v) => (Number(v) || 0).toLocaleString("fr-FR");
@@ -37,10 +39,35 @@ function peutModifier(t) {
 export default function Transferts() {
   const [onglet, setOnglet] = useState("stock");
   const [fermes, setFermes] = useState([]);
+  const [enLigne, setEnLigne] = useState(navigator.onLine);
+  const [enAttenteCount, setEnAttenteCount] = useState(0);
 
   useEffect(() => {
     getFermes().then(setFermes);
   }, []);
+
+  const rafraichirEnAttente = useCallback(async () => {
+    const items = await listerTransfertsEnAttente();
+    setEnAttenteCount(items.length);
+  }, []);
+
+  // Même câblage hors-ligne que Point Journalier (offline/sync.js) : file
+  // d'attente locale rejouée au retour du réseau, cf. conversation du
+  // 02/08/2026 avec Serge.
+  useEffect(() => {
+    rafraichirEnAttente();
+    const synchroniser = () => synchroniserTransfertsEnAttente(() => rafraichirEnAttente());
+    function onOnline() { setEnLigne(true); synchroniser(); }
+    function onOffline() { setEnLigne(false); }
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    const interval = setInterval(() => { if (navigator.onLine) synchroniser(); }, 30000);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      clearInterval(interval);
+    };
+  }, [rafraichirEnAttente]);
 
   return (
     <div style={styles.page}>
@@ -49,6 +76,17 @@ export default function Transferts() {
           <div style={styles.eyebrow}>Volailles de l'Est · Stock</div>
           <h1 style={styles.h1}>Transferts entre fermes</h1>
         </header>
+
+        {(!enLigne || enAttenteCount > 0) && (
+          <div style={styles.offlineBanner}>
+            <WifiOff size={14} />
+            <span>
+              {!enLigne
+                ? "Hors-ligne — vos transferts seront synchronisés automatiquement au retour du réseau"
+                : `${enAttenteCount} transfert(s) en attente de synchronisation`}
+            </span>
+          </div>
+        )}
 
         <div style={styles.tabs}>
           <button style={{ ...styles.tab, ...(onglet === "stock" ? styles.tabOn : {}) }} onClick={() => setOnglet("stock")}>
@@ -59,13 +97,17 @@ export default function Transferts() {
           </button>
         </div>
 
-        {onglet === "stock" ? <TransfertsStock fermes={fermes} /> : <TransfertsEquipement fermes={fermes} />}
+        {onglet === "stock" ? (
+          <TransfertsStock fermes={fermes} onMiseEnAttente={rafraichirEnAttente} />
+        ) : (
+          <TransfertsEquipement fermes={fermes} onMiseEnAttente={rafraichirEnAttente} />
+        )}
       </div>
     </div>
   );
 }
 
-function TransfertsStock({ fermes }) {
+function TransfertsStock({ fermes, onMiseEnAttente }) {
   const [transferts, setTransferts] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [form, setForm] = useState(FORM_VIDE);
@@ -100,17 +142,42 @@ function TransfertsStock({ fermes }) {
     if (!form.ferme_source || !form.ferme_destination || !form.quantite) return;
     setEnvoi(true);
     setErreur("");
+    const payload = {
+      date: form.date, type_transfert: form.type_transfert,
+      ferme_source: form.ferme_source, ferme_destination: form.ferme_destination,
+      quantite: form.type_transfert === "ALVEOLES" ? colisVersUnites(form.quantite) : form.quantite,
+      observation: form.observation,
+    };
+    if (!navigator.onLine) {
+      try {
+        await ajouterTransfertEnAttente("stock", payload);
+        onMiseEnAttente?.();
+        setForm((f) => ({ ...FORM_VIDE, ferme_source: f.ferme_source, date: f.date }));
+      } catch {
+        setErreur("Impossible d'enregistrer hors-ligne sur cet appareil (stockage plein ou navigation privée).");
+      } finally {
+        setEnvoi(false);
+      }
+      return;
+    }
     try {
-      await creerTransfertStock({
-        date: form.date, type_transfert: form.type_transfert,
-        ferme_source: form.ferme_source, ferme_destination: form.ferme_destination,
-        quantite: form.type_transfert === "ALVEOLES" ? colisVersUnites(form.quantite) : form.quantite,
-        observation: form.observation,
-      });
+      await creerTransfertStock(payload);
       setForm((f) => ({ ...FORM_VIDE, ferme_source: f.ferme_source, date: f.date }));
       rafraichir();
     } catch (err) {
-      setErreur(err.response?.data?.detail || "Impossible d'enregistrer ce transfert.");
+      if (!err.response) {
+        // Pas de réponse serveur = coupure réseau pendant l'envoi : on met
+        // en file plutôt que d'afficher une erreur (cf. Point Journalier).
+        try {
+          await ajouterTransfertEnAttente("stock", payload);
+          onMiseEnAttente?.();
+          setForm((f) => ({ ...FORM_VIDE, ferme_source: f.ferme_source, date: f.date }));
+        } catch {
+          setErreur("Impossible d'enregistrer hors-ligne sur cet appareil (stockage plein ou navigation privée).");
+        }
+      } else {
+        setErreur(err.response?.data?.detail || "Impossible d'enregistrer ce transfert.");
+      }
     } finally {
       setEnvoi(false);
     }
@@ -273,7 +340,7 @@ function TransfertsStock({ fermes }) {
   );
 }
 
-function TransfertsEquipement({ fermes }) {
+function TransfertsEquipement({ fermes, onMiseEnAttente }) {
   const [transferts, setTransferts] = useState([]);
   const [inventaire, setInventaire] = useState([]);
   const [chargement, setChargement] = useState(true);
@@ -317,17 +384,40 @@ function TransfertsEquipement({ fermes }) {
     if (!form.ferme_source || !form.ferme_destination || !form.quantite) return;
     setEnvoi(true);
     setErreur("");
+    const payload = {
+      date: form.date, type_equipement: form.type_equipement,
+      ferme_source: form.ferme_source, ferme_destination: form.ferme_destination,
+      quantite: form.quantite, observation: form.observation,
+    };
+    if (!navigator.onLine) {
+      try {
+        await ajouterTransfertEnAttente("equipement", payload);
+        onMiseEnAttente?.();
+        setForm((f) => ({ ...FORM_VIDE_EQUIPEMENT, ferme_source: f.ferme_source, date: f.date }));
+      } catch {
+        setErreur("Impossible d'enregistrer hors-ligne sur cet appareil (stockage plein ou navigation privée).");
+      } finally {
+        setEnvoi(false);
+      }
+      return;
+    }
     try {
-      await creerTransfertEquipement({
-        date: form.date, type_equipement: form.type_equipement,
-        ferme_source: form.ferme_source, ferme_destination: form.ferme_destination,
-        quantite: form.quantite, observation: form.observation,
-      });
+      await creerTransfertEquipement(payload);
       setForm((f) => ({ ...FORM_VIDE_EQUIPEMENT, ferme_source: f.ferme_source, date: f.date }));
       rafraichir();
       rafraichirInventaire();
     } catch (err) {
-      setErreur(err.response?.data?.detail || "Impossible d'enregistrer ce transfert.");
+      if (!err.response) {
+        try {
+          await ajouterTransfertEnAttente("equipement", payload);
+          onMiseEnAttente?.();
+          setForm((f) => ({ ...FORM_VIDE_EQUIPEMENT, ferme_source: f.ferme_source, date: f.date }));
+        } catch {
+          setErreur("Impossible d'enregistrer hors-ligne sur cet appareil (stockage plein ou navigation privée).");
+        }
+      } else {
+        setErreur(err.response?.data?.detail || "Impossible d'enregistrer ce transfert.");
+      }
     } finally {
       setEnvoi(false);
     }
@@ -495,6 +585,7 @@ const styles = {
   head: { marginBottom: 20 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
   tabs: { display: "flex", gap: 6, marginBottom: 16 },
   tab: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#fff", border: "1px solid #ECE9DF", color: "#7A857F", padding: "10px 8px", borderRadius: 10, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" },
   tabOn: { background: GREEN, borderColor: GREEN, color: "#fff", fontWeight: 600 },
