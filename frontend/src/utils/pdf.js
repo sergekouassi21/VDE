@@ -541,7 +541,10 @@ export function genererFichePaie(employe, periodeLabel, lignes, absencesJustifie
   doc.text(`Période : ${periodeLabel}`, 15, 61);
   if (employe.telephone) doc.text(`Téléphone : ${employe.telephone}`, 15, 67);
 
-  const heureTxt = (iso) => (iso ? new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—");
+  // timeZone explicite : sans lui, l'heure s'affiche dans le fuseau de la
+  // machine qui génère le PDF (souvent réglé sur l'heure française,
+  // GMT+1/+2) au lieu de l'heure d'Abidjan (GMT+0).
+  const heureTxt = (iso) => (iso ? new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Abidjan" }) : "—");
 
   function entetesColonnes(y) {
     doc.setFillColor(...GREEN_DARK);

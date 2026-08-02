@@ -92,7 +92,7 @@ export default function JournalAudit() {
                 <tbody>
                   {entrees.map((e) => (
                     <tr key={e.id}>
-                      <td style={styles.td}>{new Date(e.date).toLocaleString("fr-FR")}</td>
+                      <td style={styles.td}>{new Date(e.date).toLocaleString("fr-FR", { timeZone: "Africa/Abidjan" })}</td>
                       <td style={styles.td}>{e.utilisateur_nom}</td>
                       <td style={{ ...styles.td, fontWeight: 600, color: COULEUR_ACTION[e.action] }}>{LABEL_ACTION[e.action]}</td>
                       <td style={styles.td}>{e.modele}</td>

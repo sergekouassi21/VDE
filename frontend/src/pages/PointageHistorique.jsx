@@ -19,7 +19,10 @@ const LIGNE_PAIE_VIDE = {
 
 const separeMilliers = (n) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 const fcfa = (v) => `${separeMilliers(Number(v) || 0)} F`;
-const heure = (iso) => (iso ? new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—");
+// timeZone explicite : sans lui, l'heure s'affiche dans le fuseau du
+// navigateur (souvent réglé sur l'heure française, GMT+1/+2) au lieu de
+// l'heure d'Abidjan (GMT+0) — cf. conversation du 02/08/2026 avec Serge.
+const heure = (iso) => (iso ? new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Abidjan" }) : "—");
 const pad = (n) => String(n).padStart(2, "0");
 const dateISO = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 

@@ -7,7 +7,10 @@ import CaptureSelfie from "../components/CaptureSelfie";
 import { ajouterPointageEnAttente, listerPointagesEnAttente } from "../offline/queuePointage";
 import { synchroniserPointagesEnAttente } from "../offline/syncPointage";
 
-const heure = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+// timeZone explicite : sans lui, l'heure s'affiche dans le fuseau du
+// téléphone/navigateur (souvent réglé sur l'heure française, GMT+1/+2) au
+// lieu de l'heure d'Abidjan (GMT+0) — cf. conversation du 02/08/2026 avec Serge.
+const heure = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Abidjan" });
 
 export default function PointageScan() {
   const { token } = useParams();
