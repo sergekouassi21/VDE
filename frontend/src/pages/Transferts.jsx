@@ -175,7 +175,7 @@ function TransfertsStock({ fermes }) {
           <label style={styles.field}>
             <span style={styles.fieldLabel}>Quantité ({UNITE_TYPE[form.type_transfert]})</span>
             <input
-              style={styles.input} type="number" min="0.01" step={STEP_TYPE[form.type_transfert]}
+              style={styles.input} type="number" min={STEP_TYPE[form.type_transfert]} step={STEP_TYPE[form.type_transfert]}
               value={form.quantite} onChange={(e) => setForm({ ...form, quantite: e.target.value })} required
             />
           </label>
