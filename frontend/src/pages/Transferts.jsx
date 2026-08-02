@@ -6,15 +6,21 @@ import {
   getTransfertsEquipement, creerTransfertEquipement, modifierTransfertEquipement, supprimerTransfertEquipement,
   getInventaireEquipement,
 } from "../api/client";
-import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+import { GREEN, GREEN_DARK, INK, CLAY, UNITES_PAR_COLIS } from "../theme";
 import { estDirectionOuAdmin } from "../utils/auth";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const nf = (v) => (Number(v) || 0).toLocaleString("fr-FR");
+// Les alvéoles se saisissent en colis (1 colis = 100 unités, même
+// convention que le Point Journalier) — le stock/le transfert restent
+// stockés en unités côté serveur, la conversion n'a lieu qu'à l'affichage
+// et à la saisie. Cf. conversation du 02/08/2026 avec Serge.
+const colisVersUnites = (colis) => Math.round((Number(colis) || 0) * UNITES_PAR_COLIS);
+const unitesVersColis = (unites) => (Number(unites) || 0) / UNITES_PAR_COLIS;
 
 const LABEL_TYPE = { ALIMENT: "Aliment", ALVEOLES: "Alvéoles", OEUFS: "Œufs" };
-const UNITE_TYPE = { ALIMENT: "sacs", ALVEOLES: "unités", OEUFS: "œufs" };
-const STEP_TYPE = { ALIMENT: "0.01", ALVEOLES: "1", OEUFS: "1" };
+const UNITE_TYPE = { ALIMENT: "sacs", ALVEOLES: "colis", OEUFS: "œufs" };
+const STEP_TYPE = { ALIMENT: "0.01", ALVEOLES: "0.1", OEUFS: "1" };
 
 const LABEL_EQUIPEMENT = { MANGEOIRES: "Mangeoires", ABREUVOIRS: "Abreuvoirs" };
 
@@ -98,7 +104,8 @@ function TransfertsStock({ fermes }) {
       await creerTransfertStock({
         date: form.date, type_transfert: form.type_transfert,
         ferme_source: form.ferme_source, ferme_destination: form.ferme_destination,
-        quantite: form.quantite, observation: form.observation,
+        quantite: form.type_transfert === "ALVEOLES" ? colisVersUnites(form.quantite) : form.quantite,
+        observation: form.observation,
       });
       setForm((f) => ({ ...FORM_VIDE, ferme_source: f.ferme_source, date: f.date }));
       rafraichir();
@@ -111,14 +118,19 @@ function TransfertsStock({ fermes }) {
 
   function commencerEdition(t) {
     setEdition(t.id);
-    setBrouillon({ quantite: String(t.quantite), observation: t.observation });
+    const quantiteAffichee = t.type_transfert === "ALVEOLES" ? unitesVersColis(t.quantite) : t.quantite;
+    setBrouillon({ quantite: String(quantiteAffichee), observation: t.observation });
     setErreur("");
   }
 
-  async function enregistrerEdition(id) {
+  async function enregistrerEdition(id, typeTransfert) {
     setEnvoiEdition(true);
     try {
-      await modifierTransfertStock(id, { quantite: Number(brouillon.quantite) || 0, observation: brouillon.observation });
+      const quantite = Number(brouillon.quantite) || 0;
+      await modifierTransfertStock(id, {
+        quantite: typeTransfert === "ALVEOLES" ? colisVersUnites(quantite) : quantite,
+        observation: brouillon.observation,
+      });
       setEdition(null);
       rafraichir();
     } catch (err) {
@@ -129,8 +141,9 @@ function TransfertsStock({ fermes }) {
   }
 
   async function supprimer(t) {
+    const quantiteAffichee = t.type_transfert === "ALVEOLES" ? unitesVersColis(t.quantite) : t.quantite;
     if (!window.confirm(
-      `Supprimer ce transfert de ${nf(t.quantite)} ${UNITE_TYPE[t.type_transfert]} (${t.ferme_source_nom} → ${t.ferme_destination_nom}) ?`
+      `Supprimer ce transfert de ${nf(quantiteAffichee)} ${UNITE_TYPE[t.type_transfert]} (${t.ferme_source_nom} → ${t.ferme_destination_nom}) ?`
     )) return;
     try {
       await supprimerTransfertStock(t.id);
@@ -222,7 +235,7 @@ function TransfertsStock({ fermes }) {
                         {enEdition ? (
                           <input type="number" style={styles.tableInput} value={brouillon.quantite}
                             onChange={(e) => setBrouillon((b) => ({ ...b, quantite: e.target.value }))} />
-                        ) : `${nf(t.quantite)} ${UNITE_TYPE[t.type_transfert]}`}
+                        ) : `${nf(t.type_transfert === "ALVEOLES" ? unitesVersColis(t.quantite) : t.quantite)} ${UNITE_TYPE[t.type_transfert]}`}
                       </td>
                       <td style={{ ...styles.td, color: "#6B756E" }}>
                         {enEdition ? (
@@ -233,7 +246,7 @@ function TransfertsStock({ fermes }) {
                       <td style={{ ...styles.td, display: "flex", gap: 8 }}>
                         {enEdition ? (
                           <div style={styles.actionsRow}>
-                            <button style={styles.actionBtn} disabled={envoiEdition} onClick={() => enregistrerEdition(t.id)}><Check size={14} /></button>
+                            <button style={styles.actionBtn} disabled={envoiEdition} onClick={() => enregistrerEdition(t.id, t.type_transfert)}><Check size={14} /></button>
                             <button style={styles.actionBtn} disabled={envoiEdition} onClick={() => setEdition(null)}><X size={14} /></button>
                           </div>
                         ) : peutModifier(t) ? (
