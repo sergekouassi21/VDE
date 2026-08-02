@@ -512,15 +512,28 @@ def _appareil_autorise(request):
     return autorise
 
 
+# Durée maximale plausible d'une garde de nuit — au-delà, un pointage
+# d'hier encore ouvert est traité comme un badge oublié (pas une vraie
+# garde en cours) : le scan du jour démarre une nouvelle journée au lieu de
+# "fermer" l'ancien pointage avec une durée aberrante (~24h). Sans cette
+# borne, un employé de jour qui oublie de débadger le soir et rebadge le
+# lendemain matin verrait son arrivée du lendemain interprétée à tort comme
+# la fin de la garde de la veille. Cf. conversation du 02/08/2026 avec Serge.
+DUREE_MAX_GARDE_HEURES = 16
+
+
 def _garde_ouverte_hier(employe):
     """Une garde de nuit d'hier encore ouverte (heure_debut posé, heure_fin
     non posé) — le prochain scan doit la clôturer plutôt que de créer un
     nouveau pointage "aujourd'hui" mal étiqueté comme une nouvelle arrivée.
-    Bornée à hier seulement (pas n'importe quelle date passée), pour ne pas
-    réattribuer un pointage oublié depuis des semaines au scan du jour. Cf.
-    conversation du 02/08/2026 avec Serge."""
+    Bornée à hier (pas n'importe quelle date passée) ET à une durée
+    plausible (DUREE_MAX_GARDE_HEURES), pour ne pas réattribuer un pointage
+    oublié au scan du jour. Cf. conversation du 02/08/2026 avec Serge."""
     hier = timezone.localdate() - timedelta(days=1)
-    return Pointage.objects.filter(employe=employe, date=hier, heure_debut__isnull=False, heure_fin__isnull=True).first()
+    limite = timezone.now() - timedelta(hours=DUREE_MAX_GARDE_HEURES)
+    return Pointage.objects.filter(
+        employe=employe, date=hier, heure_debut__isnull=False, heure_fin__isnull=True, heure_debut__gte=limite,
+    ).first()
 
 
 def _pointage_actuel(employe):

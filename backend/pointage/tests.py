@@ -450,6 +450,25 @@ class GardeDeNuitPointageTests(TestCase):
         self.assertIsNotNone(nouveau.heure_debut)
         self.assertIsNone(nouveau.heure_fin)
 
+    def test_un_badge_oublie_hier_soir_n_est_pas_confondu_avec_une_garde_de_nuit(self):
+        # Employé de jour qui oublie de débadger hier soir (arrivée il y a
+        # ~26h, bien au-delà de DUREE_MAX_GARDE_HEURES) puis rebadge ce
+        # matin : le scan doit démarrer une nouvelle journée, pas fermer
+        # l'ancien pointage avec une durée aberrante de ~26h.
+        hier = timezone.localdate() - timedelta(days=1)
+        pointage_oublie = Pointage.objects.create(
+            employe=self.employe, date=hier, heure_debut=timezone.now() - timedelta(hours=26),
+        )
+        req = self.factory.post(f"/api/pointage/scan/{self.employe.qr_token}/valider/", {"photo": _photo()})
+        resp = scan_valider(req, token=str(self.employe.qr_token))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(Pointage.objects.filter(employe=self.employe).count(), 2)
+        pointage_oublie.refresh_from_db()
+        self.assertIsNone(pointage_oublie.heure_fin)  # laissé ouvert pour correction manuelle par la Direction
+        nouveau = Pointage.objects.get(employe=self.employe, date=timezone.localdate())
+        self.assertIsNotNone(nouveau.heure_debut)
+        self.assertIsNone(nouveau.heure_fin)
+
     def test_scan_info_detecte_la_garde_d_hier_encore_ouverte_comme_en_cours(self):
         # Avant la clôture : scan_info doit montrer EN_COURS (pas
         # NON_COMMENCE) pour que l'écran propose "Valider le départ" et non
