@@ -780,3 +780,11 @@ export async function partagerPdf(doc, nomFichier) {
 export function telechargerPdf(doc, nomFichier) {
   doc.save(nomFichier);
 }
+
+// Ouvre le PDF dans un nouvel onglet (visionneuse du navigateur) sans
+// déclencher de téléchargement — utile pour une simple vérification avant
+// de le transmettre. L'URL blob n'a pas de nom de fichier ; le navigateur
+// l'affiche donc en ligne au lieu de proposer un "Enregistrer sous".
+export function visualiserPdf(doc) {
+  window.open(doc.output("bloburl"), "_blank");
+}

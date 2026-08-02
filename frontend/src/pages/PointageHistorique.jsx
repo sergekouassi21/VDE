@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Pencil, Trash2, X, Download, FileText, UserMinus, Wallet, Check, Ban, LifeBuoy } from "lucide-react";
+import { Pencil, Trash2, X, Download, Eye, FileText, UserMinus, Wallet, Check, Ban, LifeBuoy } from "lucide-react";
 import {
   getFermes, getEmployes, getPointages, corrigerPointage, supprimerPointage,
   getAbsences, declarerAbsence, supprimerAbsence, validerAbsence, rejeterAbsence, getLignesPaie, enregistrerLignePaie,
   getResumePaie,
 } from "../api/client";
-import { genererFichePaie, telechargerPdf } from "../utils/pdf";
+import { genererFichePaie, telechargerPdf, visualiserPdf } from "../utils/pdf";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 
 const LABEL_MODE_PAIEMENT = {
@@ -116,10 +116,10 @@ export default function PointageHistorique() {
     setDateFin(dateISO(new Date(an, m, 0)));
   }
 
-  function telechargerFichePaie(groupe) {
+  function construireFichePaie(groupe) {
     const lignesTriees = [...groupe.lignesTravaillees].sort((a, b) => a.date.localeCompare(b.date));
     const absencesTriees = [...groupe.absencesJustifiees].sort((a, b) => a.date.localeCompare(b.date));
-    const doc = genererFichePaie(
+    return genererFichePaie(
       { nom: groupe.nom, ferme_nom: groupe.fermeNom, role: groupe.role, telephone: groupe.telephone },
       periodeLabel,
       lignesTriees,
@@ -127,7 +127,14 @@ export default function PointageHistorique() {
       groupe.joursAbsenceInjustifiee,
       groupe.lignePaie,
     );
-    telechargerPdf(doc, `fiche-paie-${groupe.nom.replace(/\s+/g, "-")}-${dateDebut || "periode"}.pdf`);
+  }
+
+  function telechargerFichePaie(groupe) {
+    telechargerPdf(construireFichePaie(groupe), `fiche-paie-${groupe.nom.replace(/\s+/g, "-")}-${dateDebut || "periode"}.pdf`);
+  }
+
+  function visualiserFichePaie(groupe) {
+    visualiserPdf(construireFichePaie(groupe));
   }
 
   function ouvrirEditionPaie(groupe) {
@@ -329,6 +336,9 @@ export default function PointageHistorique() {
                         </td>
                       )}
                       <td style={{ ...styles.td, display: "flex", gap: 8 }}>
+                        <button style={styles.pdfBtn} onClick={() => visualiserFichePaie(g)}>
+                          <Eye size={14} /> Visualiser
+                        </button>
                         <button style={styles.pdfBtn} onClick={() => telechargerFichePaie(g)}>
                           <Download size={14} /> Fiche de paie
                         </button>
