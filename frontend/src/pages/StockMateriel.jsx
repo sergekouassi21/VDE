@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Pencil, Check, X, Wrench, Plus, Trash2 } from "lucide-react";
+import { Pencil, Check, X, Wrench, Plus, Trash2, ArrowLeftRight } from "lucide-react";
 import {
   getInventaireEquipement, modifierInventaireEquipement,
   getReceptionsEquipement, creerReceptionEquipement, modifierReceptionEquipement, supprimerReceptionEquipement,
+  getMouvementsEquipement, creerMouvementEquipement, modifierMouvementEquipement, supprimerMouvementEquipement,
 } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 import { estDirectionOuAdmin } from "../utils/auth";
@@ -14,8 +15,23 @@ const LABEL_EQUIPEMENT = { MANGEOIRES: "Mangeoires", ABREUVOIRS: "Abreuvoirs" };
 
 const CHAMPS = ["bon_etat", "gate", "reserve", "jete"];
 const LABEL_CHAMP = { bon_etat: "Bon état", gate: "Gâté", reserve: "Réserve", jete: "Jeté" };
+const LABEL_ETAT = { BON_ETAT: "Bon état", GATE: "Gâté", RESERVE: "Réserve", JETE: "Jeté" };
+
+// Les boutons Gâté/Réserve/Jeté retirent toujours du Bon état ; seul le
+// bouton Bon état (retour) permet de choisir la provenance (Gâté ou
+// Réserve, jamais Jeté — irréversible). Cf. conversation du 02/08/2026.
+const TYPES_MOUVEMENT = [
+  { valeur: "GATE", label: "Gâté" },
+  { valeur: "RESERVE", label: "Réserve" },
+  { valeur: "JETE", label: "Jeté" },
+  { valeur: "RETOUR", label: "Bon état" },
+];
+const LABEL_ACTION_MOUVEMENT = {
+  GATE: "Marquer comme gâté", RESERVE: "Mettre en réserve", JETE: "Jeter", RETOUR: "Remettre en bon état",
+};
 
 const FORM_VIDE_RECEPTION = { date: todayISO(), ferme: "", type_equipement: "MANGEOIRES", quantite: "", observation: "" };
+const FORM_VIDE_MOUVEMENT = { date: todayISO(), ferme: "", type_equipement: "MANGEOIRES", provenance: "GATE", quantite: "", observation: "" };
 
 // Même règle que les transferts : un chef corrige librement le jour même,
 // au-delà c'est réservé à la Direction (cf. conversation du 31/07/2026).
@@ -40,6 +56,16 @@ export default function StockMateriel() {
   const [brouillonReception, setBrouillonReception] = useState({ quantite: "", observation: "" });
   const [envoiEditionReception, setEnvoiEditionReception] = useState(false);
 
+  const [typeMouvement, setTypeMouvement] = useState("GATE");
+  const [formMouvement, setFormMouvement] = useState(FORM_VIDE_MOUVEMENT);
+  const [mouvements, setMouvements] = useState([]);
+  const [chargementMouvements, setChargementMouvements] = useState(true);
+  const [erreurMouvement, setErreurMouvement] = useState("");
+  const [envoiMouvement, setEnvoiMouvement] = useState(false);
+  const [editionMouvement, setEditionMouvement] = useState(null);
+  const [brouillonMouvement, setBrouillonMouvement] = useState({ quantite: "", observation: "" });
+  const [envoiEditionMouvement, setEnvoiEditionMouvement] = useState(false);
+
   const rafraichir = useCallback(() => {
     setChargement(true);
     let annule = false;
@@ -62,8 +88,20 @@ export default function StockMateriel() {
     return () => { annule = true; };
   }, []);
 
+  const rafraichirMouvements = useCallback(() => {
+    setChargementMouvements(true);
+    let annule = false;
+    getMouvementsEquipement().then((data) => {
+      if (annule) return;
+      setMouvements(data);
+      setChargementMouvements(false);
+    });
+    return () => { annule = true; };
+  }, []);
+
   useEffect(() => rafraichir(), [rafraichir]);
   useEffect(() => rafraichirReceptions(), [rafraichirReceptions]);
+  useEffect(() => rafraichirMouvements(), [rafraichirMouvements]);
 
   const fermes = useMemo(() => {
     const vues = new Map();
@@ -73,6 +111,7 @@ export default function StockMateriel() {
 
   useEffect(() => {
     setFormReception((f) => (f.ferme ? f : { ...f, ferme: fermes[0]?.id ?? "" }));
+    setFormMouvement((f) => (f.ferme ? f : { ...f, ferme: fermes[0]?.id ?? "" }));
   }, [fermes]);
 
   function commencerEdition(ligne) {
@@ -153,6 +192,61 @@ export default function StockMateriel() {
     }
   }
 
+  async function soumettreMouvement(e) {
+    e.preventDefault();
+    if (!formMouvement.ferme || !formMouvement.quantite) return;
+    setEnvoiMouvement(true);
+    setErreurMouvement("");
+    const etatSource = typeMouvement === "RETOUR" ? formMouvement.provenance : "BON_ETAT";
+    const etatDestination = typeMouvement === "RETOUR" ? "BON_ETAT" : typeMouvement;
+    try {
+      await creerMouvementEquipement({
+        date: formMouvement.date, ferme: formMouvement.ferme, type_equipement: formMouvement.type_equipement,
+        etat_source: etatSource, etat_destination: etatDestination,
+        quantite: formMouvement.quantite, observation: formMouvement.observation,
+      });
+      setFormMouvement((f) => ({ ...FORM_VIDE_MOUVEMENT, ferme: f.ferme, date: f.date }));
+      rafraichirMouvements();
+      rafraichir();
+    } catch (err) {
+      setErreurMouvement(err.response?.data?.detail || "Impossible d'enregistrer ce mouvement.");
+    } finally {
+      setEnvoiMouvement(false);
+    }
+  }
+
+  function commencerEditionMouvement(m) {
+    setEditionMouvement(m.id);
+    setBrouillonMouvement({ quantite: String(m.quantite), observation: m.observation });
+  }
+
+  async function enregistrerEditionMouvement(id) {
+    setEnvoiEditionMouvement(true);
+    try {
+      await modifierMouvementEquipement(id, {
+        quantite: Number(brouillonMouvement.quantite) || 0, observation: brouillonMouvement.observation,
+      });
+      setEditionMouvement(null);
+      rafraichirMouvements();
+      rafraichir();
+    } catch (err) {
+      window.alert(err.response?.data?.detail || "Impossible de modifier ce mouvement.");
+    } finally {
+      setEnvoiEditionMouvement(false);
+    }
+  }
+
+  async function supprimerMouvement(m) {
+    if (!window.confirm(`Supprimer ce mouvement de ${nf(m.quantite)} (${LABEL_ETAT[m.etat_source]} → ${LABEL_ETAT[m.etat_destination]}, ${m.ferme_nom}) ?`)) return;
+    try {
+      await supprimerMouvementEquipement(m.id);
+      rafraichirMouvements();
+      rafraichir();
+    } catch (err) {
+      window.alert(err.response?.data?.detail || "Impossible de supprimer ce mouvement.");
+    }
+  }
+
   const stockBrouillon = CHAMPS.reduce((acc, c, i) => (i < 3 ? acc + (Number(brouillon[c]) || 0) : acc - (Number(brouillon[c]) || 0)), 0);
 
   return (
@@ -200,6 +294,65 @@ export default function StockMateriel() {
           {erreurReception && <p style={styles.erreur}>{erreurReception}</p>}
           <button style={styles.submitBtn} type="submit" disabled={envoiReception}>
             <Plus size={15} /> {envoiReception ? "Enregistrement..." : "Ajouter du matériel reçu"}
+          </button>
+        </form>
+
+        <form style={styles.formCard} onSubmit={soumettreMouvement}>
+          <div style={styles.tabs}>
+            {TYPES_MOUVEMENT.map((t) => (
+              <button
+                key={t.valeur} type="button"
+                style={{ ...styles.tab, ...(typeMouvement === t.valeur ? styles.tabOn : {}) }}
+                onClick={() => setTypeMouvement(t.valeur)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div style={styles.fieldRow}>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Ferme</span>
+              <select style={styles.input} value={formMouvement.ferme} onChange={(e) => setFormMouvement({ ...formMouvement, ferme: e.target.value })} required>
+                <option value="">Sélectionner...</option>
+                {fermes.map((f) => <option key={f.id} value={f.id}>{f.nom}</option>)}
+              </select>
+            </label>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Type</span>
+              <select style={styles.input} value={formMouvement.type_equipement} onChange={(e) => setFormMouvement({ ...formMouvement, type_equipement: e.target.value })}>
+                {Object.entries(LABEL_EQUIPEMENT).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </label>
+            {typeMouvement === "RETOUR" && (
+              <label style={styles.field}>
+                <span style={styles.fieldLabel}>Provenance</span>
+                <select style={styles.input} value={formMouvement.provenance} onChange={(e) => setFormMouvement({ ...formMouvement, provenance: e.target.value })}>
+                  <option value="GATE">Gâté</option>
+                  <option value="RESERVE">Réserve</option>
+                </select>
+              </label>
+            )}
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Date</span>
+              <input style={styles.input} type="date" max={todayISO()} value={formMouvement.date} onChange={(e) => setFormMouvement({ ...formMouvement, date: e.target.value })} required />
+            </label>
+          </div>
+          <div style={styles.fieldRow}>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Quantité</span>
+              <input
+                style={styles.input} type="number" min="1" step="1"
+                value={formMouvement.quantite} onChange={(e) => setFormMouvement({ ...formMouvement, quantite: e.target.value })} required
+              />
+            </label>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Observation (optionnel)</span>
+              <input style={styles.input} value={formMouvement.observation} onChange={(e) => setFormMouvement({ ...formMouvement, observation: e.target.value })} />
+            </label>
+          </div>
+          {erreurMouvement && <p style={styles.erreur}>{erreurMouvement}</p>}
+          <button style={styles.submitBtn} type="submit" disabled={envoiMouvement}>
+            <ArrowLeftRight size={15} /> {envoiMouvement ? "Enregistrement..." : LABEL_ACTION_MOUVEMENT[typeMouvement]}
           </button>
         </form>
 
@@ -324,10 +477,74 @@ export default function StockMateriel() {
           )}
         </section>
 
+        <h2 style={styles.h2}>Historique des mouvements</h2>
+        <section style={styles.card}>
+          {chargementMouvements ? (
+            <p style={styles.empty}>Chargement...</p>
+          ) : mouvements.length === 0 ? (
+            <p style={styles.empty}>Aucun mouvement enregistré.</p>
+          ) : (
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Date</th>
+                    <th style={styles.th}>Ferme</th>
+                    <th style={styles.th}>Type</th>
+                    <th style={styles.th}>Mouvement</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Quantité</th>
+                    <th style={styles.th}>Observation</th>
+                    <th style={styles.th}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mouvements.map((m) => {
+                    const enEdition = editionMouvement === m.id;
+                    return (
+                      <tr key={m.id}>
+                        <td style={styles.td}>{new Date(m.date).toLocaleDateString("fr-FR")}</td>
+                        <td style={styles.td}>{m.ferme_nom}</td>
+                        <td style={styles.td}>{LABEL_EQUIPEMENT[m.type_equipement]}</td>
+                        <td style={styles.td}>{LABEL_ETAT[m.etat_source]} → {LABEL_ETAT[m.etat_destination]}</td>
+                        <td style={{ ...styles.td, textAlign: "right", fontWeight: 600, color: GREEN_DARK }}>
+                          {enEdition ? (
+                            <input type="number" style={styles.tableInput} value={brouillonMouvement.quantite}
+                              onChange={(e) => setBrouillonMouvement((b) => ({ ...b, quantite: e.target.value }))} />
+                          ) : nf(m.quantite)}
+                        </td>
+                        <td style={{ ...styles.td, color: "#6B756E" }}>
+                          {enEdition ? (
+                            <input style={styles.tableInput} value={brouillonMouvement.observation}
+                              onChange={(e) => setBrouillonMouvement((b) => ({ ...b, observation: e.target.value }))} />
+                          ) : (m.observation || "—")}
+                        </td>
+                        <td style={{ ...styles.td, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          {enEdition ? (
+                            <div style={styles.actionsRow}>
+                              <button style={styles.actionBtn} disabled={envoiEditionMouvement} onClick={() => enregistrerEditionMouvement(m.id)}><Check size={14} /></button>
+                              <button style={styles.actionBtn} disabled={envoiEditionMouvement} onClick={() => setEditionMouvement(null)}><X size={14} /></button>
+                            </div>
+                          ) : peutModifier(m) ? (
+                            <div style={styles.actionsRow}>
+                              <button style={styles.actionBtn} onClick={() => commencerEditionMouvement(m)}><Pencil size={14} /></button>
+                              <button style={{ ...styles.actionBtn, color: CLAY }} onClick={() => supprimerMouvement(m)}><Trash2 size={14} /></button>
+                            </div>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
         <p style={styles.note}>
-          <Wrench size={13} style={{ verticalAlign: -2 }} /> Une réception ajoute directement au bon état ; le tableau ci-dessus
-          reste la seule façon de déclarer du matériel gâté, mis en réserve ou jeté. Ces chiffres (bon état) sont ceux utilisés
-          par les transferts d'équipement entre fermes.
+          <Wrench size={13} style={{ verticalAlign: -2 }} /> Une réception ajoute du matériel neuf au bon état ; un mouvement
+          recatégorise du matériel déjà en stock (gâté, réserve, jeté ou retour en bon état) sans changer le total. Le tableau
+          récapitulatif reste modifiable directement pour une correction ponctuelle. Le bon état est le seul déplacé par les
+          transferts d'équipement entre fermes.
         </p>
       </div>
     </div>
@@ -343,6 +560,9 @@ const styles = {
   h2: { fontSize: 16, fontWeight: 700, margin: "24px 0 12px", letterSpacing: -.2 },
   sous: { fontSize: 13, color: "#6B756E", margin: "6px 0 0" },
   formCard: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 18, marginBottom: 16, display: "flex", flexDirection: "column", gap: 12 },
+  tabs: { display: "flex", gap: 6 },
+  tab: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#F4F1EA", border: "1px solid #ECE9DF", color: "#7A857F", padding: "8px 8px", borderRadius: 10, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" },
+  tabOn: { background: GREEN, borderColor: GREEN, color: "#fff", fontWeight: 600 },
   fieldRow: { display: "flex", gap: 12, flexWrap: "wrap" },
   field: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: "#6B756E", flex: "1 1 160px" },
   fieldLabel: { fontSize: 11.5 },

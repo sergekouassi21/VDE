@@ -108,6 +108,12 @@ export const creerReceptionEquipement = (payload) => api.post("/receptions-equip
 export const modifierReceptionEquipement = (id, payload) => api.patch(`/receptions-equipement/${id}/`, payload).then((r) => r.data);
 export const supprimerReceptionEquipement = (id) => api.delete(`/receptions-equipement/${id}/`);
 
+// --- Mouvements entre états du stock de matériel (bon état/gâté/réserve/jeté) ---
+export const getMouvementsEquipement = (params) => api.get("/mouvements-equipement/", { params }).then((r) => r.data);
+export const creerMouvementEquipement = (payload) => api.post("/mouvements-equipement/", payload).then((r) => r.data);
+export const modifierMouvementEquipement = (id, payload) => api.patch(`/mouvements-equipement/${id}/`, payload).then((r) => r.data);
+export const supprimerMouvementEquipement = (id) => api.delete(`/mouvements-equipement/${id}/`);
+
 // --- Pointage des employés (heures de travail) ---
 export const getEmployes = (params) => api.get("/pointage/employes/", { params }).then((r) => r.data);
 export const getUtilisateursDisponibles = () => api.get("/pointage/utilisateurs-disponibles/").then((r) => r.data);
