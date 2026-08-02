@@ -1,6 +1,7 @@
 import calendar
 import os
 import uuid
+from collections import defaultdict
 from datetime import date as date_cls, timedelta
 from decimal import Decimal
 from io import BytesIO
@@ -23,6 +24,7 @@ from exploitation.audit import AuditMixin, journaliser, journaliser_objet
 from exploitation.calculs import _verrou_consultatif, _verrou_consultatif_texte, prix_moyen_sac_aliment
 from exploitation.models import ActionAudit, Ferme, LigneFacture, PointJournalier, RoleUtilisateur
 from exploitation.permissions import EstDirectionOuAdmin
+from exploitation.views import _limite_borne
 
 # Espaces de noms pour pg_advisory_xact_lock (cf. exploitation/calculs.py,
 # _LOCK_CLASSID_*) — classid 1 à 3 y sont déjà pris (numéro de facture, nom
@@ -35,6 +37,7 @@ _LOCK_CLASSID_BADGE_TEMPORAIRE = 5
 _LOCK_CLASSID_BADGE_ABSENCE = 6
 _LOCK_CLASSID_ABSENCE_DECLARATION = 7
 _LOCK_CLASSID_LIGNE_PAIE = 8
+_LOCK_CLASSID_POINTAGE_CORRECTION = 9
 
 
 class ThrottlePointagePublic(ScopedRateThrottle):
@@ -62,6 +65,9 @@ from .serializers import (
     LignePaieSerializer,
     PointageSerializer,
     ScanEmployeSerializer,
+    _noms_fermes,
+    _role_employe,
+    _telephone_employe,
 )
 
 
@@ -185,14 +191,27 @@ class PointageViewSet(AuditMixin, viewsets.ModelViewSet):
         if date_fin:
             qs = qs.filter(date__lte=date_fin)
 
-        return qs.order_by("-date")
+        qs = qs.order_by("-date")
+        # Borne la réponse de list() seulement — trancher casserait
+        # get_object() pour retrieve/patch/delete (cf. exploitation/views.py,
+        # même garde-fou, audit du 01/08/2026 : ce viewset avait été oublié).
+        if self.action == "list":
+            qs = qs[:_limite_borne(self.request, 500)]
+        return qs
 
+    @transaction.atomic
     def partial_update(self, request, *args, **kwargs):
         # Corrige une heure d'arrivée/de départ saisie de travers (oubli de
         # scan, erreur) — les heures travaillées et le montant sont
         # recalculés dès que les deux heures sont connues, sinon remis à 0
         # (ex: on efface l'heure de fin par erreur, ça redevient "en cours").
+        # Verrou consultatif + refresh_from_db : sans eux, deux corrections
+        # concurrentes du même pointage pouvaient perdre l'une des deux
+        # écritures (cf. conversation du 02/08/2026 avec Serge, même
+        # correctif que modifier_transfert_stock côté exploitation).
         pointage = self.get_object()
+        _verrou_consultatif(_LOCK_CLASSID_POINTAGE_CORRECTION, pointage.id)
+        pointage.refresh_from_db()
         serializer = CorrigerPointageSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         donnees = serializer.validated_data
@@ -263,7 +282,10 @@ class AbsenceViewSet(AuditMixin, viewsets.ModelViewSet):
         if statut:
             qs = qs.filter(statut=statut)
 
-        return qs.order_by("-date")
+        qs = qs.order_by("-date")
+        if self.action == "list":
+            qs = qs[:_limite_borne(self.request, 500)]
+        return qs
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
@@ -336,7 +358,10 @@ class LignePaieViewSet(AuditMixin, viewsets.ModelViewSet):
         if mois:
             qs = qs.filter(mois=mois)
 
-        return qs.order_by("-mois")
+        qs = qs.order_by("-mois")
+        if self.action == "list":
+            qs = qs[:_limite_borne(self.request, 500)]
+        return qs
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
@@ -359,6 +384,114 @@ class LignePaieViewSet(AuditMixin, viewsets.ModelViewSet):
         return Response(serializer.data, status=code)
 
 
+@api_view(["GET"])
+@permission_classes([EstDirectionOuAdmin])
+def resume_paie(request):
+    """Porte côté serveur le résumé par employé auparavant recalculé en JS
+    dans PointageHistorique.jsx (montant du jour d'absence justifiée, jours
+    de repos dus/travaillés, détection des absences injustifiées) — pour
+    que la fiche de paie PDF ne soit plus générée à partir de chiffres
+    jamais validés côté serveur. Mêmes filtres que PointageViewSet/
+    AbsenceViewSet, + mois pour joindre LignePaie. Les clés de la réponse
+    restent en camelCase pour correspondre exactement à ce que
+    PointageHistorique.jsx lit déjà — ce blob n'est consommé que par cette
+    page et le générateur de PDF, pas une ressource REST classique. Cf.
+    conversation du 02/08/2026 avec Serge."""
+    ferme_id = request.query_params.get("ferme")
+    employe_id = request.query_params.get("employe")
+    date_debut = request.query_params.get("date_debut")
+    date_fin = request.query_params.get("date_fin")
+    mois = request.query_params.get("mois")
+
+    employes = Employe.objects.prefetch_related("fermes").all()
+    if ferme_id:
+        employes = employes.filter(fermes=ferme_id).distinct()
+    if employe_id:
+        employes = employes.filter(id=employe_id)
+    employes = list(employes)
+
+    pointages_qs = Pointage.objects.filter(employe__in=employes)
+    absences_qs = Absence.objects.filter(employe__in=employes)
+    if date_debut:
+        pointages_qs = pointages_qs.filter(date__gte=date_debut)
+        absences_qs = absences_qs.filter(date__gte=date_debut)
+    if date_fin:
+        pointages_qs = pointages_qs.filter(date__lte=date_fin)
+        absences_qs = absences_qs.filter(date__lte=date_fin)
+    lignes_paie_qs = LignePaie.objects.filter(employe__in=employes, mois=mois) if mois else LignePaie.objects.none()
+
+    pointages_par_employe = defaultdict(list)
+    for p in pointages_qs.select_related("employe"):
+        pointages_par_employe[p.employe_id].append(p)
+    absences_par_employe = defaultdict(list)
+    for a in absences_qs.select_related("employe"):
+        absences_par_employe[a.employe_id].append(a)
+    lignes_paie_par_employe = {lp.employe_id: lp for lp in lignes_paie_qs}
+
+    date_debut_obj = date_cls.fromisoformat(date_debut) if date_debut else None
+    date_fin_obj = date_cls.fromisoformat(date_fin) if date_fin else None
+    aujourdhui = timezone.localdate()
+
+    resultat = []
+    for emp in employes:
+        pointages_termines = [p for p in pointages_par_employe.get(emp.id, []) if p.heure_fin]
+        absences_emp = absences_par_employe.get(emp.id, [])
+        ligne_paie = lignes_paie_par_employe.get(emp.id)
+
+        total_heures = sum((p.heures_travaillees for p in pointages_termines), Decimal("0"))
+        total_montant = sum((p.montant_du_jour for p in pointages_termines), Decimal("0"))
+
+        absences_justifiees = []
+        for a in absences_emp:
+            if a.statut == StatutAbsence.VALIDEE:
+                montant = emp.salaire_journalier
+                absences_justifiees.append({"id": a.id, "date": a.date, "motif": a.motif, "montant": montant})
+                total_montant += montant
+
+        if ligne_paie:
+            total_montant += (
+                ligne_paie.frais + ligne_paie.primes + ligne_paie.carburant + ligne_paie.appel_internet
+                - ligne_paie.avances - ligne_paie.retenues
+            )
+
+        jours_absence_injustifiee = []
+        jours_repos_dus = 0
+        jours_repos_travailles = []
+        if date_debut_obj and date_fin_obj and emp.actif:
+            jours_pointes = {p.date for p in pointages_termines}
+            # Une absence rejetée reste une absence non payée : on ne
+            # l'exclut PAS de la détection des trous, pour qu'elle ressorte
+            # comme injustifiée (même règle que le JS remplacé).
+            jours_absence_declaree = {a.date for a in absences_emp if a.statut != StatutAbsence.REJETEE}
+            jour = date_debut_obj
+            while jour <= date_fin_obj and jour <= aujourdhui:
+                if emp.jour_repos is not None and jour.weekday() == emp.jour_repos:
+                    jours_repos_dus += 1
+                    if jour in jours_pointes:
+                        jours_repos_travailles.append(jour.isoformat())
+                elif jour not in jours_pointes and jour not in jours_absence_declaree:
+                    jours_absence_injustifiee.append(jour.isoformat())
+                jour += timedelta(days=1)
+
+        if not pointages_termines and not absences_justifiees and not jours_absence_injustifiee and not ligne_paie:
+            continue
+
+        resultat.append({
+            "employeId": emp.id, "nom": emp.nom, "fermeNom": _noms_fermes(emp), "role": _role_employe(emp),
+            "telephone": _telephone_employe(emp), "salaireMensuel": emp.salaire_mensuel, "jourRepos": emp.jour_repos,
+            "actif": emp.actif,
+            "lignesTravaillees": PointageSerializer(pointages_termines, many=True, context={"request": request}).data,
+            "absencesJustifiees": absences_justifiees,
+            "joursAbsenceInjustifiee": jours_absence_injustifiee,
+            "totalHeures": total_heures, "totalMontant": total_montant,
+            "lignePaie": LignePaieSerializer(ligne_paie).data if ligne_paie else None,
+            "joursReposDus": jours_repos_dus, "joursReposTravailles": jours_repos_travailles,
+        })
+
+    resultat.sort(key=lambda g: g["nom"])
+    return Response(resultat)
+
+
 def _appareil_autorise(request):
     """True si aucun AppareilPointage n'est encore configuré (transition en
     douceur), ou si le jeton présenté dans l'en-tête X-Appareil-Token
@@ -379,9 +512,43 @@ def _appareil_autorise(request):
     return autorise
 
 
-def _etat_pointage(request, employe):
-    aujourdhui = timezone.localdate()
-    pointage = Pointage.objects.filter(employe=employe, date=aujourdhui).first()
+def _garde_ouverte_hier(employe):
+    """Une garde de nuit d'hier encore ouverte (heure_debut posé, heure_fin
+    non posé) — le prochain scan doit la clôturer plutôt que de créer un
+    nouveau pointage "aujourd'hui" mal étiqueté comme une nouvelle arrivée.
+    Bornée à hier seulement (pas n'importe quelle date passée), pour ne pas
+    réattribuer un pointage oublié depuis des semaines au scan du jour. Cf.
+    conversation du 02/08/2026 avec Serge."""
+    hier = timezone.localdate() - timedelta(days=1)
+    return Pointage.objects.filter(employe=employe, date=hier, heure_debut__isnull=False, heure_fin__isnull=True).first()
+
+
+def _pointage_actuel(employe):
+    """Lecture seule (pas de get_or_create) — le pointage à afficher pour
+    cet employé maintenant : une garde d'hier encore ouverte, sinon celui
+    d'aujourd'hui s'il existe déjà."""
+    return _garde_ouverte_hier(employe) or Pointage.objects.filter(employe=employe, date=timezone.localdate()).first()
+
+
+def _traiter_scan(employe, photo=None, via_secours=False):
+    """Résout le pointage concerné par ce scan (garde de nuit d'hier encore
+    ouverte, sinon celui d'aujourd'hui) et y applique l'arrivée ou le
+    départ. `deja_complet` indique qu'aucune action n'a été faite (journée
+    déjà terminée) — un 3e scan ne crée pas de 2e plage, mais le signale au
+    lieu d'un no-op silencieux (cf. conversation du 02/08/2026 avec Serge)."""
+    pointage = _garde_ouverte_hier(employe)
+    if pointage is None:
+        pointage, _ = Pointage.objects.get_or_create(employe=employe, date=timezone.localdate())
+    if not pointage.heure_debut:
+        pointage.valider_debut(photo=photo, via_secours=via_secours)
+        return pointage, False
+    if not pointage.heure_fin:
+        pointage.valider_fin(photo=photo, via_secours=via_secours)
+        return pointage, False
+    return pointage, True
+
+
+def _reponse_etat(request, employe, pointage, deja_complet=False):
     if pointage is None or not pointage.heure_debut:
         etat = "NON_COMMENCE"
     elif not pointage.heure_fin:
@@ -395,6 +562,7 @@ def _etat_pointage(request, employe):
         "heure_fin": pointage.heure_fin if pointage else None,
         "heures_travaillees": pointage.heures_travaillees if pointage else None,
         "montant_du_jour": pointage.montant_du_jour if pointage else None,
+        "deja_complet": deja_complet,
     }
 
 
@@ -459,7 +627,7 @@ def scan_info(request, token):
     """Public — l'employé n'a pas de compte. Le token du QR (non-devinable)
     joue le rôle d'identifiant/autorisation."""
     employe = get_object_or_404(Employe, qr_token=token, actif=True)
-    return Response(_etat_pointage(request, employe))
+    return Response(_reponse_etat(request, employe, _pointage_actuel(employe)))
 
 
 @api_view(["POST"])
@@ -486,13 +654,8 @@ def scan_valider(request, token):
     if erreur:
         return Response({"detail": erreur}, status=status.HTTP_400_BAD_REQUEST)
     employe = get_object_or_404(Employe, qr_token=token, actif=True)
-    aujourdhui = timezone.localdate()
-    pointage, _ = Pointage.objects.get_or_create(employe=employe, date=aujourdhui)
-    if not pointage.heure_debut:
-        pointage.valider_debut(photo=photo)
-    elif not pointage.heure_fin:
-        pointage.valider_fin(photo=photo)
-    return Response(_etat_pointage(request, employe))
+    pointage, deja_complet = _traiter_scan(employe, photo=photo)
+    return Response(_reponse_etat(request, employe, pointage, deja_complet=deja_complet))
 
 
 @api_view(["GET"])
@@ -604,7 +767,7 @@ def badge_temporaire_employes(request, token):
     employes = Employe.objects.filter(actif=True).prefetch_related("fermes")
     if ferme_id:
         employes = employes.filter(fermes=ferme_id).distinct()
-    return Response([_etat_pointage(request, e) for e in employes.order_by("nom")])
+    return Response([_reponse_etat(request, e, _pointage_actuel(e)) for e in employes.order_by("nom")])
 
 
 @api_view(["POST"])
@@ -626,13 +789,8 @@ def badge_temporaire_valider(request, token, employe_id):
         return Response({"detail": erreur}, status=status.HTTP_400_BAD_REQUEST)
     get_object_or_404(BadgeTemporaire, token=token)
     employe = get_object_or_404(Employe, id=employe_id, actif=True)
-    aujourdhui = timezone.localdate()
-    pointage, _ = Pointage.objects.get_or_create(employe=employe, date=aujourdhui)
-    if not pointage.heure_debut:
-        pointage.valider_debut(photo=photo, via_secours=True)
-    elif not pointage.heure_fin:
-        pointage.valider_fin(photo=photo, via_secours=True)
-    return Response(_etat_pointage(request, employe))
+    pointage, deja_complet = _traiter_scan(employe, photo=photo, via_secours=True)
+    return Response(_reponse_etat(request, employe, pointage, deja_complet=deja_complet))
 
 
 @api_view(["GET"])

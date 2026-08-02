@@ -3,6 +3,7 @@ import { Pencil, Trash2, X, Download, FileText, UserMinus, Wallet, Check, Ban, L
 import {
   getFermes, getEmployes, getPointages, corrigerPointage, supprimerPointage,
   getAbsences, declarerAbsence, supprimerAbsence, validerAbsence, rejeterAbsence, getLignesPaie, enregistrerLignePaie,
+  getResumePaie,
 } from "../api/client";
 import { genererFichePaie, telechargerPdf } from "../utils/pdf";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
@@ -21,11 +22,6 @@ const fcfa = (v) => `${separeMilliers(Number(v) || 0)} F`;
 const heure = (iso) => (iso ? new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—");
 const pad = (n) => String(n).padStart(2, "0");
 const dateISO = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-// Convertit un "YYYY-MM-DD" en Date locale à minuit — évite le piège de
-// new Date("YYYY-MM-DD") qui parse en UTC (décalage possible hors CI/UTC+0).
-const parseISO = (s) => { const [a, m, j] = s.split("-").map(Number); return new Date(a, m - 1, j); };
-// Convertit JS getDay() (0=dimanche) vers notre convention (0=lundi...6=dimanche).
-const jourSemaineISO = (d) => (d.getDay() + 6) % 7;
 
 function versDatetimeLocal(iso) {
   if (!iso) return "";
@@ -39,6 +35,7 @@ export default function PointageHistorique() {
   const [pointages, setPointages] = useState([]);
   const [absences, setAbsences] = useState([]);
   const [lignesPaie, setLignesPaie] = useState([]);
+  const [resume, setResume] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [fermeId, setFermeId] = useState("");
   const [employeId, setEmployeId] = useState("");
@@ -84,9 +81,10 @@ export default function PointageHistorique() {
       getPointages(params),
       getAbsences(params),
       moisPremierJour ? getLignesPaie(paieParams) : Promise.resolve([]),
-    ]).then(([pts, abs, paie]) => {
+      getResumePaie(paieParams),
+    ]).then(([pts, abs, paie, resumeData]) => {
       if (annule) return;
-      setPointages(pts); setAbsences(abs); setLignesPaie(paie); setChargement(false);
+      setPointages(pts); setAbsences(abs); setLignesPaie(paie); setResume(resumeData); setChargement(false);
     });
     return () => { annule = true; };
   }, [fermeId, employeId, dateDebut, dateFin, moisPremierJour]);
@@ -99,75 +97,6 @@ export default function PointageHistorique() {
     heures: pointages.reduce((s, p) => s + Number(p.heures_travaillees || 0), 0),
     montant: pointages.reduce((s, p) => s + Number(p.montant_du_jour || 0), 0),
   }), [pointages]);
-
-  // Regroupe par employé : jours travaillés (pointages), absences justifiées
-  // (payées comme une journée complète) et — seulement si une période
-  // complète est sélectionnée — les jours ouvrés sans pointage ni absence
-  // déclarée, listés comme absences injustifiées (non payées) pour que ça
-  // reste visible/traçable plutôt qu'un simple manque à gagner silencieux.
-  const resumeParEmploye = useMemo(() => {
-    const employesVises = employeId ? employes.filter((e) => String(e.id) === String(employeId)) : employes;
-    const parEmploye = new Map();
-    for (const emp of employesVises) {
-      parEmploye.set(emp.id, {
-        employeId: emp.id, nom: emp.nom, fermeNom: emp.fermes_noms, role: emp.role, telephone: emp.telephone,
-        salaireMensuel: Number(emp.salaire_mensuel) || 0, jourRepos: emp.jour_repos, actif: emp.actif,
-        lignesTravaillees: [], absencesJustifiees: [], joursAbsenceInjustifiee: [],
-        totalHeures: 0, totalMontant: 0, lignePaie: null,
-        joursReposDus: 0, joursReposTravailles: [],
-      });
-    }
-    for (const lp of lignesPaie) {
-      const g = parEmploye.get(lp.employe);
-      if (!g) continue;
-      g.lignePaie = lp;
-      g.totalMontant += Number(lp.frais) + Number(lp.primes) + Number(lp.carburant) + Number(lp.appel_internet)
-        - Number(lp.avances) - Number(lp.retenues);
-    }
-    for (const p of pointages) {
-      const g = parEmploye.get(p.employe);
-      if (!g || !p.heure_fin) continue;
-      g.lignesTravaillees.push(p);
-      g.totalHeures += Number(p.heures_travaillees || 0);
-      g.totalMontant += Number(p.montant_du_jour || 0);
-    }
-    for (const a of absences) {
-      const g = parEmploye.get(a.employe);
-      if (!g) continue;
-      if (a.statut === "VALIDEE") {
-        const montantJour = g.salaireMensuel / 26;
-        g.absencesJustifiees.push({ ...a, montant: montantJour });
-        g.totalMontant += montantJour;
-      }
-    }
-    if (dateDebut && dateFin) {
-      const pointagesFaits = new Set(pointages.filter((p) => p.heure_fin).map((p) => `${p.employe}_${p.date}`));
-      // Une absence rejetée reste une absence non payée : on ne l'exclut PAS
-      // de la détection des trous, pour qu'elle ressorte comme injustifiée.
-      const absencesDeclarees = new Set(absences.filter((a) => a.statut !== "REJETEE").map((a) => `${a.employe}_${a.date}`));
-      const debut = parseISO(dateDebut);
-      const fin = parseISO(dateFin);
-      const aujourdhui = new Date();
-      for (const g of parEmploye.values()) {
-        if (!g.actif) continue;
-        for (let d = new Date(debut); d <= fin; d.setDate(d.getDate() + 1)) {
-          if (d > aujourdhui) break;
-          const iso = dateISO(d);
-          const cle = `${g.employeId}_${iso}`;
-          if (g.jourRepos != null && jourSemaineISO(d) === g.jourRepos) {
-            g.joursReposDus += 1;
-            if (pointagesFaits.has(cle)) g.joursReposTravailles.push(iso);
-            continue;
-          }
-          if (pointagesFaits.has(cle) || absencesDeclarees.has(cle)) continue;
-          g.joursAbsenceInjustifiee.push(iso);
-        }
-      }
-    }
-    return [...parEmploye.values()]
-      .filter((g) => g.lignesTravaillees.length > 0 || g.absencesJustifiees.length > 0 || g.joursAbsenceInjustifiee.length > 0 || g.lignePaie)
-      .sort((a, b) => a.nom.localeCompare(b.nom));
-  }, [pointages, absences, lignesPaie, employes, employeId, dateDebut, dateFin]);
 
   const periodeLabel = useMemo(() => {
     if (dateDebut && dateFin) return `Du ${new Date(dateDebut).toLocaleDateString("fr-FR")} au ${new Date(dateFin).toLocaleDateString("fr-FR")}`;
@@ -354,7 +283,7 @@ export default function PointageHistorique() {
           </div>
         )}
 
-        {resumeParEmploye.length > 0 && (
+        {resume.length > 0 && (
           <section style={{ ...styles.card, marginBottom: 16 }}>
             <div style={styles.resumeHead}>
               <FileText size={15} color={GREEN} />
@@ -376,7 +305,7 @@ export default function PointageHistorique() {
                   </tr>
                 </thead>
                 <tbody>
-                  {resumeParEmploye.map((g) => (
+                  {resume.map((g) => (
                     <tr key={g.employeId}>
                       <td style={styles.td}>{g.nom}</td>
                       <td style={styles.td}>{g.fermeNom}</td>

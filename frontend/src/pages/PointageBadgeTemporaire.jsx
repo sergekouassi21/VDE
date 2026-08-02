@@ -92,7 +92,10 @@ export default function PointageBadgeTemporaire() {
       return;
     }
     try {
-      await validerBadgeTemporaire(token, employeId, photo);
+      const data = await validerBadgeTemporaire(token, employeId, photo);
+      if (data.deja_complet) {
+        window.alert("Ce badge a déjà pointé arrivée et départ aujourd'hui. Contactez la Direction pour un rappel.");
+      }
       setSelectionne(null);
       charger();
     } catch (err) {

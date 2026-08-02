@@ -198,6 +198,11 @@ export default function PointageScan() {
             <div style={styles.recapLigne}><span>Arrivée</span><span>{heure(etat.heure_debut)}</span></div>
             <div style={styles.recapLigne}><span>Départ</span><span>{heure(etat.heure_fin)}</span></div>
             <div style={{ ...styles.recapLigne, borderBottom: "none" }}><span>Heures travaillées</span><span>{etat.heures_travaillees} h</span></div>
+            {etat.deja_complet && (
+              <p style={styles.dejaCompletNote}>
+                Ce badge a déjà pointé arrivée et départ aujourd'hui. Contactez la Direction pour un rappel.
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -234,4 +239,5 @@ const styles = {
   recap: { width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginTop: 6 },
   recapTitre: { fontSize: 16, fontWeight: 700, color: INK, margin: "6px 0 10px" },
   recapLigne: { display: "flex", justifyContent: "space-between", width: "100%", fontSize: 13.5, color: "#4C544E", padding: "5px 0", borderBottom: "1px solid #ECE9DF" },
+  dejaCompletNote: { fontSize: 12.5, color: CLAY, marginTop: 10, textAlign: "center", lineHeight: 1.4 },
 };
