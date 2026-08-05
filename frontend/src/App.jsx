@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from "react-router-dom";
 import { useRegisterSW } from "virtual:pwa-register/react";
-import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp, Wheat, Syringe, Search, ScrollText, Lock, Phone, ArrowRightLeft, Wrench, RefreshCw } from "lucide-react";
+import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp, Wheat, Syringe, Search, ScrollText, Lock, Phone, ArrowRightLeft, Wrench, RefreshCw, MoreHorizontal } from "lucide-react";
 // Chargées à la demande (par route) plutôt qu'au premier accès : sans ça, un
 // chef de ferme qui n'ouvre que Point Journalier téléchargeait aussi
 // Recharts (Dashboard), jsPDF (plusieurs pages) et tout le reste — pénalisant
@@ -285,6 +285,34 @@ function NavBar() {
 
   useEffect(() => { setOuvert(false); }, [location.pathname]);
 
+  // Barre d'onglets basse (mobile uniquement, cf. .bottom-tab-bar dans
+  // index.css) — 3-4 pages les plus utilisées par rôle, accessibles au
+  // pouce sans ouvrir le menu hamburger ; tout le reste passe par le
+  // bouton "Plus", qui réutilise le même panneau/état que le hamburger.
+  // Composition confirmée avec Serge le 05/08/2026 ("qu'est-ce que tu
+  // aurais voulu pour une meilleure navigation").
+  const barreOnglets = technicien
+    ? [
+        { to: "/tableau-de-bord", icon: LayoutDashboard, label: "Bord" },
+        { to: "/historique", icon: History, label: "Historique" },
+        { to: "/vaccinations", icon: Syringe, label: "Vaccins" },
+      ]
+    : autorise
+    ? [
+        { to: "/tableau-de-bord", icon: LayoutDashboard, label: "Bord" },
+        { to: "/ventes", icon: ShoppingBasket, label: "Ventes" },
+        { to: "/rentabilite", icon: TrendingUp, label: "Rentabilité" },
+        { to: "/employes", icon: Users, label: "Employés" },
+        { plus: true },
+      ]
+    : [
+        { to: "/point-journalier", icon: ClipboardList, label: "Point J." },
+        { to: "/tableau-de-bord", icon: LayoutDashboard, label: "Bord" },
+        { to: "/historique", icon: History, label: "Historique" },
+        { to: "/vaccinations", icon: Syringe, label: "Vaccins" },
+        { plus: true },
+      ];
+
   return (
     <nav className="nav-bar" style={navStyles.nav}>
       <div className="nav-top">
@@ -327,6 +355,29 @@ function NavBar() {
           <LogOut size={15} /> Déconnexion
         </button>
       </div>
+      <div className="bottom-tab-bar">
+        {barreOnglets.map((item) => {
+          if (item.plus) {
+            return (
+              <button key="plus" className={`bottom-tab-item${ouvert ? " active" : ""}`} onClick={() => setOuvert((o) => !o)}>
+                <MoreHorizontal size={20} />
+                <span>Plus</span>
+              </button>
+            );
+          }
+          const Icone = item.icon;
+          const actif = location.pathname === item.to;
+          return (
+            <Link key={item.to} to={item.to} className={`bottom-tab-item${actif ? " active" : ""}`}>
+              <span style={{ position: "relative" }}>
+                <Icone size={20} />
+                {item.to === "/tableau-de-bord" && badgeAlertes > 0 && <span className="bottom-tab-badge">{badgeAlertes}</span>}
+              </span>
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }
@@ -335,7 +386,7 @@ function Layout({ children }) {
   return (
     <>
       <NavBar />
-      <div style={{ paddingTop: NAV_HEIGHT }}>{children}</div>
+      <div className="page-content-mobile-pad" style={{ paddingTop: NAV_HEIGHT }}>{children}</div>
     </>
   );
 }
@@ -399,7 +450,7 @@ function MiseAJourDisponible() {
   if (!needRefresh) return null;
 
   return (
-    <div style={majStyles.bandeau}>
+    <div className="update-banner" style={majStyles.bandeau}>
       <span>Une nouvelle version de l'application est disponible.</span>
       <button style={majStyles.bouton} onClick={() => updateServiceWorker(true)}>
         <RefreshCw size={13} /> Mettre à jour
@@ -410,7 +461,6 @@ function MiseAJourDisponible() {
 
 const majStyles = {
   bandeau: {
-    position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 500,
     display: "flex", alignItems: "center", justifyContent: "center", gap: 14, flexWrap: "wrap",
     background: GREEN_DARK, color: "#fff", fontFamily: "'Inter', sans-serif", fontSize: 13,
     padding: "10px 16px",

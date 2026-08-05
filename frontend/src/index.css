@@ -45,6 +45,20 @@ input:focus, textarea:focus, button:focus {
   flex: 1;
 }
 
+/* Barre d'onglets basse — mobile uniquement (cf. media query ci-dessous),
+   masquée sur desktop où le menu du haut suffit. Cf. conversation du
+   05/08/2026 avec Serge. */
+.bottom-tab-bar {
+  display: none;
+}
+.update-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 500;
+}
+
 /* Carte de profil — toujours visible en haut à droite de l'écran, sous la
    barre de nav, sur chaque page (cf. conversation du 30/07/2026 avec
    Serge). Position fixe indépendante du flux flex de la nav, qui diffère
@@ -183,5 +197,61 @@ input:focus, textarea:focus, button:focus {
   .nav-links a, .nav-links .nav-logout {
     width: 100%;
     padding: 10px 0;
+  }
+
+  .bottom-tab-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 110;
+    height: 58px;
+    background: #123D26;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, .18);
+  }
+  .bottom-tab-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: rgba(255, 255, 255, .68);
+    text-decoration: none;
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 10px;
+    cursor: pointer;
+  }
+  .bottom-tab-item.active {
+    color: #fff;
+  }
+  .bottom-tab-badge {
+    position: absolute;
+    top: -5px;
+    right: -8px;
+    background: #E05A3C;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+    border-radius: 999px;
+    padding: 2px 4px;
+    min-width: 12px;
+    text-align: center;
+  }
+
+  /* Réserve la place de la barre du bas pour que le contenu de page ne
+     soit pas caché derrière (cf. Layout dans App.jsx). */
+  .page-content-mobile-pad {
+    padding-bottom: 58px;
+  }
+  /* Le bandeau de mise à jour s'affiche au-dessus de la barre du bas
+     plutôt que superposé/caché derrière, si les deux apparaissent en
+     même temps. */
+  .update-banner {
+    bottom: 58px;
   }
 }
