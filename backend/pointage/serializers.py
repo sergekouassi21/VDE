@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Absence, DocumentEmploye, Employe, LignePaie, Pointage
+from .models import Absence, DocumentEmploye, Employe, EvaluationEmploye, LignePaie, Pointage
 
 
 def _noms_fermes(employe):
@@ -48,6 +48,21 @@ class EmployeSerializer(serializers.ModelSerializer):
 
     def get_telephone(self, obj):
         return _telephone_employe(obj)
+
+
+class EvaluationEmployeSerializer(serializers.ModelSerializer):
+    employe_nom = serializers.CharField(source="employe.nom", read_only=True)
+    created_by_nom = serializers.CharField(source="created_by.username", read_only=True, default=None)
+    score = serializers.ReadOnlyField()
+    score_max = serializers.ReadOnlyField()
+
+    class Meta:
+        model = EvaluationEmploye
+        fields = [
+            "id", "employe", "employe_nom", "date", "ponctualite", "qualite_travail", "comportement",
+            "commentaire", "score", "score_max", "created_by", "created_by_nom", "created_at", "updated_at",
+        ]
+        read_only_fields = ["created_by", "created_at", "updated_at"]
 
 
 class PointageSerializer(serializers.ModelSerializer):

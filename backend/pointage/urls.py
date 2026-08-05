@@ -5,6 +5,7 @@ from .views import (
     AbsenceViewSet,
     DocumentEmployeViewSet,
     EmployeViewSet,
+    EvaluationEmployeViewSet,
     LignePaieViewSet,
     PointageViewSet,
     appareil_pointage_desactiver,
@@ -32,6 +33,7 @@ router.register("historique", PointageViewSet, basename="pointage-historique")
 router.register("absences", AbsenceViewSet, basename="absence")
 router.register("lignes-paie", LignePaieViewSet, basename="ligne-paie")
 router.register("documents-employe", DocumentEmployeViewSet, basename="document-employe")
+router.register("evaluations-employes", EvaluationEmployeViewSet, basename="evaluation-employe")
 
 urlpatterns = [
     path("scan/<uuid:token>/", scan_info, name="pointage-scan-info"),

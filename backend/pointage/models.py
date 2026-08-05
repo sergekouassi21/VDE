@@ -67,6 +67,42 @@ class Employe(models.Model):
         super().save(*args, **kwargs)
 
 
+class EvaluationEmploye(models.Model):
+    """Évaluation du travail d'un employé (ponctualité, qualité du travail,
+    comportement — chacun noté 0 à 2) + commentaire libre, faite par un
+    technicien/vétérinaire de passage ou la Direction. Tous les employés
+    sont concernés, quel que soit leur niveau (ouvrier, sous-chef, chef,
+    superviseur) — cf. conversation du 05/08/2026 avec Serge : "il doit
+    voir les volaillers, sous chef, chefs et superviseurs font bien leur
+    travail"."""
+
+    employe = models.ForeignKey(Employe, on_delete=models.CASCADE, related_name="evaluations")
+    date = models.DateField()
+    ponctualite = models.PositiveSmallIntegerField(default=0)
+    qualite_travail = models.PositiveSmallIntegerField(default=0)
+    comportement = models.PositiveSmallIntegerField(default=0)
+    commentaire = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-date"]
+
+    CRITERES = ["ponctualite", "qualite_travail", "comportement"]
+
+    @property
+    def score(self):
+        return sum(getattr(self, c) for c in self.CRITERES)
+
+    @property
+    def score_max(self):
+        return len(self.CRITERES) * 2
+
+    def __str__(self):
+        return f"Évaluation {self.employe.nom} — {self.date}"
+
+
 class TypeDocumentEmploye(models.TextChoices):
     CNI = "CNI", "Carte Nationale d'Identité"
     CONTRAT = "CONTRAT", "Contrat de travail"

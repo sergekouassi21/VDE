@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Check, Trash2, Syringe, AlertTriangle, List, Calendar, ChevronLeft, ChevronRight, WifiOff, Stethoscope, ShieldCheck } from "lucide-react";
+import { Check, Trash2, Syringe, AlertTriangle, List, Calendar, ChevronLeft, ChevronRight, WifiOff, Stethoscope, ShieldCheck, Users } from "lucide-react";
 import {
   getFermes, getEvenementsSante, creerEvenementSante, supprimerEvenementSante, marquerFaitEvenementSante,
   getVisitesTechniques, creerVisiteTechnique, supprimerVisiteTechnique,
+  getEmployesFerme, getEvaluationsEmployes, creerEvaluationEmploye, supprimerEvaluationEmploye,
 } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 import { ajouterEvenementFaitEnAttente, listerEvenementsFaitsEnAttente } from "../offline/queueVaccinations";
@@ -40,6 +41,19 @@ const LABEL_NOTE = { 0: "Non respecté", 1: "Partiel", 2: "Bien respecté" };
 const FORM_VIDE_VISITE = {
   visiteur_nom: "", date: todayISO(), observations: "", recommandations: "",
   ...Object.fromEntries(CRITERES_BIOSECURITE.map((c) => [c.cle, 0])),
+};
+
+// Notation du travail des employés — tous niveaux confondus (ouvrier,
+// sous-chef, chef, superviseur), par le technicien/vétérinaire ou la
+// Direction. Cf. conversation du 05/08/2026 avec Serge.
+const CRITERES_EVALUATION = [
+  { cle: "ponctualite", label: "Ponctualité / assiduité" },
+  { cle: "qualite_travail", label: "Qualité du travail" },
+  { cle: "comportement", label: "Comportement / discipline" },
+];
+const FORM_VIDE_EVALUATION = {
+  employe: "", date: todayISO(), commentaire: "",
+  ...Object.fromEntries(CRITERES_EVALUATION.map((c) => [c.cle, 0])),
 };
 
 // Date locale au format ISO (pas toISOString, qui bascule en UTC et peut
@@ -101,6 +115,13 @@ export default function Vaccinations() {
   const [formVisite, setFormVisite] = useState(FORM_VIDE_VISITE);
   const [erreurVisite, setErreurVisite] = useState("");
   const [envoiVisite, setEnvoiVisite] = useState(false);
+  const [employes, setEmployes] = useState([]);
+  const [evaluations, setEvaluations] = useState([]);
+  const [chargementEvaluations, setChargementEvaluations] = useState(true);
+  const [formEvaluationOuvert, setFormEvaluationOuvert] = useState(false);
+  const [formEvaluation, setFormEvaluation] = useState(FORM_VIDE_EVALUATION);
+  const [erreurEvaluation, setErreurEvaluation] = useState("");
+  const [envoiEvaluation, setEnvoiEvaluation] = useState(false);
 
   const rafraichirEnAttente = useCallback(async () => {
     const items = await listerEvenementsFaitsEnAttente();
@@ -143,6 +164,25 @@ export default function Vaccinations() {
   }, [fermeId]);
 
   useEffect(() => rafraichirVisites(), [rafraichirVisites]);
+
+  useEffect(() => {
+    if (!fermeId || !peutNoterVisite) { setEmployes([]); return; }
+    getEmployesFerme(fermeId).then(setEmployes).catch(() => setEmployes([]));
+  }, [fermeId, peutNoterVisite]);
+
+  const rafraichirEvaluations = useCallback(() => {
+    if (!fermeId || !peutNoterVisite) { setEvaluations([]); setChargementEvaluations(false); return () => {}; }
+    setChargementEvaluations(true);
+    let annule = false;
+    getEvaluationsEmployes({ ferme: fermeId }).then((data) => {
+      if (annule) return;
+      setEvaluations(data);
+      setChargementEvaluations(false);
+    });
+    return () => { annule = true; };
+  }, [fermeId, peutNoterVisite]);
+
+  useEffect(() => rafraichirEvaluations(), [rafraichirEvaluations]);
 
   // Même câblage hors-ligne que Point Journalier (offline/sync.js) — dépend
   // de `rafraichir` (qui dépend lui-même de fermeId), donc réabonné à chaque
@@ -251,6 +291,29 @@ export default function Vaccinations() {
     rafraichirVisites();
   }
 
+  async function soumettreEvaluation(e) {
+    e.preventDefault();
+    if (!formEvaluation.employe) return;
+    setEnvoiEvaluation(true);
+    setErreurEvaluation("");
+    try {
+      await creerEvaluationEmploye({ ...formEvaluation, employe: Number(formEvaluation.employe) });
+      setFormEvaluation({ ...FORM_VIDE_EVALUATION, employe: formEvaluation.employe });
+      setFormEvaluationOuvert(false);
+      rafraichirEvaluations();
+    } catch {
+      setErreurEvaluation("Impossible d'enregistrer cette évaluation.");
+    } finally {
+      setEnvoiEvaluation(false);
+    }
+  }
+
+  async function supprimerEvaluation(ev) {
+    if (!window.confirm(`Supprimer l'évaluation de ${ev.employe_nom} du ${new Date(ev.date).toLocaleDateString("fr-FR")} ?`)) return;
+    await supprimerEvaluationEmploye(ev.id);
+    rafraichirEvaluations();
+  }
+
   const evenementsDuJour = jourSelectionne ? (evenementsParDate[jourSelectionne] || []) : [];
 
   return (
@@ -287,8 +350,13 @@ export default function Vaccinations() {
             <button style={{ ...styles.vueBtn, ...(vue === "visites" ? styles.vueBtnOn : {}) }} onClick={() => setVue("visites")}>
               <Stethoscope size={14} /> Visites
             </button>
+            {peutNoterVisite && (
+              <button style={{ ...styles.vueBtn, ...(vue === "personnel" ? styles.vueBtnOn : {}) }} onClick={() => setVue("personnel")}>
+                <Users size={14} /> Personnel
+              </button>
+            )}
           </div>
-          {bande && vue !== "visites" && (
+          {bande && vue !== "visites" && vue !== "personnel" && (
             <button style={styles.addBtn} onClick={() => setFormOuvert((o) => !o)}>
               <Syringe size={15} /> Ajouter un évènement
             </button>
@@ -298,9 +366,14 @@ export default function Vaccinations() {
               <Stethoscope size={15} /> Ajouter une visite
             </button>
           )}
+          {bande && vue === "personnel" && peutNoterVisite && (
+            <button style={styles.addBtn} onClick={() => setFormEvaluationOuvert((o) => !o)}>
+              <Users size={15} /> Ajouter une évaluation
+            </button>
+          )}
         </div>
 
-        {formOuvert && vue !== "visites" && (
+        {formOuvert && vue !== "visites" && vue !== "personnel" && (
           <form style={styles.formCard} onSubmit={soumettre}>
             <select style={styles.input} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
               <option value="VACCIN">Vaccin</option>
@@ -352,6 +425,37 @@ export default function Vaccinations() {
           </form>
         )}
 
+        {formEvaluationOuvert && vue === "personnel" && peutNoterVisite && (
+          <form style={{ ...styles.formCard, flexDirection: "column", alignItems: "stretch" }} onSubmit={soumettreEvaluation}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <select style={styles.input} value={formEvaluation.employe} onChange={(e) => setFormEvaluation({ ...formEvaluation, employe: e.target.value })} required>
+                <option value="">Employé...</option>
+                {employes.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
+              </select>
+              <input style={styles.input} type="date" value={formEvaluation.date} onChange={(e) => setFormEvaluation({ ...formEvaluation, date: e.target.value })} required />
+            </div>
+            <div style={styles.grilleCriteres}>
+              {CRITERES_EVALUATION.map((c) => (
+                <label key={c.cle} style={styles.critereLigne}>
+                  <span style={styles.critereLabel}>{c.label}</span>
+                  <select
+                    style={styles.critereSelect}
+                    value={formEvaluation[c.cle]}
+                    onChange={(e) => setFormEvaluation({ ...formEvaluation, [c.cle]: Number(e.target.value) })}
+                  >
+                    <option value={0}>0 · {LABEL_NOTE[0]}</option>
+                    <option value={1}>1 · {LABEL_NOTE[1]}</option>
+                    <option value={2}>2 · {LABEL_NOTE[2]}</option>
+                  </select>
+                </label>
+              ))}
+            </div>
+            <textarea style={{ ...styles.input, flex: "1 1 100%", minHeight: 60, resize: "vertical" }} placeholder="Commentaire (optionnel)" value={formEvaluation.commentaire} onChange={(e) => setFormEvaluation({ ...formEvaluation, commentaire: e.target.value })} />
+            {erreurEvaluation && <p style={styles.erreur}>{erreurEvaluation}</p>}
+            <button style={{ ...styles.submitBtn, alignSelf: "flex-start" }} type="submit" disabled={envoiEvaluation}>{envoiEvaluation ? "Enregistrement..." : "Enregistrer l'évaluation"}</button>
+          </form>
+        )}
+
         {!bande ? (
           <p style={styles.empty}>{fermeId ? "Cette ferme n'a pas de bande active." : "Sélectionne une ferme."}</p>
         ) : vue === "visites" ? (
@@ -361,6 +465,15 @@ export default function Vaccinations() {
             <Section titre="Historique des visites" icon={<ShieldCheck size={15} color={GREEN_DARK} />}>
               {visites.length === 0 ? <p style={styles.empty}>Aucune visite enregistrée.</p> :
                 visites.map((v) => <LigneVisite key={v.id} visite={v} onSupprimer={peutNoterVisite ? supprimerVisite : undefined} />)}
+            </Section>
+          )
+        ) : vue === "personnel" ? (
+          chargementEvaluations ? (
+            <p style={styles.empty}>Chargement...</p>
+          ) : (
+            <Section titre="Évaluations du personnel" icon={<Users size={15} color={GREEN_DARK} />}>
+              {evaluations.length === 0 ? <p style={styles.empty}>Aucune évaluation enregistrée.</p> :
+                evaluations.map((ev) => <LigneEvaluation key={ev.id} evaluation={ev} onSupprimer={supprimerEvaluation} />)}
             </Section>
           )
         ) : chargement ? (
@@ -507,6 +620,21 @@ function LigneVisite({ visite: v, onSupprimer }) {
       {onSupprimer && (
         <button style={{ ...styles.iconBtn, color: CLAY }} title="Supprimer" onClick={() => onSupprimer(v)}><Trash2 size={14} /></button>
       )}
+    </div>
+  );
+}
+
+function LigneEvaluation({ evaluation: ev, onSupprimer }) {
+  const couleur = ev.score / ev.score_max >= 0.75 ? GREEN_DARK : ev.score / ev.score_max >= 0.5 ? "#B08B2E" : CLAY;
+  return (
+    <div style={{ ...styles.ligne, alignItems: "flex-start" }}>
+      <div style={styles.ligneInfo}>
+        <span style={styles.ligneNom}>{ev.employe_nom} · {new Date(ev.date).toLocaleDateString("fr-FR")}</span>
+        <span style={styles.ligneMeta}>Évalué par {ev.created_by_nom || "—"}</span>
+        {ev.commentaire && <span style={styles.ligneMeta}>{ev.commentaire}</span>}
+      </div>
+      <span style={{ ...styles.badge, color: couleur }}>{ev.score}/{ev.score_max}</span>
+      <button style={{ ...styles.iconBtn, color: CLAY }} title="Supprimer" onClick={() => onSupprimer(ev)}><Trash2 size={14} /></button>
     </div>
   );
 }

@@ -17,13 +17,16 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
 from exploitation.audit import AuditMixin, journaliser, journaliser_objet
 from exploitation.calculs import _verrou_consultatif, _verrou_consultatif_texte, prix_moyen_sac_aliment
 from exploitation.models import ActionAudit, Ferme, LigneFacture, PointJournalier, RoleUtilisateur
-from exploitation.permissions import EstDirectionOuAdmin
+from exploitation.permissions import EstDirectionOuAdmin, IsFermeAccessibleTechnicienInclus
+from exploitation.permissions import est_direction_ou_admin as _est_direction_ou_admin
+from exploitation.permissions import est_technicien as _est_technicien
 from exploitation.views import _limite_borne
 
 # Espaces de noms pour pg_advisory_xact_lock (cf. exploitation/calculs.py,
@@ -48,8 +51,8 @@ class ThrottlePointagePublic(ScopedRateThrottle):
     scope = "pointage_public"
 
 from .models import (
-    Absence, AppareilPointage, BadgeAbsence, BadgeTemporaire, DocumentEmploye, Employe, LignePaie, Pointage,
-    StatutAbsence,
+    Absence, AppareilPointage, BadgeAbsence, BadgeTemporaire, DocumentEmploye, Employe, EvaluationEmploye,
+    LignePaie, Pointage, StatutAbsence,
 )
 
 # Prix moyen de secours si un magasin n'a encore aucune commande d'aliment
@@ -62,6 +65,7 @@ from .serializers import (
     CorrigerPointageSerializer,
     DocumentEmployeSerializer,
     EmployeSerializer,
+    EvaluationEmployeSerializer,
     LignePaieSerializer,
     PointageSerializer,
     ScanEmployeSerializer,
@@ -145,6 +149,56 @@ class EmployeViewSet(AuditMixin, viewsets.ModelViewSet):
                 {"detail": "Impossible de supprimer : cet employé a déjà des pointages enregistrés. Désactive-le plutôt."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+
+class EvaluationEmployeViewSet(viewsets.ModelViewSet):
+    """Évaluation du travail d'un employé (ponctualité, qualité du travail,
+    comportement + commentaire) — lecture ouverte à qui a accès à la ferme
+    (chef de ferme inclus), mais seuls le technicien/vétérinaire et la
+    Direction/Admin peuvent noter (créer/modifier/supprimer), même règle
+    que VisiteTechniqueViewSet côté exploitation. Cf. conversation du
+    05/08/2026 avec Serge."""
+
+    serializer_class = EvaluationEmployeSerializer
+    permission_classes = [IsFermeAccessibleTechnicienInclus]
+
+    def get_queryset(self):
+        fermes = Ferme.objects.filter_visibles_par(self.request.user)
+        qs = EvaluationEmploye.objects.filter(employe__fermes__in=fermes).distinct().select_related("employe", "created_by")
+        ferme_id = self.request.query_params.get("ferme")
+        if ferme_id:
+            qs = qs.filter(employe__fermes__id=ferme_id)
+        employe_id = self.request.query_params.get("employe")
+        if employe_id:
+            qs = qs.filter(employe_id=employe_id)
+        return qs
+
+    def _verifier_peut_noter(self):
+        user = self.request.user
+        if not (_est_technicien(user) or _est_direction_ou_admin(user)):
+            raise PermissionDenied("Seuls un technicien/vétérinaire ou la Direction peuvent noter un employé.")
+
+    def perform_create(self, serializer):
+        self._verifier_peut_noter()
+        employe = serializer.validated_data["employe"]
+        if not Ferme.objects.filter_visibles_par(self.request.user).filter(employes=employe).exists():
+            raise PermissionDenied("Employé non accessible.")
+        serializer.save(created_by=self.request.user)
+        journaliser_objet(self.request.user, ActionAudit.CREATION, serializer.instance)
+
+    def perform_update(self, serializer):
+        self._verifier_peut_noter()
+        employe = serializer.validated_data.get("employe")
+        if employe and not Ferme.objects.filter_visibles_par(self.request.user).filter(employes=employe).exists():
+            raise PermissionDenied("Employé non accessible.")
+        serializer.save()
+        journaliser_objet(self.request.user, ActionAudit.MODIFICATION, serializer.instance)
+
+    def perform_destroy(self, instance):
+        self._verifier_peut_noter()
+        modele, objet_id, objet_repr = instance.__class__.__name__, instance.pk, str(instance)
+        super().perform_destroy(instance)
+        journaliser(self.request.user, ActionAudit.SUPPRESSION, modele, objet_id, objet_repr)
 
 
 class DocumentEmployeViewSet(AuditMixin, viewsets.ModelViewSet):

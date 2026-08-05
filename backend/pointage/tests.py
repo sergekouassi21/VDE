@@ -9,11 +9,13 @@ from django.utils import timezone
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from exploitation.models import Ferme, Magasin, ProfilUtilisateur, RoleUtilisateur, TypeFerme
+from exploitation.views import employes_ferme
 
-from .models import Absence, AppareilPointage, BadgeTemporaire, Employe, LignePaie, Pointage, StatutAbsence
+from .models import Absence, AppareilPointage, BadgeTemporaire, Employe, EvaluationEmploye, LignePaie, Pointage, StatutAbsence
 from .views import (
     AbsenceViewSet,
     EmployeViewSet,
+    EvaluationEmployeViewSet,
     LignePaieViewSet,
     PointageViewSet,
     _calculer_rentabilite_bruts,
@@ -677,3 +679,113 @@ class PointageCorrectionVerrouTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.pointage.refresh_from_db()
         self.assertEqual(self.pointage.heures_travaillees, Decimal("9.00"))
+
+
+class EvaluationEmployeTests(TestCase):
+    """Notation du travail d'un employé (ponctualité, qualité du travail,
+    comportement + commentaire) par un technicien/vétérinaire ou la
+    Direction — tous les employés sont concernés, quel que soit leur
+    niveau. Cf. conversation du 05/08/2026 avec Serge."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        magasin = Magasin.objects.create(nom="Magasin Evaluation")
+        self.ferme = Ferme.objects.create(nom="Ferme Evaluation", type=TypeFerme.PONTE, nombre_chambres=1, magasin=magasin)
+        self.employe = Employe.objects.create(nom="Employe Evaluation")
+        self.employe.fermes.add(self.ferme)
+        self.direction = User.objects.create(username="test_evaluation_direction")
+        ProfilUtilisateur.objects.create(user=self.direction, role=RoleUtilisateur.DIRECTION)
+        self.technicien = User.objects.create(username="test_evaluation_technicien")
+        profil_technicien = ProfilUtilisateur.objects.create(user=self.technicien, role=RoleUtilisateur.TECHNICIEN)
+        profil_technicien.fermes.add(self.ferme)
+        self.chef = User.objects.create(username="test_evaluation_chef")
+        profil_chef = ProfilUtilisateur.objects.create(user=self.chef, role=RoleUtilisateur.CHEF_FERME)
+        profil_chef.fermes.add(self.ferme)
+
+    def test_score_est_la_somme_des_3_criteres(self):
+        evaluation = EvaluationEmploye.objects.create(
+            employe=self.employe, date=date(2026, 7, 29), created_by=self.direction,
+            ponctualite=2, qualite_travail=1, comportement=2,
+        )
+        self.assertEqual(evaluation.score, 5)
+        self.assertEqual(evaluation.score_max, 6)
+
+    def test_technicien_peut_noter_un_employe_de_sa_ferme(self):
+        view = EvaluationEmployeViewSet.as_view({"post": "create"})
+        req = self.factory.post("/api/pointage/evaluations-employes/", {
+            "employe": self.employe.id, "date": "2026-07-29", "ponctualite": 2, "qualite_travail": 2, "comportement": 1,
+            "commentaire": "Bon travail dans l'ensemble",
+        })
+        force_authenticate(req, user=self.technicien)
+        resp = view(req)
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(EvaluationEmploye.objects.get(pk=resp.data["id"]).created_by, self.technicien)
+
+    def test_technicien_ne_peut_pas_noter_un_employe_hors_de_ses_fermes(self):
+        autre_magasin = Magasin.objects.create(nom="Magasin Evaluation Autre")
+        autre_ferme = Ferme.objects.create(nom="Ferme Evaluation Autre", type=TypeFerme.PONTE, nombre_chambres=1, magasin=autre_magasin)
+        autre_employe = Employe.objects.create(nom="Employe Autre Ferme")
+        autre_employe.fermes.add(autre_ferme)
+
+        view = EvaluationEmployeViewSet.as_view({"post": "create"})
+        req = self.factory.post("/api/pointage/evaluations-employes/", {
+            "employe": autre_employe.id, "date": "2026-07-29",
+        })
+        force_authenticate(req, user=self.technicien)
+        resp = view(req)
+        self.assertEqual(resp.status_code, 403)
+
+    def test_direction_peut_noter(self):
+        view = EvaluationEmployeViewSet.as_view({"post": "create"})
+        req = self.factory.post("/api/pointage/evaluations-employes/", {
+            "employe": self.employe.id, "date": "2026-07-29",
+        })
+        force_authenticate(req, user=self.direction)
+        resp = view(req)
+        self.assertEqual(resp.status_code, 201)
+
+    def test_chef_de_ferme_peut_consulter_mais_pas_noter(self):
+        EvaluationEmploye.objects.create(employe=self.employe, date=date(2026, 7, 29), created_by=self.direction)
+
+        liste = EvaluationEmployeViewSet.as_view({"get": "list"})
+        req = self.factory.get("/api/pointage/evaluations-employes/")
+        force_authenticate(req, user=self.chef)
+        resp = liste(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data), 1)
+
+        creation = EvaluationEmployeViewSet.as_view({"post": "create"})
+        req = self.factory.post("/api/pointage/evaluations-employes/", {
+            "employe": self.employe.id, "date": "2026-07-30",
+        })
+        force_authenticate(req, user=self.chef)
+        resp = creation(req)
+        self.assertEqual(resp.status_code, 403)
+
+    def test_employes_ferme_autorise_le_technicien(self):
+        # Régression : employes_ferme était IsFermeAccessible (refusait le
+        # technicien) avant ce changement — nécessaire pour le sélecteur
+        # d'employé du formulaire de notation.
+        req = self.factory.get("/api/employes-ferme/", {"ferme": self.ferme.id})
+        force_authenticate(req, user=self.technicien)
+        resp = employes_ferme(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(self.employe.id, [e["id"] for e in resp.data])
+
+    def test_technicien_refuse_sur_evaluation_employe_viewset_scope_liste(self):
+        # Contrôle négatif : un technicien ne voit que les évaluations des
+        # employés de ses propres fermes (même filtre que get_queryset
+        # ailleurs dans l'appli).
+        autre_magasin = Magasin.objects.create(nom="Magasin Evaluation Scope")
+        autre_ferme = Ferme.objects.create(nom="Ferme Evaluation Scope", type=TypeFerme.PONTE, nombre_chambres=1, magasin=autre_magasin)
+        autre_employe = Employe.objects.create(nom="Employe Scope Autre")
+        autre_employe.fermes.add(autre_ferme)
+        EvaluationEmploye.objects.create(employe=autre_employe, date=date(2026, 7, 29), created_by=self.direction)
+        EvaluationEmploye.objects.create(employe=self.employe, date=date(2026, 7, 29), created_by=self.direction)
+
+        view = EvaluationEmployeViewSet.as_view({"get": "list"})
+        req = self.factory.get("/api/pointage/evaluations-employes/")
+        force_authenticate(req, user=self.technicien)
+        resp = view(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data), 1)

@@ -70,6 +70,10 @@ export const corrigerPointJournalier = (id, payload) =>
 export const getPointsJournaliers = (params) => api.get("/points-journaliers/", { params }).then((r) => r.data);
 export const deletePointJournalier = (id) => api.delete(`/points-journaliers/${id}/`);
 export const getEmployesFerme = (fermeId) => api.get("/employes-ferme/", { params: { ferme: fermeId } }).then((r) => r.data);
+export const getEvaluationsEmployes = (params) => api.get("/pointage/evaluations-employes/", { params }).then((r) => r.data);
+export const creerEvaluationEmploye = (payload) => api.post("/pointage/evaluations-employes/", payload).then((r) => r.data);
+export const modifierEvaluationEmploye = (id, payload) => api.patch(`/pointage/evaluations-employes/${id}/`, payload).then((r) => r.data);
+export const supprimerEvaluationEmploye = (id) => api.delete(`/pointage/evaluations-employes/${id}/`);
 export const getCloturesMensuelles = (params) => api.get("/clotures-mensuelles/", { params }).then((r) => r.data);
 export const cloturerMois = (fermeId, payload) => api.post(`/fermes/${fermeId}/cloturer-mois/`, payload).then((r) => r.data);
 export const rouvrirMois = (fermeId, payload) => api.post(`/fermes/${fermeId}/rouvrir-mois/`, payload).then((r) => r.data);
