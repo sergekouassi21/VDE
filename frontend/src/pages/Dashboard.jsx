@@ -132,6 +132,13 @@ export default function Dashboard() {
     return ((f.dernier_point?.casse || 0) + (f.dernier_point?.brise || 0)) / p * 100;
   };
 
+  // Même seuils que la couleur du score dans Vaccinations.jsx (cf.
+  // LigneVisite) — cohérence entre les deux écrans où le score apparaît.
+  const couleurScoreBiosecurite = (v) => {
+    const ratio = v.score_biosecurite / v.score_biosecurite_max;
+    return ratio >= 0.75 ? GREEN_DARK : ratio >= 0.5 ? "#B08B2E" : "#9E4527";
+  };
+
   const kpi = useMemo(() => {
     const effectif = pondeuses.reduce((s, f) => s + effectifActuel(f), 0);
     const prod = pondeuses.reduce((s, f) => s + (f.dernier_point?.production_oeufs || 0), 0);
@@ -364,6 +371,15 @@ export default function Dashboard() {
                       <span style={styles.kpiFermeValeur}>{nf(f.dernier_point.gmq_grammes)} g/j</span>
                     </div>
                   )}
+                  {f.derniere_visite && (
+                    <div style={styles.kpiFermeStat}>
+                      <span style={styles.kpiFermeLabel}>Biosécurité</span>
+                      <span style={{ ...styles.kpiFermeValeur, color: couleurScoreBiosecurite(f.derniere_visite) }}>
+                        {f.derniere_visite.score_biosecurite}/{f.derniere_visite.score_biosecurite_max}
+                      </span>
+                      <span style={styles.kpiFermeMois}>visite du {new Date(f.derniere_visite.date).toLocaleDateString("fr-FR")}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -549,6 +565,12 @@ export default function Dashboard() {
                             )}
                             {f.type === "CHAIR" && f.dernier_point?.gmq_grammes != null && (
                               <DetailItem label="GMQ" value={`${nf(f.dernier_point.gmq_grammes)} g/j`} />
+                            )}
+                            {f.derniere_visite && (
+                              <DetailItem
+                                label="Biosécurité (dernière visite)"
+                                value={`${f.derniere_visite.score_biosecurite}/${f.derniere_visite.score_biosecurite_max} · ${f.derniere_visite.visiteur_nom} le ${new Date(f.derniere_visite.date).toLocaleDateString("fr-FR")}`}
+                              />
                             )}
                           </div>
                           {f.dernier_point?.traitement && (

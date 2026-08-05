@@ -312,6 +312,15 @@ export default function Vaccinations() {
         {formVisiteOuvert && vue === "visites" && peutNoterVisite && (
           <form style={{ ...styles.formCard, flexDirection: "column", alignItems: "stretch" }} onSubmit={soumettreVisite}>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {/* Sélection explicite de la ferme concernée par la visite,
+                  plutôt que de dépendre implicitement du sélecteur de ferme
+                  en haut de page — cf. conversation du 05/08/2026 avec
+                  Serge : "la notation est par ferme, il faut qu'il
+                  sélectionne la ferme concernée". */}
+              <select style={styles.input} value={fermeId} onChange={(e) => { setFermeId(e.target.value); setJourSelectionne(null); }} required>
+                <option value="">Ferme concernée...</option>
+                {fermes.filter((f) => f.bande_active).map((f) => <option key={f.id} value={f.id}>{f.nom}</option>)}
+              </select>
               <input style={styles.input} placeholder="Nom du technicien/vétérinaire" value={formVisite.visiteur_nom} onChange={(e) => setFormVisite({ ...formVisite, visiteur_nom: e.target.value })} required />
               <input style={styles.input} type="date" value={formVisite.date} onChange={(e) => setFormVisite({ ...formVisite, date: e.target.value })} required />
             </div>
