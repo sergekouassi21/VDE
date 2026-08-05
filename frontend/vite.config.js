@@ -7,7 +7,14 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' plutôt que 'autoUpdate' : un rechargement silencieux et
+      // automatique pourrait interrompre une saisie en cours (ex: un
+      // formulaire hors-ligne pas encore envoyé) — on affiche un bandeau
+      // et c'est l'utilisateur qui choisit le moment de recharger (cf.
+      // App.jsx, MiseAJourDisponible, et conversation du 05/08/2026 avec
+      // Serge — l'app de Jeannot gardait une version obsolète en cache
+      // tant qu'elle n'était pas complètement fermée puis rouverte).
+      registerType: 'prompt',
       devOptions: {
         // Active le service worker sous `npm run dev` pour pouvoir tester
         // le mode hors-ligne sans build de prod.

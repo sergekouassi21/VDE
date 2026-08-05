@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp, Wheat, Syringe, Search, ScrollText, Lock, Phone, ArrowRightLeft, Wrench } from "lucide-react";
+import { useRegisterSW } from "virtual:pwa-register/react";
+import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp, Wheat, Syringe, Search, ScrollText, Lock, Phone, ArrowRightLeft, Wrench, RefreshCw } from "lucide-react";
 // Chargées à la demande (par route) plutôt qu'au premier accès : sans ça, un
 // chef de ferme qui n'ouvre que Point Journalier téléchargeait aussi
 // Recharts (Dashboard), jsPDF (plusieurs pages) et tout le reste — pénalisant
@@ -372,9 +373,59 @@ const searchStyles = {
   meta: { fontSize: 11.5, color: "#7A857F", whiteSpace: "nowrap" },
 };
 
+const INTERVALLE_VERIF_MAJ_MS = 30 * 60 * 1000;
+
+// Une PWA ouverte en continu sur le terrain ne revérifie une mise à jour
+// qu'au prochain enregistrement du service worker (donc seulement si
+// l'app est complètement fermée puis rouverte) — sans ce sondage
+// périodique, un déploiement pouvait rester invisible pendant des jours
+// pour quelqu'un qui ne ferme jamais l'app (cf. incident de connexion de
+// Jeannot, conversation du 05/08/2026 avec Serge : son téléphone gardait
+// une version obsolète du code de connexion en cache). Pas de rechargement
+// automatique et silencieux (registerType 'prompt', pas 'autoUpdate') :
+// ça pourrait couper une saisie hors-ligne en cours — c'est l'utilisateur
+// qui choisit le moment via ce bandeau.
+function MiseAJourDisponible() {
+  const {
+    needRefresh: [needRefresh],
+    updateServiceWorker,
+  } = useRegisterSW({
+    onRegisteredSW(_url, registration) {
+      if (!registration) return;
+      setInterval(() => { registration.update(); }, INTERVALLE_VERIF_MAJ_MS);
+    },
+  });
+
+  if (!needRefresh) return null;
+
+  return (
+    <div style={majStyles.bandeau}>
+      <span>Une nouvelle version de l'application est disponible.</span>
+      <button style={majStyles.bouton} onClick={() => updateServiceWorker(true)}>
+        <RefreshCw size={13} /> Mettre à jour
+      </button>
+    </div>
+  );
+}
+
+const majStyles = {
+  bandeau: {
+    position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 500,
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 14, flexWrap: "wrap",
+    background: GREEN_DARK, color: "#fff", fontFamily: "'Inter', sans-serif", fontSize: 13,
+    padding: "10px 16px",
+  },
+  bouton: {
+    display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK,
+    border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600,
+    fontFamily: "inherit", cursor: "pointer",
+  },
+};
+
 export default function App() {
   return (
     <BrowserRouter>
+      <MiseAJourDisponible />
       <Suspense fallback={<div style={{ padding: 20 }}>Chargement...</div>}>
       <Routes>
         <Route path="/connexion" element={<Login />} />
