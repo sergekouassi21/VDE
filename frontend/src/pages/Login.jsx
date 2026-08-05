@@ -65,6 +65,9 @@ export default function Login() {
               onChange={(e) => setUsername(e.target.value)}
               onPaste={(e) => { const v = e.clipboardData.getData("text"); if (v) { setUsername(v); e.preventDefault(); } }}
               autoComplete="off"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               autoFocus
             />
             <input
@@ -75,7 +78,10 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onPaste={(e) => { const v = e.clipboardData.getData("text"); if (v) { setPassword(v); e.preventDefault(); } }}
-              autoComplete="new-password"
+              autoComplete="current-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
             />
           </>
         ) : (
