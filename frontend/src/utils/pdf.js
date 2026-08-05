@@ -676,6 +676,111 @@ export function genererFichePaie(employe, periodeLabel, lignes, absencesJustifie
   return doc;
 }
 
+// Libellés 0/1/2 communs à la grille de biosécurité (VisiteTechnique) et à
+// la notation d'un employé (EvaluationEmploye) — dupliqué à l'identique
+// depuis Vaccinations.jsx (LABEL_NOTE) plutôt que partagé, vu la taille
+// négligeable et la stabilité de ces libellés.
+const LABEL_NOTE_GRILLE = { 0: "Non respecté", 1: "Partiel", 2: "Bien respecté" };
+
+// Rapport PDF d'une visite technique (grille de biosécurité) — `criteres`
+// est la liste {cle, label} définie dans Vaccinations.jsx
+// (CRITERES_BIOSECURITE), passée en paramètre pour ne pas dupliquer cette
+// donnée métier ici. Cf. conversation du 05/08/2026 avec Serge.
+export function genererPdfVisiteTechnique(visite, criteres) {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  entete(doc);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(...INK);
+  doc.text("Visite technique — Biosécurité", 15, 42);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(...GRAY);
+  doc.text(`Ferme : ${visite.ferme_nom}`, 15, 49);
+  doc.text(`Date : ${new Date(visite.date).toLocaleDateString("fr-FR")}`, 15, 55);
+  doc.text(`Visiteur : ${visite.visiteur_nom}`, 15, 61);
+
+  let y = 76;
+  y = bandeauSection(doc, y, "Score de biosécurité");
+  y = ligneCle(doc, y, "Score global", `${visite.score_biosecurite} / ${visite.score_biosecurite_max}`);
+
+  y = bandeauSection(doc, y + 2, "Grille détaillée");
+  criteres.forEach(({ cle, label }) => {
+    y = ligneCle(doc, y, label, LABEL_NOTE_GRILLE[visite[cle]] ?? "—");
+  });
+
+  if (visite.observations) {
+    y = bandeauSection(doc, y + 2, "Observations");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(...INK);
+    doc.text(visite.observations, 18, y, { maxWidth: 174 });
+    y += doc.getTextDimensions(visite.observations, { maxWidth: 174 }).h + 6;
+  }
+
+  if (visite.recommandations) {
+    y = bandeauSection(doc, y + 2, "Recommandations");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(...INK);
+    doc.text(visite.recommandations, 18, y, { maxWidth: 174 });
+  }
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY);
+  doc.text("Volailles de l'Est", 105, 285, { align: "center" });
+
+  return doc;
+}
+
+// Rapport PDF d'une évaluation d'employé — `criteres` est la liste
+// {cle, label} définie dans Vaccinations.jsx (CRITERES_EVALUATION), même
+// principe que genererPdfVisiteTechnique. Cf. conversation du 05/08/2026
+// avec Serge.
+export function genererPdfEvaluationEmploye(evaluation, criteres) {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  entete(doc);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(...INK);
+  doc.text("Évaluation du travail", 15, 42);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(...GRAY);
+  doc.text(`Employé : ${evaluation.employe_nom}`, 15, 49);
+  doc.text(`Date : ${new Date(evaluation.date).toLocaleDateString("fr-FR")}`, 15, 55);
+  doc.text(`Évalué par : ${evaluation.created_by_nom || "—"}`, 15, 61);
+
+  let y = 76;
+  y = bandeauSection(doc, y, "Score");
+  y = ligneCle(doc, y, "Score global", `${evaluation.score} / ${evaluation.score_max}`);
+
+  y = bandeauSection(doc, y + 2, "Critères");
+  criteres.forEach(({ cle, label }) => {
+    y = ligneCle(doc, y, label, LABEL_NOTE_GRILLE[evaluation[cle]] ?? "—");
+  });
+
+  if (evaluation.commentaire) {
+    y = bandeauSection(doc, y + 2, "Commentaire");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(...INK);
+    doc.text(evaluation.commentaire, 18, y, { maxWidth: 174 });
+  }
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(9);
+  doc.setTextColor(...GRAY);
+  doc.text("Volailles de l'Est", 105, 285, { align: "center" });
+
+  return doc;
+}
+
 // Relevé imprimable des créances clients en cours (reste dû > 0) — pour
 // archivage ou envoi à un tiers (comptable, etc.), cf. conversation du
 // 31/07/2026 avec Serge.

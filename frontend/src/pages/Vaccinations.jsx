@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Check, Trash2, Syringe, AlertTriangle, List, Calendar, ChevronLeft, ChevronRight, WifiOff, Stethoscope, ShieldCheck, Users } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { Check, Trash2, Syringe, AlertTriangle, List, Calendar, ChevronLeft, ChevronRight, WifiOff, Stethoscope, ShieldCheck, Users, Download } from "lucide-react";
 import {
   getFermes, getEvenementsSante, creerEvenementSante, supprimerEvenementSante, marquerFaitEvenementSante,
   getVisitesTechniques, creerVisiteTechnique, supprimerVisiteTechnique,
@@ -9,6 +10,7 @@ import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 import { ajouterEvenementFaitEnAttente, listerEvenementsFaitsEnAttente } from "../offline/queueVaccinations";
 import { synchroniserEvenementsFaitsEnAttente } from "../offline/syncVaccinations";
 import { estDirectionOuAdmin, estTechnicien } from "../utils/auth";
+import { genererPdfVisiteTechnique, genererPdfEvaluationEmploye, telechargerPdf } from "../utils/pdf";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const FORM_VIDE = { type: "VACCIN", nom: "", date_prevue: todayISO(), notes: "" };
@@ -122,6 +124,7 @@ export default function Vaccinations() {
   const [formEvaluation, setFormEvaluation] = useState(FORM_VIDE_EVALUATION);
   const [erreurEvaluation, setErreurEvaluation] = useState("");
   const [envoiEvaluation, setEnvoiEvaluation] = useState(false);
+  const [employeFiltre, setEmployeFiltre] = useState("");
 
   const rafraichirEnAttente = useCallback(async () => {
     const items = await listerEvenementsFaitsEnAttente();
@@ -316,6 +319,31 @@ export default function Vaccinations() {
 
   const evenementsDuJour = jourSelectionne ? (evenementsParDate[jourSelectionne] || []) : [];
 
+  // Historique trié -date par le backend — on inverse pour un graphique
+  // chronologique (gauche = plus ancien), cf. conversation du 05/08/2026
+  // avec Serge ("vue d'évolution dans le temps").
+  const dataTendanceVisites = useMemo(() => [...visites].reverse().map((v) => ({
+    date: new Date(v.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
+    score: v.score_biosecurite,
+  })), [visites]);
+
+  const evaluationsFiltrees = useMemo(
+    () => (employeFiltre ? evaluations.filter((e) => String(e.employe) === employeFiltre) : evaluations),
+    [evaluations, employeFiltre],
+  );
+  const dataTendanceEvaluations = useMemo(() => [...evaluationsFiltrees].reverse().map((e) => ({
+    date: new Date(e.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
+    score: e.score,
+  })), [evaluationsFiltrees]);
+
+  function telechargerPdfVisite(v) {
+    telechargerPdf(genererPdfVisiteTechnique(v, CRITERES_BIOSECURITE), `visite-${v.ferme_nom.replace(/\s+/g, "-")}-${v.date}.pdf`);
+  }
+
+  function telechargerPdfEvaluation(ev) {
+    telechargerPdf(genererPdfEvaluationEmploye(ev, CRITERES_EVALUATION), `evaluation-${ev.employe_nom.replace(/\s+/g, "-")}-${ev.date}.pdf`);
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.wrap}>
@@ -462,19 +490,41 @@ export default function Vaccinations() {
           chargementVisites ? (
             <p style={styles.empty}>Chargement...</p>
           ) : (
-            <Section titre="Historique des visites" icon={<ShieldCheck size={15} color={GREEN_DARK} />}>
-              {visites.length === 0 ? <p style={styles.empty}>Aucune visite enregistrée.</p> :
-                visites.map((v) => <LigneVisite key={v.id} visite={v} onSupprimer={peutNoterVisite ? supprimerVisite : undefined} />)}
-            </Section>
+            <>
+              {visites.length > 1 && (
+                <TendanceScore titre="Évolution du score de biosécurité" data={dataTendanceVisites} max={visites[0].score_biosecurite_max} />
+              )}
+              <Section titre="Historique des visites" icon={<ShieldCheck size={15} color={GREEN_DARK} />}>
+                {visites.length === 0 ? <p style={styles.empty}>Aucune visite enregistrée.</p> :
+                  visites.map((v) => (
+                    <LigneVisite key={v.id} visite={v} onSupprimer={peutNoterVisite ? supprimerVisite : undefined} onTelecharger={telechargerPdfVisite} />
+                  ))}
+              </Section>
+            </>
           )
         ) : vue === "personnel" ? (
           chargementEvaluations ? (
             <p style={styles.empty}>Chargement...</p>
           ) : (
-            <Section titre="Évaluations du personnel" icon={<Users size={15} color={GREEN_DARK} />}>
-              {evaluations.length === 0 ? <p style={styles.empty}>Aucune évaluation enregistrée.</p> :
-                evaluations.map((ev) => <LigneEvaluation key={ev.id} evaluation={ev} onSupprimer={supprimerEvaluation} />)}
-            </Section>
+            <>
+              {employes.length > 0 && (
+                <div style={{ ...styles.formCard, marginBottom: 16 }}>
+                  <select style={styles.input} value={employeFiltre} onChange={(e) => setEmployeFiltre(e.target.value)}>
+                    <option value="">Tous les employés</option>
+                    {employes.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
+                  </select>
+                </div>
+              )}
+              {employeFiltre && dataTendanceEvaluations.length > 1 && (
+                <TendanceScore titre={`Évolution du score — ${employes.find((e) => String(e.id) === employeFiltre)?.nom || ""}`} data={dataTendanceEvaluations} max={evaluationsFiltrees[0].score_max} />
+              )}
+              <Section titre="Évaluations du personnel" icon={<Users size={15} color={GREEN_DARK} />}>
+                {evaluationsFiltrees.length === 0 ? <p style={styles.empty}>Aucune évaluation enregistrée.</p> :
+                  evaluationsFiltrees.map((ev) => (
+                    <LigneEvaluation key={ev.id} evaluation={ev} onSupprimer={supprimerEvaluation} onTelecharger={telechargerPdfEvaluation} />
+                  ))}
+              </Section>
+            </>
           )
         ) : chargement ? (
           <p style={styles.empty}>Chargement...</p>
@@ -607,7 +657,28 @@ function Ligne({ evenement: e, onFait, onSupprimer, fait }) {
   );
 }
 
-function LigneVisite({ visite: v, onSupprimer }) {
+// Graphique d'évolution partagé par les visites (score de biosécurité) et
+// les évaluations d'employé (score /6) — même principe que les graphiques
+// du tableau de bord (recharts), cf. conversation du 05/08/2026 avec
+// Serge ("vue d'évolution dans le temps").
+function TendanceScore({ titre, data, max }) {
+  return (
+    <section style={{ ...styles.card, marginBottom: 16, padding: "14px 16px" }}>
+      <div style={{ ...styles.resumeHead, padding: 0, marginBottom: 10, border: "none" }}>{titre}</div>
+      <ResponsiveContainer width="100%" height={160}>
+        <LineChart data={data} margin={{ top: 4, right: 12, left: -18, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#EEEBE2" vertical={false} />
+          <XAxis dataKey="date" tickLine={false} axisLine={false} />
+          <YAxis domain={[0, max]} tickLine={false} axisLine={false} allowDecimals={false} />
+          <Tooltip contentStyle={{ background: "#fff", border: "1px solid #ECE9DF", borderRadius: 10, fontSize: 12 }} formatter={(v) => [`${v}/${max}`, "Score"]} />
+          <Line type="monotone" dataKey="score" stroke={GREEN} strokeWidth={2.5} dot={{ r: 3, fill: GREEN }} />
+        </LineChart>
+      </ResponsiveContainer>
+    </section>
+  );
+}
+
+function LigneVisite({ visite: v, onSupprimer, onTelecharger }) {
   const couleur = v.score_biosecurite / v.score_biosecurite_max >= 0.75 ? GREEN_DARK : v.score_biosecurite / v.score_biosecurite_max >= 0.5 ? "#B08B2E" : CLAY;
   return (
     <div style={{ ...styles.ligne, alignItems: "flex-start" }}>
@@ -617,6 +688,7 @@ function LigneVisite({ visite: v, onSupprimer }) {
         {v.recommandations && <span style={styles.ligneMeta}>Recommandations : {v.recommandations}</span>}
       </div>
       <span style={{ ...styles.badge, color: couleur }}>{v.score_biosecurite}/{v.score_biosecurite_max}</span>
+      <button style={{ ...styles.iconBtn, color: GREEN_DARK }} title="Télécharger le PDF" onClick={() => onTelecharger(v)}><Download size={14} /></button>
       {onSupprimer && (
         <button style={{ ...styles.iconBtn, color: CLAY }} title="Supprimer" onClick={() => onSupprimer(v)}><Trash2 size={14} /></button>
       )}
@@ -624,7 +696,7 @@ function LigneVisite({ visite: v, onSupprimer }) {
   );
 }
 
-function LigneEvaluation({ evaluation: ev, onSupprimer }) {
+function LigneEvaluation({ evaluation: ev, onSupprimer, onTelecharger }) {
   const couleur = ev.score / ev.score_max >= 0.75 ? GREEN_DARK : ev.score / ev.score_max >= 0.5 ? "#B08B2E" : CLAY;
   return (
     <div style={{ ...styles.ligne, alignItems: "flex-start" }}>
@@ -634,6 +706,7 @@ function LigneEvaluation({ evaluation: ev, onSupprimer }) {
         {ev.commentaire && <span style={styles.ligneMeta}>{ev.commentaire}</span>}
       </div>
       <span style={{ ...styles.badge, color: couleur }}>{ev.score}/{ev.score_max}</span>
+      <button style={{ ...styles.iconBtn, color: GREEN_DARK }} title="Télécharger le PDF" onClick={() => onTelecharger(ev)}><Download size={14} /></button>
       <button style={{ ...styles.iconBtn, color: CLAY }} title="Supprimer" onClick={() => onSupprimer(ev)}><Trash2 size={14} /></button>
     </div>
   );
