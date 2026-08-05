@@ -42,8 +42,22 @@ export default function Login() {
         return;
       }
       await finaliserConnexion();
-    } catch {
-      setErreur(etape2FA ? "Code de vérification incorrect." : "Identifiants incorrects.");
+    } catch (err) {
+      // Avant, TOUTE erreur affichait « Identifiants incorrects » : serveur
+      // endormi, coupure réseau, limite de tentatives ou panne serveur
+      // renvoyaient le même message, et on cherchait un mot de passe alors
+      // que le problème était ailleurs. Un message d'erreur doit dire ce qui
+      // s'est passé et quoi faire.
+      const statut = err?.response?.status;
+      if (!err?.response) {
+        setErreur("Serveur injoignable. Vérifiez votre connexion, puis réessayez.");
+      } else if (statut === 429) {
+        setErreur("Trop de tentatives. Patientez une minute avant de réessayer.");
+      } else if (statut >= 500) {
+        setErreur("Le serveur ne répond pas correctement. Réessayez dans un instant.");
+      } else {
+        setErreur(etape2FA ? "Code de vérification incorrect." : "Identifiants incorrects.");
+      }
     } finally {
       setChargement(false);
     }
