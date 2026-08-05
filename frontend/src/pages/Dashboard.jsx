@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo, Fragment } from "react";
+import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import { Egg, TrendingUp, AlertTriangle, AlertCircle, Skull, Package, ChevronRight, Activity, Wheat, Droplet } from "lucide-react";
-import { getDashboard, getEmployes, getAbsences, getEvenementsSante, getFacturesCreances, getPointages, getRentabilite, getRapportMensuel } from "../api/client";
+import { getDashboard, getEmployes, getAbsences, getEvenementsSante, getFacturesCreances, getPointages, corrigerPointage, getRentabilite, getRapportMensuel } from "../api/client";
 import { GREEN, GREEN_DARK, INK, formatSacs, formatColis, AGE_REFORME_SEMAINES, KG_PAR_SAC } from "../theme";
-import { calculerAlertes, signatureAlertes, JOURS_CREANCE_RETARD, joursDepuis } from "../alertes";
+import { calculerAlertes, signatureAlertes, JOURS_CREANCE_RETARD, joursDepuis, estPointageOublie } from "../alertes";
 import { estDirectionOuAdmin as estDirectionOuAdminRole } from "../utils/auth";
 
 const nf = (v) => (v ?? 0).toLocaleString("fr-FR");
@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [creancesEnRetard, setCreancesEnRetard] = useState([]);
   const [creancesTotal, setCreancesTotal] = useState(0);
   const [pointagesSecoursRecents, setPointagesSecoursRecents] = useState([]);
+  const [pointagesOublies, setPointagesOublies] = useState([]);
   const [rentabilite, setRentabilite] = useState(null);
   const [rapportMoisPrecedent, setRapportMoisPrecedent] = useState(null);
   const [sel, setSel] = useState(null);
@@ -29,6 +30,23 @@ export default function Dashboard() {
   // que partout ailleurs dans l'appli) — le tableau de bord, lui, est
   // ouvert à tous les rôles, donc on ne tente ces appels que si autorisé.
   const estDirectionOuAdmin = estDirectionOuAdminRole();
+
+  // Le badge de secours ET les pointages oubliés en dérivent tous deux —
+  // extrait en fonction nommée pour pouvoir la rappeler après avoir validé
+  // le départ d'un pointage oublié depuis l'alerte (cf. conversation du
+  // 05/08/2026 avec Serge).
+  const rafraichirPointages = useCallback(() => {
+    if (!estDirectionOuAdmin) return;
+    // Le badge de secours n'a aucun jeton personnel à vérifier — signaler
+    // son usage récent (48 h) permet à la Direction de le remarquer sans
+    // avoir à parcourir tout l'historique des pointages (cf. conversation
+    // du 29/07/2026 avec Serge).
+    const depuis = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+    getPointages({ date_debut: depuis }).then((pts) => {
+      setPointagesSecoursRecents(pts.filter((p) => p.arrivee_via_secours || p.depart_via_secours));
+      setPointagesOublies(pts.filter(estPointageOublie));
+    });
+  }, [estDirectionOuAdmin]);
 
   useEffect(() => {
     // annule évite d'appliquer une réponse tardive après que le composant se
@@ -57,15 +75,7 @@ export default function Dashboard() {
         setCreancesEnRetard(creances.filter((f) => joursDepuis(f.date) > JOURS_CREANCE_RETARD));
         setCreancesTotal(creances.reduce((s, f) => s + Number(f.reste_du || 0), 0));
       });
-      // Le badge de secours n'a aucun jeton personnel à vérifier — signaler
-      // son usage récent (48 h) permet à la Direction de le remarquer sans
-      // avoir à parcourir tout l'historique des pointages (cf. conversation
-      // du 29/07/2026 avec Serge).
-      const depuis = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
-      getPointages({ date_debut: depuis }).then((pts) => {
-        if (annule) return;
-        setPointagesSecoursRecents(pts.filter((p) => p.arrivee_via_secours || p.depart_via_secours));
-      });
+      rafraichirPointages();
       // Aperçu financier + tendances — réservé à la Direction/Admin (cf.
       // conversation du 30/07/2026 : "ajoute les 3 mais ça doit être visible
       // que par l'administration/direction").
@@ -172,8 +182,8 @@ export default function Dashboard() {
   }, [actives, pondeuses]);
 
   const alertes = useMemo(
-    () => calculerAlertes({ fermes, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard, creancesEnRetard, pointagesSecoursRecents }),
-    [fermes, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard, creancesEnRetard, pointagesSecoursRecents],
+    () => calculerAlertes({ fermes, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard, creancesEnRetard, pointagesSecoursRecents, pointagesOublies }),
+    [fermes, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard, creancesEnRetard, pointagesSecoursRecents, pointagesOublies],
   );
 
   // Gravité la plus haute par ferme concernée — sert à mettre en avant les
@@ -243,7 +253,12 @@ export default function Dashboard() {
                 {alertes.map((a, i) => (
                   <div key={i} style={{ ...styles.alertItem, ...(a.grav === "haut" ? styles.alertHaut : {}) }}>
                     <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                    <div><strong style={{ fontWeight: 600 }}>{a.ferme}</strong> — {a.txt}</div>
+                    <div style={{ flex: 1 }}>
+                      <div><strong style={{ fontWeight: 600 }}>{a.ferme}</strong> — {a.txt}</div>
+                      {a.pointageOublie && estDirectionOuAdmin && (
+                        <AlerteValidationPointage pointage={a.pointageOublie} onValide={rafraichirPointages} />
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -571,6 +586,34 @@ function Kpi({ icon, label, value, sub, accent, mois }) {
 function Card({ titre, children, danger }) {
   return (<section style={styles.card}><div style={{ ...styles.cardHead, ...(danger ? { color: "#9E4527" } : {}) }}>{titre}</div>{children}</section>);
 }
+// Action inline sur l'alerte "pointage oublié" — heure pré-remplie à 17h00
+// (pas l'heure du clic, qui serait fausse si on valide le lendemain),
+// modifiable avant confirmation. Cf. conversation du 05/08/2026 avec Serge.
+function AlerteValidationPointage({ pointage, onValide }) {
+  const [heure, setHeure] = useState("17:00");
+  const [envoi, setEnvoi] = useState(false);
+
+  async function valider() {
+    setEnvoi(true);
+    try {
+      await corrigerPointage(pointage.id, { heure_fin: `${pointage.date}T${heure}:00` });
+      onValide();
+    } catch {
+      window.alert("Impossible de valider ce départ.");
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  return (
+    <div style={styles.validationRow}>
+      <input type="time" value={heure} onChange={(e) => setHeure(e.target.value)} style={styles.validationHeure} disabled={envoi} />
+      <button onClick={valider} disabled={envoi} style={styles.validationBtn}>
+        {envoi ? "Enregistrement..." : "Valider le départ"}
+      </button>
+    </div>
+  );
+}
 function DetailItem({ label, value }) {
   return (
     <div style={styles.fermeDetailItem}>
@@ -651,6 +694,9 @@ const styles = {
   alertList: { display: "flex", flexDirection: "column", gap: 8 },
   alertItem: { display: "flex", gap: 9, alignItems: "flex-start", background: "#FBF0EB", color: "#9E4527", padding: "10px 12px", borderRadius: 10, fontSize: 12.5, lineHeight: 1.4 },
   alertHaut: { background: "#F7E4DC", fontWeight: 500 },
+  validationRow: { display: "flex", gap: 6, alignItems: "center", marginTop: 6 },
+  validationHeure: { padding: "5px 8px", borderRadius: 7, border: "1px solid #E3BBA8", fontSize: 12.5, fontFamily: "inherit", color: "#9E4527" },
+  validationBtn: { background: GREEN, color: "#fff", border: "none", borderRadius: 7, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   fermeList: { display: "flex", flexDirection: "column", gap: 2 },
   fermeRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 8px", border: "none", background: "none", borderBottom: "1px solid #F2F0E8", cursor: "pointer", textAlign: "left", fontFamily: "inherit", width: "100%" },
   fermeNom: { fontSize: 14.5, fontWeight: 600, color: INK },

@@ -24,9 +24,9 @@ const StockMateriel = lazy(() => import("./pages/StockMateriel"));
 const Vaccinations = lazy(() => import("./pages/Vaccinations"));
 const JournalAudit = lazy(() => import("./pages/JournalAudit"));
 const Securite = lazy(() => import("./pages/Securite"));
-import { isAuthenticated, logout, ADMIN_URL, getRechercheGlobale, getDashboard, getEvenementsSante, getAbsences, getEmployes, getFactures } from "./api/client";
+import { isAuthenticated, logout, ADMIN_URL, getRechercheGlobale, getDashboard, getEvenementsSante, getAbsences, getEmployes, getFactures, getPointages } from "./api/client";
 import { GREEN_DARK } from "./theme";
-import { calculerAlertes, signatureAlertes, joursDepuis, JOURS_CREANCE_RETARD } from "./alertes";
+import { calculerAlertes, signatureAlertes, joursDepuis, JOURS_CREANCE_RETARD, estPointageOublie } from "./alertes";
 import { estDirectionOuAdmin } from "./utils/auth";
 
 function RequireAuth({ children }) {
@@ -231,12 +231,14 @@ function useBadgeAlertes() {
     async function charger() {
       const autoriseRole = estDirectionOuAdmin();
       try {
-        const [dashboard, evenementsSante, absences, employes, factures] = await Promise.all([
+        const depuisPointages = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+        const [dashboard, evenementsSante, absences, employes, factures, pointages] = await Promise.all([
           getDashboard(),
           getEvenementsSante({ non_faits: "true" }),
           autoriseRole ? getAbsences({ statut: "EN_ATTENTE" }) : Promise.resolve([]),
           autoriseRole ? getEmployes() : Promise.resolve([]),
           autoriseRole ? getFactures() : Promise.resolve([]),
+          autoriseRole ? getPointages({ date_debut: depuisPointages }) : Promise.resolve([]),
         ]);
         if (annule) return;
         const alertes = calculerAlertes({
@@ -245,6 +247,7 @@ function useBadgeAlertes() {
           employesSansSalaire: employes.filter((e) => e.actif && Number(e.salaire_mensuel) === 0),
           evenementsSanteEnRetard: evenementsSante.filter((e) => e.statut === "EN_RETARD"),
           creancesEnRetard: factures.filter((f) => Number(f.reste_du) > 0 && joursDepuis(f.date) > JOURS_CREANCE_RETARD),
+          pointagesOublies: pointages.filter(estPointageOublie),
         });
         setSignatureActuelle(signatureAlertes(alertes));
         setNbAlertes(alertes.length);

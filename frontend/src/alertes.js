@@ -8,6 +8,18 @@ const nf = (v) => (v ?? 0).toLocaleString("fr-FR");
 export const JOURS_CREANCE_RETARD = 15;
 export const joursDepuis = (iso) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 
+// Un pointage encore "en cours" (arrivée sans départ) depuis plus de 8h est
+// considéré oublié plutôt qu'une garde de nuit en cours — assez long pour
+// ne jamais se déclencher sur un gardien qui vient juste de badger pour sa
+// garde. Exportée pour être appliquée identiquement par Dashboard.jsx et
+// App.jsx (même raison que le reste de ce fichier). Cf. conversation du
+// 05/08/2026 avec Serge.
+const SEUIL_POINTAGE_OUBLIE_MS = 8 * 3600 * 1000;
+export const estPointageOublie = (p) =>
+  Boolean(p.heure_debut) && !p.heure_fin && Date.now() - new Date(p.heure_debut).getTime() > SEUIL_POINTAGE_OUBLIE_MS;
+
+const heureTxt = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Abidjan" });
+
 const tauxPonte = (f) => (f.dernier_point ? Number(f.dernier_point.taux_ponte) : 0);
 const tauxCasseJour = (f) => {
   const p = f.dernier_point?.production_oeufs || 0;
@@ -15,7 +27,7 @@ const tauxCasseJour = (f) => {
   return ((f.dernier_point?.casse || 0) + (f.dernier_point?.brise || 0)) / p * 100;
 };
 
-export function calculerAlertes({ fermes, absencesEnAttente = [], employesSansSalaire = [], evenementsSanteEnRetard = [], creancesEnRetard = [], pointagesSecoursRecents = [] }) {
+export function calculerAlertes({ fermes, absencesEnAttente = [], employesSansSalaire = [], evenementsSanteEnRetard = [], creancesEnRetard = [], pointagesSecoursRecents = [], pointagesOublies = [] }) {
   const actives = fermes.filter((f) => !f.est_vide);
   const a = [];
   actives.forEach((f) => {
@@ -81,6 +93,12 @@ export function calculerAlertes({ fermes, absencesEnAttente = [], employesSansSa
   pointagesSecoursRecents.forEach((p) => {
     const via = [p.arrivee_via_secours && "arrivée", p.depart_via_secours && "départ"].filter(Boolean).join(" et ");
     a.push({ ferme: "Pointage", txt: `Badge de secours utilisé pour ${p.employe_nom} (${via}, ${new Date(p.date).toLocaleDateString("fr-FR")})`, grav: "moy" });
+  });
+  // Affecte directement la paie du jour si non corrigé — grav "haut".
+  // pointageOublie porte le pointage brut pour l'action "Valider le départ"
+  // affichée inline sur le Tableau de bord (cf. conversation du 05/08/2026).
+  pointagesOublies.forEach((p) => {
+    a.push({ ferme: "Pointage", txt: `${p.employe_nom} n'a pas badgé son départ (arrivé à ${heureTxt(p.heure_debut)})`, grav: "haut", pointageOublie: p });
   });
   return a.sort((x, y) => (x.grav === "haut" ? -1 : 1));
 }
