@@ -7,6 +7,7 @@ import {
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 import { ajouterEvenementFaitEnAttente, listerEvenementsFaitsEnAttente } from "../offline/queueVaccinations";
 import { synchroniserEvenementsFaitsEnAttente } from "../offline/syncVaccinations";
+import { estDirectionOuAdmin, estTechnicien } from "../utils/auth";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const FORM_VIDE = { type: "VACCIN", nom: "", date_prevue: todayISO(), notes: "" };
@@ -71,6 +72,11 @@ function genererGrilleMois(mois) {
 }
 
 export default function Vaccinations() {
+  // Seuls le technicien/vétérinaire et la Direction/Admin peuvent noter une
+  // visite — chef de ferme et sous-chef sont en lecture seule sur cet
+  // onglet (même restriction côté backend, cf. VisiteTechniqueViewSet).
+  // Conversation du 05/08/2026 avec Serge.
+  const peutNoterVisite = estTechnicien() || estDirectionOuAdmin();
   const [fermes, setFermes] = useState([]);
   const [fermeId, setFermeId] = useState("");
   const [evenements, setEvenements] = useState([]);
@@ -282,7 +288,7 @@ export default function Vaccinations() {
               <Syringe size={15} /> Ajouter un évènement
             </button>
           )}
-          {bande && vue === "visites" && (
+          {bande && vue === "visites" && peutNoterVisite && (
             <button style={styles.addBtn} onClick={() => setFormVisiteOuvert((o) => !o)}>
               <Stethoscope size={15} /> Ajouter une visite
             </button>
@@ -303,7 +309,7 @@ export default function Vaccinations() {
           </form>
         )}
 
-        {formVisiteOuvert && vue === "visites" && (
+        {formVisiteOuvert && vue === "visites" && peutNoterVisite && (
           <form style={{ ...styles.formCard, flexDirection: "column", alignItems: "stretch" }} onSubmit={soumettreVisite}>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <input style={styles.input} placeholder="Nom du technicien/vétérinaire" value={formVisite.visiteur_nom} onChange={(e) => setFormVisite({ ...formVisite, visiteur_nom: e.target.value })} required />
@@ -340,7 +346,7 @@ export default function Vaccinations() {
           ) : (
             <Section titre="Historique des visites" icon={<ShieldCheck size={15} color={GREEN_DARK} />}>
               {visites.length === 0 ? <p style={styles.empty}>Aucune visite enregistrée.</p> :
-                visites.map((v) => <LigneVisite key={v.id} visite={v} onSupprimer={supprimerVisite} />)}
+                visites.map((v) => <LigneVisite key={v.id} visite={v} onSupprimer={peutNoterVisite ? supprimerVisite : undefined} />)}
             </Section>
           )
         ) : chargement ? (
@@ -484,7 +490,9 @@ function LigneVisite({ visite: v, onSupprimer }) {
         {v.recommandations && <span style={styles.ligneMeta}>Recommandations : {v.recommandations}</span>}
       </div>
       <span style={{ ...styles.badge, color: couleur }}>{v.score_biosecurite}/{v.score_biosecurite_max}</span>
-      <button style={{ ...styles.iconBtn, color: CLAY }} title="Supprimer" onClick={() => onSupprimer(v)}><Trash2 size={14} /></button>
+      {onSupprimer && (
+        <button style={{ ...styles.iconBtn, color: CLAY }} title="Supprimer" onClick={() => onSupprimer(v)}><Trash2 size={14} /></button>
+      )}
     </div>
   );
 }
