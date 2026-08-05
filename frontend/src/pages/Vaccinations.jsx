@@ -17,8 +17,11 @@ const COULEUR_STATUT = { EN_RETARD: CLAY, A_VENIR: GREEN_DARK, FAIT: "#8A948D" }
 
 const JOURS_SEMAINE = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-// Grille de biosécurité — 10 critères fixes, chacun noté 0 (non respecté) à
-// 2 (bien respecté), confirmée avec Serge le 05/08/2026.
+// Grille de biosécurité — 12 critères fixes, chacun noté 0 (non respecté) à
+// 2 (bien respecté), confirmée avec Serge le 05/08/2026. Les deux derniers
+// (oiseaux sauvages, véhicules) ajoutés sur avis vétérinaire — vecteurs
+// majeurs de grippe aviaire/Newcastle, souvent plus à risque que le seul
+// pédiluve piéton déjà couvert par "Désinfection à l'entrée".
 const CRITERES_BIOSECURITE = [
   { cle: "desinfection_entree", label: "Désinfection / pédiluve à l'entrée" },
   { cle: "cloture_acces", label: "Clôture / accès restreint au site" },
@@ -30,6 +33,8 @@ const CRITERES_BIOSECURITE = [
   { cle: "vide_sanitaire", label: "Vide sanitaire respecté entre bandes" },
   { cle: "stockage_aliment", label: "Stockage de l'aliment à l'abri" },
   { cle: "proprete_batiment", label: "Propreté du bâtiment/litière" },
+  { cle: "protection_oiseaux_sauvages", label: "Protection contre oiseaux sauvages/animaux errants" },
+  { cle: "desinfection_vehicules", label: "Désinfection des véhicules à l'entrée" },
 ];
 const LABEL_NOTE = { 0: "Non respecté", 1: "Partiel", 2: "Bien respecté" };
 const FORM_VIDE_VISITE = {
