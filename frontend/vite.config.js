@@ -4,6 +4,24 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // lucide-react expose chaque icône comme son propre module — sans
+          // ce regroupement, Rollup les scinde chacune en un mini-fichier
+          // séparé (15-20 fichiers de 0,1 à 0,4 Ko) dès qu'une icône est
+          // utilisée par plusieurs pages chargées en lazy. Chaque petit
+          // fichier est une requête réseau de plus à chaque changement de
+          // page — pénalisant sur une connexion mobile en zone rurale (cf.
+          // conversation du 05/08/2026 avec Serge : "lenteur au chargement
+          // de l'application"). Un seul paquet d'icônes = une seule requête,
+          // mise en cache une fois pour toutes par le service worker.
+          if (id.includes('node_modules/lucide-react')) return 'vendor-icons'
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({
