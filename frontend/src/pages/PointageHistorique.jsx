@@ -25,6 +25,15 @@ const fcfa = (v) => `${separeMilliers(Number(v) || 0)} F`;
 const heure = (iso) => (iso ? new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Abidjan" }) : "—");
 const pad = (n) => String(n).padStart(2, "0");
 const dateISO = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+// "YYYY-MM" du mois en cours — sert de valeur par défaut au filtre (sans
+// ça, aucune période n'était sélectionnée à l'ouverture de la page et la
+// fiche de paie mélangeait plusieurs mois d'historique, cf. conversation
+// du 05/08/2026 avec Serge).
+const moisActuel = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
+function premierEtDernierJour(valeurMois) {
+  const [an, m] = valeurMois.split("-").map(Number);
+  return { debut: dateISO(new Date(an, m - 1, 1)), fin: dateISO(new Date(an, m, 0)) };
+}
 
 function versDatetimeLocal(iso) {
   if (!iso) return "";
@@ -42,9 +51,9 @@ export default function PointageHistorique() {
   const [chargement, setChargement] = useState(true);
   const [fermeId, setFermeId] = useState("");
   const [employeId, setEmployeId] = useState("");
-  const [dateDebut, setDateDebut] = useState("");
-  const [dateFin, setDateFin] = useState("");
-  const [mois, setMois] = useState("");
+  const [dateDebut, setDateDebut] = useState(() => premierEtDernierJour(moisActuel()).debut);
+  const [dateFin, setDateFin] = useState(() => premierEtDernierJour(moisActuel()).fin);
+  const [mois, setMois] = useState(moisActuel);
   const [edition, setEdition] = useState(null);
   const [debutEdit, setDebutEdit] = useState("");
   const [finEdit, setFinEdit] = useState("");
@@ -111,9 +120,9 @@ export default function PointageHistorique() {
   function appliquerMois(valeur) {
     setMois(valeur);
     if (!valeur) return;
-    const [an, m] = valeur.split("-").map(Number);
-    setDateDebut(dateISO(new Date(an, m - 1, 1)));
-    setDateFin(dateISO(new Date(an, m, 0)));
+    const { debut, fin } = premierEtDernierJour(valeur);
+    setDateDebut(debut);
+    setDateFin(fin);
   }
 
   function construireFichePaie(groupe) {
