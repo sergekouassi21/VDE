@@ -273,10 +273,11 @@ function NavBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const autorise = estDirectionOuAdmin();
-  // Technicien/vétérinaire : accès restreint à "Vaccins & traitements"
-  // uniquement (le backend refuse déjà tout le reste, ceci évite juste
-  // d'afficher des liens qui mèneraient à des pages vides/403). Cf.
-  // conversation du 05/08/2026 avec Serge.
+  // Technicien/vétérinaire : accès restreint à Tableau de bord, Historique
+  // (lecture seule) et Vaccins & traitements — Point Journalier, Transferts
+  // et Stock matériel restent masqués (le backend refuse déjà tout le
+  // reste, ceci évite juste d'afficher des liens qui mèneraient à des
+  // pages vides/403). Cf. conversations du 05/08/2026 avec Serge.
   const technicien = estTechnicien();
   const [ouvert, setOuvert] = useState(false);
   const badgeAlertes = useBadgeAlertes();
@@ -294,16 +295,14 @@ function NavBar() {
       </div>
       <ProfilMenu />
       <div className={`nav-links${ouvert ? " open" : ""}`}>
+        <Link to="/tableau-de-bord" style={navStyles.link}>
+          <LayoutDashboard size={16} /> Tableau de bord
+          {badgeAlertes > 0 && <span style={navStyles.badge}>{badgeAlertes}</span>}
+        </Link>
         {!technicien && (
-          <>
-            <Link to="/tableau-de-bord" style={navStyles.link}>
-              <LayoutDashboard size={16} /> Tableau de bord
-              {badgeAlertes > 0 && <span style={navStyles.badge}>{badgeAlertes}</span>}
-            </Link>
-            <Link to="/point-journalier" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
-            <Link to="/historique" style={navStyles.link}><History size={16} /> Historique</Link>
-          </>
+          <Link to="/point-journalier" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
         )}
+        <Link to="/historique" style={navStyles.link}><History size={16} /> Historique</Link>
         <Link to="/vaccinations" style={navStyles.link}><Syringe size={16} /> Vaccins & traitements</Link>
         {!technicien && (
           <>

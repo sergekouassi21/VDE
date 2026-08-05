@@ -8,7 +8,7 @@ import {
 import { GREEN, GREEN_DARK, INK, CLAY, formatSacs, formatColis } from "../theme";
 import { genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { mettreEnCache, lireCache } from "../offline/cache";
-import { estDirectionOuAdmin } from "../utils/auth";
+import { estDirectionOuAdmin, estTechnicien } from "../utils/auth";
 
 const CACHE_CLE_HISTORIQUE = "historique-points";
 
@@ -27,8 +27,12 @@ const peutSupprimer = estDirectionOuAdmin;
 // Un chef peut librement resoumettre le jour même (rattrapage), mais
 // corriger un jour déjà passé et déjà enregistré est réservé à
 // Direction/Admin — même règle appliquée côté serveur (point 15 du
-// backlog, cf. conversation du 27/07/2026 avec Serge).
+// backlog, cf. conversation du 27/07/2026 avec Serge). Le technicien, lui,
+// n'a jamais le droit de modifier — l'Historique est en lecture seule pour
+// ce rôle (même règle côté serveur, cf. IsFermeAccessibleTechnicienLectureSeule
+// et conversation du 05/08/2026 avec Serge).
 function peutModifier(p) {
+  if (estTechnicien()) return false;
   return peutSupprimer() || p.date === todayISO();
 }
 
