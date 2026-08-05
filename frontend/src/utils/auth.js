@@ -8,3 +8,10 @@ export function estDirectionOuAdmin() {
   const role = localStorage.getItem("vde_role");
   return !role || role === "DIRECTION" || role === "ADMIN";
 }
+
+// Technicien/vétérinaire externe — accès restreint à "Vaccins &
+// traitements" uniquement (cf. IsFermeAccessible côté backend, qui refuse
+// ce rôle partout ailleurs). Cf. conversation du 05/08/2026 avec Serge.
+export function estTechnicien() {
+  return localStorage.getItem("vde_role") === "TECHNICIEN";
+}

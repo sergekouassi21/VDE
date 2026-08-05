@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Check, Trash2, Syringe, AlertTriangle, List, Calendar, ChevronLeft, ChevronRight, WifiOff } from "lucide-react";
-import { getFermes, getEvenementsSante, creerEvenementSante, supprimerEvenementSante, marquerFaitEvenementSante } from "../api/client";
+import { Check, Trash2, Syringe, AlertTriangle, List, Calendar, ChevronLeft, ChevronRight, WifiOff, Stethoscope, ShieldCheck } from "lucide-react";
+import {
+  getFermes, getEvenementsSante, creerEvenementSante, supprimerEvenementSante, marquerFaitEvenementSante,
+  getVisitesTechniques, creerVisiteTechnique, supprimerVisiteTechnique,
+} from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
 import { ajouterEvenementFaitEnAttente, listerEvenementsFaitsEnAttente } from "../offline/queueVaccinations";
 import { synchroniserEvenementsFaitsEnAttente } from "../offline/syncVaccinations";
@@ -12,6 +15,26 @@ const LABEL_STATUT = { EN_RETARD: "En retard", A_VENIR: "À venir", FAIT: "Fait"
 const COULEUR_STATUT = { EN_RETARD: CLAY, A_VENIR: GREEN_DARK, FAIT: "#8A948D" };
 
 const JOURS_SEMAINE = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
+// Grille de biosécurité — 10 critères fixes, chacun noté 0 (non respecté) à
+// 2 (bien respecté), confirmée avec Serge le 05/08/2026.
+const CRITERES_BIOSECURITE = [
+  { cle: "desinfection_entree", label: "Désinfection / pédiluve à l'entrée" },
+  { cle: "cloture_acces", label: "Clôture / accès restreint au site" },
+  { cle: "registre_visiteurs", label: "Registre des visiteurs tenu" },
+  { cle: "equipement_dedie", label: "Tenue/équipement dédié (bottes, blouse)" },
+  { cle: "lutte_nuisibles", label: "Lutte contre les nuisibles" },
+  { cle: "gestion_cadavres", label: "Gestion des cadavres" },
+  { cle: "qualite_eau", label: "Qualité de l'eau d'abreuvement" },
+  { cle: "vide_sanitaire", label: "Vide sanitaire respecté entre bandes" },
+  { cle: "stockage_aliment", label: "Stockage de l'aliment à l'abri" },
+  { cle: "proprete_batiment", label: "Propreté du bâtiment/litière" },
+];
+const LABEL_NOTE = { 0: "Non respecté", 1: "Partiel", 2: "Bien respecté" };
+const FORM_VIDE_VISITE = {
+  visiteur_nom: "", date: todayISO(), observations: "", recommandations: "",
+  ...Object.fromEntries(CRITERES_BIOSECURITE.map((c) => [c.cle, 0])),
+};
 
 // Date locale au format ISO (pas toISOString, qui bascule en UTC et peut
 // décaler d'un jour selon le fuseau) — les cases du calendrier doivent
@@ -61,6 +84,12 @@ export default function Vaccinations() {
   const [jourSelectionne, setJourSelectionne] = useState(null);
   const [enLigne, setEnLigne] = useState(navigator.onLine);
   const [enAttenteCount, setEnAttenteCount] = useState(0);
+  const [visites, setVisites] = useState([]);
+  const [chargementVisites, setChargementVisites] = useState(true);
+  const [formVisiteOuvert, setFormVisiteOuvert] = useState(false);
+  const [formVisite, setFormVisite] = useState(FORM_VIDE_VISITE);
+  const [erreurVisite, setErreurVisite] = useState("");
+  const [envoiVisite, setEnvoiVisite] = useState(false);
 
   const rafraichirEnAttente = useCallback(async () => {
     const items = await listerEvenementsFaitsEnAttente();
@@ -89,6 +118,20 @@ export default function Vaccinations() {
   // Empêche une réponse obsolète (changement rapide de ferme pendant le
   // chargement) d'écraser un state plus récent — cf. audit du 30/07/2026.
   useEffect(() => rafraichir(), [rafraichir]);
+
+  const rafraichirVisites = useCallback(() => {
+    if (!fermeId) { setVisites([]); setChargementVisites(false); return () => {}; }
+    setChargementVisites(true);
+    let annule = false;
+    getVisitesTechniques({ ferme: fermeId }).then((data) => {
+      if (annule) return;
+      setVisites(data);
+      setChargementVisites(false);
+    });
+    return () => { annule = true; };
+  }, [fermeId]);
+
+  useEffect(() => rafraichirVisites(), [rafraichirVisites]);
 
   // Même câblage hors-ligne que Point Journalier (offline/sync.js) — dépend
   // de `rafraichir` (qui dépend lui-même de fermeId), donc réabonné à chaque
@@ -174,6 +217,29 @@ export default function Vaccinations() {
     rafraichir();
   }
 
+  async function soumettreVisite(e) {
+    e.preventDefault();
+    if (!formVisite.visiteur_nom.trim() || !bande) return;
+    setEnvoiVisite(true);
+    setErreurVisite("");
+    try {
+      await creerVisiteTechnique({ bande: bande.id, ...formVisite, visiteur_nom: formVisite.visiteur_nom.trim() });
+      setFormVisite(FORM_VIDE_VISITE);
+      setFormVisiteOuvert(false);
+      rafraichirVisites();
+    } catch {
+      setErreurVisite("Impossible d'enregistrer cette visite.");
+    } finally {
+      setEnvoiVisite(false);
+    }
+  }
+
+  async function supprimerVisite(v) {
+    if (!window.confirm(`Supprimer la visite du ${new Date(v.date).toLocaleDateString("fr-FR")} ?`)) return;
+    await supprimerVisiteTechnique(v.id);
+    rafraichirVisites();
+  }
+
   const evenementsDuJour = jourSelectionne ? (evenementsParDate[jourSelectionne] || []) : [];
 
   return (
@@ -207,15 +273,23 @@ export default function Vaccinations() {
             <button style={{ ...styles.vueBtn, ...(vue === "liste" ? styles.vueBtnOn : {}) }} onClick={() => setVue("liste")}>
               <List size={14} /> Liste
             </button>
+            <button style={{ ...styles.vueBtn, ...(vue === "visites" ? styles.vueBtnOn : {}) }} onClick={() => setVue("visites")}>
+              <Stethoscope size={14} /> Visites
+            </button>
           </div>
-          {bande && (
+          {bande && vue !== "visites" && (
             <button style={styles.addBtn} onClick={() => setFormOuvert((o) => !o)}>
               <Syringe size={15} /> Ajouter un évènement
             </button>
           )}
+          {bande && vue === "visites" && (
+            <button style={styles.addBtn} onClick={() => setFormVisiteOuvert((o) => !o)}>
+              <Stethoscope size={15} /> Ajouter une visite
+            </button>
+          )}
         </div>
 
-        {formOuvert && (
+        {formOuvert && vue !== "visites" && (
           <form style={styles.formCard} onSubmit={soumettre}>
             <select style={styles.input} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
               <option value="VACCIN">Vaccin</option>
@@ -229,8 +303,46 @@ export default function Vaccinations() {
           </form>
         )}
 
+        {formVisiteOuvert && vue === "visites" && (
+          <form style={{ ...styles.formCard, flexDirection: "column", alignItems: "stretch" }} onSubmit={soumettreVisite}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <input style={styles.input} placeholder="Nom du technicien/vétérinaire" value={formVisite.visiteur_nom} onChange={(e) => setFormVisite({ ...formVisite, visiteur_nom: e.target.value })} required />
+              <input style={styles.input} type="date" value={formVisite.date} onChange={(e) => setFormVisite({ ...formVisite, date: e.target.value })} required />
+            </div>
+            <textarea style={{ ...styles.input, flex: "1 1 100%", minHeight: 60, resize: "vertical" }} placeholder="Observations" value={formVisite.observations} onChange={(e) => setFormVisite({ ...formVisite, observations: e.target.value })} />
+            <textarea style={{ ...styles.input, flex: "1 1 100%", minHeight: 60, resize: "vertical" }} placeholder="Recommandations" value={formVisite.recommandations} onChange={(e) => setFormVisite({ ...formVisite, recommandations: e.target.value })} />
+            <div style={styles.grilleCriteres}>
+              {CRITERES_BIOSECURITE.map((c) => (
+                <label key={c.cle} style={styles.critereLigne}>
+                  <span style={styles.critereLabel}>{c.label}</span>
+                  <select
+                    style={styles.critereSelect}
+                    value={formVisite[c.cle]}
+                    onChange={(e) => setFormVisite({ ...formVisite, [c.cle]: Number(e.target.value) })}
+                  >
+                    <option value={0}>0 · {LABEL_NOTE[0]}</option>
+                    <option value={1}>1 · {LABEL_NOTE[1]}</option>
+                    <option value={2}>2 · {LABEL_NOTE[2]}</option>
+                  </select>
+                </label>
+              ))}
+            </div>
+            {erreurVisite && <p style={styles.erreur}>{erreurVisite}</p>}
+            <button style={{ ...styles.submitBtn, alignSelf: "flex-start" }} type="submit" disabled={envoiVisite}>{envoiVisite ? "Enregistrement..." : "Enregistrer la visite"}</button>
+          </form>
+        )}
+
         {!bande ? (
           <p style={styles.empty}>{fermeId ? "Cette ferme n'a pas de bande active." : "Sélectionne une ferme."}</p>
+        ) : vue === "visites" ? (
+          chargementVisites ? (
+            <p style={styles.empty}>Chargement...</p>
+          ) : (
+            <Section titre="Historique des visites" icon={<ShieldCheck size={15} color={GREEN_DARK} />}>
+              {visites.length === 0 ? <p style={styles.empty}>Aucune visite enregistrée.</p> :
+                visites.map((v) => <LigneVisite key={v.id} visite={v} onSupprimer={supprimerVisite} />)}
+            </Section>
+          )
         ) : chargement ? (
           <p style={styles.empty}>Chargement...</p>
         ) : vue === "calendrier" ? (
@@ -362,6 +474,21 @@ function Ligne({ evenement: e, onFait, onSupprimer, fait }) {
   );
 }
 
+function LigneVisite({ visite: v, onSupprimer }) {
+  const couleur = v.score_biosecurite / v.score_biosecurite_max >= 0.75 ? GREEN_DARK : v.score_biosecurite / v.score_biosecurite_max >= 0.5 ? "#B08B2E" : CLAY;
+  return (
+    <div style={{ ...styles.ligne, alignItems: "flex-start" }}>
+      <div style={styles.ligneInfo}>
+        <span style={styles.ligneNom}>{v.visiteur_nom} · {new Date(v.date).toLocaleDateString("fr-FR")}</span>
+        {v.observations && <span style={styles.ligneMeta}>Observations : {v.observations}</span>}
+        {v.recommandations && <span style={styles.ligneMeta}>Recommandations : {v.recommandations}</span>}
+      </div>
+      <span style={{ ...styles.badge, color: couleur }}>{v.score_biosecurite}/{v.score_biosecurite_max}</span>
+      <button style={{ ...styles.iconBtn, color: CLAY }} title="Supprimer" onClick={() => onSupprimer(v)}><Trash2 size={14} /></button>
+    </div>
+  );
+}
+
 const styles = {
   page: { minHeight: "100vh", background: "#F1EEE6", fontFamily: "'Inter', sans-serif", color: INK, padding: "0 0 30px" },
   wrap: { maxWidth: 800, margin: "0 auto", padding: "24px 20px" },
@@ -408,4 +535,8 @@ const styles = {
   calPastilles: { display: "flex", gap: 3, alignItems: "center", flexWrap: "wrap", justifyContent: "center" },
   calPastille: { width: 6, height: 6, borderRadius: "50%" },
   calPlus: { fontSize: 9, fontWeight: 700, color: "#8A948D" },
+  grilleCriteres: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 8, background: "#FAF9F5", border: "1px solid #ECE9DF", borderRadius: 10, padding: 12 },
+  critereLigne: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  critereLabel: { fontSize: 12, color: INK, flex: 1 },
+  critereSelect: { padding: "5px 8px", borderRadius: 8, border: "1px solid #DAD5C7", fontSize: 11.5, fontFamily: "inherit", color: INK, background: "#fff" },
 };

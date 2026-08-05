@@ -27,7 +27,7 @@ const Securite = lazy(() => import("./pages/Securite"));
 import { isAuthenticated, logout, ADMIN_URL, getRechercheGlobale, getDashboard, getEvenementsSante, getAbsences, getEmployes, getFactures, getPointages } from "./api/client";
 import { GREEN_DARK } from "./theme";
 import { calculerAlertes, signatureAlertes, joursDepuis, JOURS_CREANCE_RETARD, estPointageOublie } from "./alertes";
-import { estDirectionOuAdmin } from "./utils/auth";
+import { estDirectionOuAdmin, estTechnicien } from "./utils/auth";
 
 function RequireAuth({ children }) {
   if (!isAuthenticated()) return <Navigate to="/connexion" replace />;
@@ -47,6 +47,7 @@ function RequireDirectionOuAdmin({ children }) {
 function AccueilSelonRole() {
   const role = localStorage.getItem("vde_role");
   const versPointJournalier = role === "CHEF_FERME" || role === "SOUS_CHEF_FERME";
+  if (role === "TECHNICIEN") return <Navigate to="/vaccinations" replace />;
   return <Navigate to={versPointJournalier ? "/point-journalier" : "/tableau-de-bord"} replace />;
 }
 
@@ -272,6 +273,11 @@ function NavBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const autorise = estDirectionOuAdmin();
+  // Technicien/vétérinaire : accès restreint à "Vaccins & traitements"
+  // uniquement (le backend refuse déjà tout le reste, ceci évite juste
+  // d'afficher des liens qui mèneraient à des pages vides/403). Cf.
+  // conversation du 05/08/2026 avec Serge.
+  const technicien = estTechnicien();
   const [ouvert, setOuvert] = useState(false);
   const badgeAlertes = useBadgeAlertes();
 
@@ -288,15 +294,23 @@ function NavBar() {
       </div>
       <ProfilMenu />
       <div className={`nav-links${ouvert ? " open" : ""}`}>
-        <Link to="/tableau-de-bord" style={navStyles.link}>
-          <LayoutDashboard size={16} /> Tableau de bord
-          {badgeAlertes > 0 && <span style={navStyles.badge}>{badgeAlertes}</span>}
-        </Link>
-        <Link to="/point-journalier" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
-        <Link to="/historique" style={navStyles.link}><History size={16} /> Historique</Link>
+        {!technicien && (
+          <>
+            <Link to="/tableau-de-bord" style={navStyles.link}>
+              <LayoutDashboard size={16} /> Tableau de bord
+              {badgeAlertes > 0 && <span style={navStyles.badge}>{badgeAlertes}</span>}
+            </Link>
+            <Link to="/point-journalier" style={navStyles.link}><ClipboardList size={16} /> Point Journalier</Link>
+            <Link to="/historique" style={navStyles.link}><History size={16} /> Historique</Link>
+          </>
+        )}
         <Link to="/vaccinations" style={navStyles.link}><Syringe size={16} /> Vaccins & traitements</Link>
-        <Link to="/transferts" style={navStyles.link}><ArrowRightLeft size={16} /> Transferts</Link>
-        <Link to="/materiel" style={navStyles.link}><Wrench size={16} /> Stock matériel</Link>
+        {!technicien && (
+          <>
+            <Link to="/transferts" style={navStyles.link}><ArrowRightLeft size={16} /> Transferts</Link>
+            <Link to="/materiel" style={navStyles.link}><Wrench size={16} /> Stock matériel</Link>
+          </>
+        )}
         {autorise && (
           <>
             <Link to="/ventes" style={navStyles.link}><ShoppingBasket size={16} /> Ventes</Link>

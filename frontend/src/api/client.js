@@ -57,6 +57,10 @@ export const creerEvenementSante = (payload) => api.post("/evenements-sante/", p
 export const modifierEvenementSante = (id, payload) => api.patch(`/evenements-sante/${id}/`, payload).then((r) => r.data);
 export const supprimerEvenementSante = (id) => api.delete(`/evenements-sante/${id}/`);
 export const marquerFaitEvenementSante = (id, payload) => api.post(`/evenements-sante/${id}/marquer-fait/`, payload || {}).then((r) => r.data);
+export const getVisitesTechniques = (params) => api.get("/visites-techniques/", { params }).then((r) => r.data);
+export const creerVisiteTechnique = (payload) => api.post("/visites-techniques/", payload).then((r) => r.data);
+export const modifierVisiteTechnique = (id, payload) => api.patch(`/visites-techniques/${id}/`, payload).then((r) => r.data);
+export const supprimerVisiteTechnique = (id) => api.delete(`/visites-techniques/${id}/`);
 export const soumettrePointJournalier = (fermeId, payload) =>
   api.post(`/fermes/${fermeId}/points-journaliers/`, payload).then((r) => r.data);
 export const getPointJournalier = (fermeId, date) =>
