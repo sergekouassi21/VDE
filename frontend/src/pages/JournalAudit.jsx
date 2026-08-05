@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { ScrollText } from "lucide-react";
 import { getJournalAudit } from "../api/client";
-import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+import { GREEN, GREEN_DARK, INK, CLAY, TEXTE_DOUX, TEXTE_META, FOND_PAGE_ALT } from "../theme";
 
 const LABEL_ACTION = { CREATION: "Création", MODIFICATION: "Modification", SUPPRESSION: "Suppression" };
 const COULEUR_ACTION = { CREATION: GREEN_DARK, MODIFICATION: "#B8860B", SUPPRESSION: CLAY };
@@ -114,21 +114,21 @@ export default function JournalAudit() {
 }
 
 const styles = {
-  page: { minHeight: "100vh", background: "#F1EEE6", fontFamily: "'Inter', sans-serif", color: INK, padding: "0 0 30px" },
+  page: { minHeight: "100vh", background: FOND_PAGE_ALT, fontFamily: "inherit", color: INK, padding: "0 0 30px" },
   wrap: { maxWidth: 1100, margin: "0 auto", padding: "24px 20px" },
   head: { marginBottom: 20 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
   filters: { display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" },
   select: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 13.5, fontFamily: "inherit", color: INK },
-  dateLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "#7A857F" },
+  dateLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: TEXTE_META },
   date: { padding: "8px 10px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
-  clear: { padding: "8px 14px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 12.5, cursor: "pointer", color: "#7A857F", fontFamily: "inherit" },
+  clear: { padding: "8px 14px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 12.5, cursor: "pointer", color: TEXTE_META, fontFamily: "inherit" },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
-  empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
+  empty: { padding: 24, textAlign: "center", color: TEXTE_DOUX, fontSize: 13.5, margin: 0 },
   tableWrap: { overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
-  th: { textAlign: "left", padding: "12px 16px", fontSize: 11.5, textTransform: "uppercase", letterSpacing: .5, color: "#8A948D", borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
+  th: { textAlign: "left", padding: "12px 16px", fontSize: 12, textTransform: "uppercase", letterSpacing: .5, color: TEXTE_DOUX, borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
   td: { padding: "11px 16px", borderBottom: "1px solid #F2F0E8", color: INK, whiteSpace: "nowrap" },
-  note: { fontSize: 12, color: "#8A948D", marginTop: 14, lineHeight: 1.5 },
+  note: { fontSize: 12, color: TEXTE_DOUX, marginTop: 14, lineHeight: 1.5 },
 };

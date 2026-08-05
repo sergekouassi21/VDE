@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Search, ChevronLeft, CheckCircle2 } from "lucide-react";
 import { getEmployesBadgeAbsence, declarerBadgeAbsence } from "../api/client";
-import { GREEN, GREEN_DARK, CREAM, INK } from "../theme";
+import { GREEN, GREEN_DARK, CREAM, INK, TEXTE_DOUX, TEXTE_GRIS, ALERTE } from "../theme";
 
 const pad = (n) => String(n).padStart(2, "0");
 const aujourdhuiISO = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
@@ -116,7 +116,7 @@ export default function PointageBadgeAbsence() {
         <p style={styles.ferme}>Choisis l'employé absent</p>
 
         <div style={styles.rechercheWrap}>
-          <Search size={15} color="#8A948D" />
+          <Search size={15} color={TEXTE_DOUX} />
           <input
             style={styles.recherche}
             placeholder="Rechercher un nom..."
@@ -148,7 +148,7 @@ export default function PointageBadgeAbsence() {
 const styles = {
   page: {
     minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-    background: `linear-gradient(160deg, ${GREEN} 0%, ${GREEN_DARK} 100%)`, fontFamily: "'Inter', sans-serif", padding: 16,
+    background: `linear-gradient(160deg, ${GREEN} 0%, ${GREEN_DARK} 100%)`, fontFamily: "inherit", padding: 16,
   },
   card: {
     background: CREAM, borderRadius: 20, padding: "32px 28px", width: 340, maxWidth: "100%",
@@ -157,18 +157,18 @@ const styles = {
   },
   retour: {
     display: "flex", alignItems: "center", gap: 4, alignSelf: "flex-start", background: "none", border: "none",
-    color: "#6B756E", fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 4,
+    color: TEXTE_GRIS, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 4,
   },
   logo: { height: 48, width: 48, borderRadius: 12, objectFit: "cover", marginBottom: 4 },
   nom: { fontSize: 20, fontWeight: 700, margin: 0, color: INK },
-  ferme: { fontSize: 13, color: "#6B756E", margin: "0 0 10px" },
-  statut: { fontSize: 13.5, color: "#6B756E", margin: "0 0 16px" },
+  ferme: { fontSize: 13, color: TEXTE_GRIS, margin: "0 0 10px" },
+  statut: { fontSize: 13.5, color: TEXTE_GRIS, margin: "0 0 16px" },
   bouton: {
     display: "flex", alignItems: "center", gap: 8, background: GREEN, color: "#fff", border: "none",
     borderRadius: 12, padding: "14px 22px", fontSize: 15.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", width: "100%", justifyContent: "center",
   },
-  attente: { fontSize: 14, color: "#6B756E" },
-  erreur: { fontSize: 14, color: "#9E4527", margin: 0 },
+  attente: { fontSize: 14, color: TEXTE_GRIS },
+  erreur: { fontSize: 14, color: ALERTE, margin: 0 },
   rechercheWrap: { display: "flex", alignItems: "center", gap: 8, width: "100%", background: "#fff", border: "1px solid #DDE2DE", borderRadius: 10, padding: "9px 12px", marginTop: 6 },
   recherche: { border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", color: INK, width: "100%", background: "none" },
   liste: { width: "100%", display: "flex", flexDirection: "column", gap: 6, marginTop: 12, maxHeight: 360, overflowY: "auto" },
@@ -177,8 +177,8 @@ const styles = {
     border: "1px solid #ECE9DF", borderRadius: 10, padding: "10px 12px", cursor: "pointer", fontFamily: "inherit",
   },
   ligneNom: { fontSize: 14, fontWeight: 600, color: INK },
-  ligneFerme: { fontSize: 11.5, color: "#8A948D", marginTop: 1 },
+  ligneFerme: { fontSize: 12, color: TEXTE_DOUX, marginTop: 1 },
   form: { width: "100%", display: "flex", flexDirection: "column", gap: 12, marginTop: 10 },
-  champLabel: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: "#6B756E", textAlign: "left" },
+  champLabel: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: TEXTE_GRIS, textAlign: "left" },
   champInput: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 14, fontFamily: "inherit", color: INK },
 };

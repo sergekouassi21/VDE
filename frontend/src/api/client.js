@@ -13,6 +13,33 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Jeton devenu invalide (compte supprimé, déconnexion depuis un autre
+// appareil, jeton révoqué) : sans ça, l'appli restait bloquée à afficher des
+// erreurs sur chaque page sans jamais proposer de se reconnecter.
+//
+// Uniquement sur 401, jamais sur 403 : depuis que TokenAuthentication est en
+// tête côté serveur, 401 signifie « ton jeton ne vaut plus rien » et 403
+// « tu es bien connecté mais cette page ne t'est pas destinée ». Déconnecter
+// sur 403 mettrait dehors un technicien qui ouvre par erreur un écran
+// réservé à la Direction.
+//
+// Une coupure réseau ne produit pas de `response` du tout : un utilisateur
+// hors-ligne n'est donc jamais déconnecté par cet intercepteur — essentiel
+// pour une appli conçue pour fonctionner sans réseau sur le terrain.
+api.interceptors.response.use(
+  (reponse) => reponse,
+  (erreur) => {
+    if (erreur.response?.status === 401 && !window.location.pathname.startsWith("/connexion")) {
+      viderSession();
+      // Rechargement complet plutôt qu'une navigation React : l'intercepteur
+      // vit hors de l'arbre React et n'a pas accès au routeur. Les saisies en
+      // attente ne sont pas perdues, elles vivent dans IndexedDB (cf. src/offline/).
+      window.location.replace("/connexion");
+    }
+    return Promise.reject(erreur);
+  },
+);
+
 export async function login(username, password, code) {
   const { data } = await axios.post(`${API_BASE_URL}/auth/login/`, { username, password, code });
   if (data.besoin_2fa) return { besoin2fa: true };
@@ -20,13 +47,42 @@ export async function login(username, password, code) {
   return { token: data.token };
 }
 
-export function logout() {
+function viderSession() {
   localStorage.removeItem("vde_token");
   localStorage.removeItem("vde_role");
   localStorage.removeItem("vde_role_display");
   localStorage.removeItem("vde_nom");
   localStorage.removeItem("vde_telephone");
   localStorage.removeItem("vde_photo");
+}
+
+// Vide l'appareil ET invalide le jeton côté serveur. Auparavant seul le
+// localStorage était vidé : le jeton restait valable indéfiniment (les
+// jetons DRF n'expirent jamais), donc sur un téléphone partagé entre
+// employés, quiconque récupérait cette chaîne gardait un accès permanent.
+//
+// L'ordre compte. On vide d'abord l'appareil pour que l'utilisateur soit
+// déconnecté instantanément, même si le réseau rame — sur une connexion de
+// zone rurale, attendre la réponse du serveur avant de rendre la main
+// donnerait un bouton qui semble ne rien faire. Le jeton est donc capturé
+// avant, puis envoyé explicitement en en-tête, puisqu'il n'est plus dans le
+// localStorage au moment de la requête.
+//
+// Limite assumée : hors-ligne, l'invalidation ne part pas et le jeton reste
+// valable côté serveur. C'est déjà mieux qu'avant (où elle ne partait
+// jamais), et la file d'attente hors-ligne ne convient pas ici — rejouer
+// une déconnexion plusieurs heures plus tard couperait la session que
+// l'utilisateur aura entre-temps rouverte.
+export function logout() {
+  const token = localStorage.getItem("vde_token");
+  viderSession();
+  if (!token) return;
+  axios
+    .post(`${API_BASE_URL}/auth/logout/`, {}, { headers: { Authorization: `Token ${token}` } })
+    .catch(() => {
+      // Réseau coupé ou jeton déjà invalide : l'appareil est déconnecté
+      // dans les deux cas, il n'y a rien à signaler à l'utilisateur.
+    });
 }
 
 export function isAuthenticated() {

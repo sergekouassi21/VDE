@@ -6,10 +6,11 @@ import {
   getTransfertsEquipement, creerTransfertEquipement, modifierTransfertEquipement, supprimerTransfertEquipement,
   getInventaireEquipement,
 } from "../api/client";
-import { GREEN, GREEN_DARK, INK, CLAY, UNITES_PAR_COLIS } from "../theme";
+import { GREEN, GREEN_DARK, INK, CLAY, UNITES_PAR_COLIS, TEXTE_DOUX, TEXTE_META, TEXTE_GRIS, FOND_PAGE, FOND_PAGE_ALT, ALERTE, ALERTE_FOND } from "../theme";
 import { estDirectionOuAdmin } from "../utils/auth";
 import { ajouterTransfertEnAttente, listerTransfertsEnAttente } from "../offline/queueTransferts";
 import { synchroniserTransfertsEnAttente } from "../offline/syncTransferts";
+import ChampNombre from "../components/ChampNombre";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const nf = (v) => (Number(v) || 0).toLocaleString("fr-FR");
@@ -254,9 +255,10 @@ function TransfertsStock({ fermes, onMiseEnAttente }) {
         <div style={styles.fieldRow}>
           <label style={styles.field}>
             <span style={styles.fieldLabel}>Quantité ({UNITE_TYPE[form.type_transfert]})</span>
-            <input
-              style={styles.input} type="number" min={STEP_TYPE[form.type_transfert]} step={STEP_TYPE[form.type_transfert]}
-              value={form.quantite} onChange={(e) => setForm({ ...form, quantite: e.target.value })} required
+            <ChampNombre
+              decimal={STEP_TYPE[form.type_transfert].includes(".")}
+              style={styles.input}
+              value={form.quantite} onChange={(v) => setForm({ ...form, quantite: v })} required
             />
           </label>
           <label style={styles.field}>
@@ -304,7 +306,7 @@ function TransfertsStock({ fermes, onMiseEnAttente }) {
                             onChange={(e) => setBrouillon((b) => ({ ...b, quantite: e.target.value }))} />
                         ) : `${nf(t.type_transfert === "ALVEOLES" ? unitesVersColis(t.quantite) : t.quantite)} ${UNITE_TYPE[t.type_transfert]}`}
                       </td>
-                      <td style={{ ...styles.td, color: "#6B756E" }}>
+                      <td style={{ ...styles.td, color: TEXTE_GRIS }}>
                         {enEdition ? (
                           <input style={styles.tableInput} value={brouillon.observation}
                             onChange={(e) => setBrouillon((b) => ({ ...b, observation: e.target.value }))} />
@@ -543,7 +545,7 @@ function TransfertsEquipement({ fermes, onMiseEnAttente }) {
                             onChange={(e) => setBrouillon((b) => ({ ...b, quantite: e.target.value }))} />
                         ) : `${nf(t.quantite)} unités`}
                       </td>
-                      <td style={{ ...styles.td, color: "#6B756E" }}>
+                      <td style={{ ...styles.td, color: TEXTE_GRIS }}>
                         {enEdition ? (
                           <input style={styles.tableInput} value={brouillon.observation}
                             onChange={(e) => setBrouillon((b) => ({ ...b, observation: e.target.value }))} />
@@ -580,31 +582,31 @@ function TransfertsEquipement({ fermes, onMiseEnAttente }) {
 }
 
 const styles = {
-  page: { minHeight: "100vh", background: "#F1EEE6", fontFamily: "'Inter', sans-serif", color: INK, padding: "0 0 30px" },
+  page: { minHeight: "100vh", background: FOND_PAGE_ALT, fontFamily: "inherit", color: INK, padding: "0 0 30px" },
   wrap: { maxWidth: 1100, margin: "0 auto", padding: "24px 20px" },
   head: { marginBottom: 20 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
-  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: ALERTE_FOND, color: ALERTE, fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
   tabs: { display: "flex", gap: 6, marginBottom: 16 },
-  tab: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#fff", border: "1px solid #ECE9DF", color: "#7A857F", padding: "10px 8px", borderRadius: 10, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" },
+  tab: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#fff", border: "1px solid #ECE9DF", color: TEXTE_META, padding: "10px 8px", borderRadius: 10, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" },
   tabOn: { background: GREEN, borderColor: GREEN, color: "#fff", fontWeight: 600 },
   formCard: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 18, marginBottom: 16, display: "flex", flexDirection: "column", gap: 12 },
   fieldRow: { display: "flex", gap: 12, flexWrap: "wrap" },
-  field: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: "#6B756E", flex: "1 1 160px" },
-  fieldLabel: { fontSize: 11.5 },
+  field: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: TEXTE_GRIS, flex: "1 1 160px" },
+  fieldLabel: { fontSize: 12 },
   input: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
-  hint: { fontSize: 11.5, color: "#8A948D" },
+  hint: { fontSize: 12, color: TEXTE_DOUX },
   submitBtn: { alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6, background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
-  erreur: { color: "#9E4527", fontSize: 12.5, margin: 0 },
+  erreur: { color: ALERTE, fontSize: 12.5, margin: 0 },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
-  empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
+  empty: { padding: 24, textAlign: "center", color: TEXTE_DOUX, fontSize: 13.5, margin: 0 },
   tableWrap: { overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
-  th: { textAlign: "left", padding: "12px 16px", fontSize: 11.5, textTransform: "uppercase", letterSpacing: .5, color: "#8A948D", borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
+  th: { textAlign: "left", padding: "12px 16px", fontSize: 12, textTransform: "uppercase", letterSpacing: .5, color: TEXTE_DOUX, borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
   td: { padding: "11px 16px", borderBottom: "1px solid #F2F0E8", color: INK, whiteSpace: "nowrap" },
   tableInput: { width: "100%", maxWidth: 140, border: "1px solid #DDE2DE", borderRadius: 6, padding: "5px 8px", fontSize: 13, fontFamily: "inherit", color: INK },
   actionsRow: { display: "flex", gap: 4, justifyContent: "flex-end" },
-  actionBtn: { background: "#F4F1EA", border: "none", color: GREEN_DARK, width: 28, height: 28, borderRadius: 7, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
-  note: { fontSize: 12, color: "#8A948D", marginTop: 14, lineHeight: 1.5 },
+  actionBtn: { background: FOND_PAGE, border: "none", color: GREEN_DARK, width: 28, height: 28, borderRadius: 7, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
+  note: { fontSize: 12, color: TEXTE_DOUX, marginTop: 14, lineHeight: 1.5 },
 };

@@ -174,8 +174,12 @@ class AppareilPointageTests(TestCase):
     def test_qr_appareil_reserve_direction(self):
         req = self.factory.get("/api/pointage/appareil/qr/")
         # Pas de force_authenticate -> anonyme, doit être refusé.
+        # 401 (et non 403) depuis que TokenAuthentication est en tête de
+        # DEFAULT_AUTHENTICATION_CLASSES : un accès anonyme se distingue
+        # maintenant d'un accès authentifié mais non autorisé, ce dont le
+        # frontend a besoin pour ne déconnecter que dans le premier cas.
         resp = appareil_pointage_qr(req)
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 401)
 
     def test_statut_reflete_l_etat_actuel(self):
         req = self.factory.get("/api/pointage/appareil/statut/")
@@ -243,8 +247,9 @@ class RegenererBadgeEmployeTests(TestCase):
         view = EmployeViewSet.as_view({"post": "regenerer_qr"})
         req = self.factory.post(f"/api/pointage/employes/{self.employe.id}/regenerer-qr/")
         # Pas de force_authenticate -> anonyme, doit être refusé.
+        # 401 (et non 403) : cf. test_qr_appareil_reserve_direction.
         resp = view(req, pk=self.employe.id)
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 401)
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())

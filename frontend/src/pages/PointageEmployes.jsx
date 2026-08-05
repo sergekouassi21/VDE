@@ -6,7 +6,7 @@ import {
   getStatutAppareilPointage, desactiverAppareilPointage,
   getDocumentsEmploye, uploaderDocumentEmploye, supprimerDocumentEmploye,
 } from "../api/client";
-import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+import { GREEN, GREEN_DARK, INK, CLAY, TEXTE_DOUX, TEXTE_META, FOND_PAGE, FOND_PAGE_ALT, ALERTE } from "../theme";
 
 const LABEL_ROLE = { CHEF_FERME: "Chef de ferme", SOUS_CHEF_FERME: "Sous-chef de ferme", SUPERVISEUR: "Superviseur", OUVRIER: "Volailler", GARDIEN: "Gardien" };
 const JOURS_SEMAINE = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
@@ -343,7 +343,7 @@ export default function PointageEmployes() {
                       <td style={styles.td}>{emp.user_nom ? <span style={{ color: GREEN_DARK }}>{emp.user_nom}</span> : <span style={{ color: "#B5BBB2" }}>—</span>}</td>
                       <td style={styles.td}>{emp.fermes_noms}</td>
                       <td style={{ ...styles.td, textAlign: "right" }}>{emp.salaire_mensuel} F</td>
-                      <td style={{ ...styles.td, textAlign: "right", color: "#8A948D" }}>{emp.taux_horaire} F/h</td>
+                      <td style={{ ...styles.td, textAlign: "right", color: TEXTE_DOUX }}>{emp.taux_horaire} F/h</td>
                       <td style={styles.td}>{emp.jour_repos === null || emp.jour_repos === undefined ? "—" : JOURS_SEMAINE[emp.jour_repos]}</td>
                       <td style={styles.td}>
                         <span style={{ color: emp.actif ? GREEN : CLAY, fontWeight: 600 }}>{emp.actif ? "Actif" : "Désactivé"}</span>
@@ -473,7 +473,7 @@ export default function PointageEmployes() {
 }
 
 const styles = {
-  page: { minHeight: "100vh", background: "#F1EEE6", fontFamily: "'Inter', sans-serif", color: INK, padding: "0 0 30px" },
+  page: { minHeight: "100vh", background: FOND_PAGE_ALT, fontFamily: "inherit", color: INK, padding: "0 0 30px" },
   wrap: { maxWidth: 1000, margin: "0 auto", padding: "24px 20px" },
   head: { marginBottom: 20 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
@@ -485,30 +485,30 @@ const styles = {
   formCard: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 18, marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
   input: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK, flex: "1 1 160px" },
   fermesGroup: { display: "flex", flexWrap: "wrap", gap: "8px 14px", alignItems: "center", padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", flex: "1 1 100%" },
-  fermesLabel: { fontSize: 12.5, color: "#7A857F", fontWeight: 600 },
+  fermesLabel: { fontSize: 12.5, color: TEXTE_META, fontWeight: 600 },
   fermeCheckbox: { display: "flex", alignItems: "center", gap: 5, fontSize: 13, color: INK, cursor: "pointer" },
   submitBtn: { background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
-  cancelBtn: { background: "#fff", color: "#7A857F", border: "1px solid #DAD5C7", borderRadius: 10, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
-  erreur: { color: "#9E4527", fontSize: 12.5, margin: 0, width: "100%" },
+  cancelBtn: { background: "#fff", color: TEXTE_META, border: "1px solid #DAD5C7", borderRadius: 10, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  erreur: { color: ALERTE, fontSize: 12.5, margin: 0, width: "100%" },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
-  empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
+  empty: { padding: 24, textAlign: "center", color: TEXTE_DOUX, fontSize: 13.5, margin: 0 },
   tableWrap: { overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
-  th: { textAlign: "left", padding: "12px 16px", fontSize: 11.5, textTransform: "uppercase", letterSpacing: .5, color: "#8A948D", borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
+  th: { textAlign: "left", padding: "12px 16px", fontSize: 12, textTransform: "uppercase", letterSpacing: .5, color: TEXTE_DOUX, borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
   td: { padding: "11px 16px", borderBottom: "1px solid #F2F0E8", color: INK, whiteSpace: "nowrap" },
-  iconBtn: { background: "#F4F1EA", border: "1px solid #ECE9DF", borderRadius: 8, padding: 7, cursor: "pointer", color: GREEN_DARK, display: "flex" },
+  iconBtn: { background: FOND_PAGE, border: "1px solid #ECE9DF", borderRadius: 8, padding: 7, cursor: "pointer", color: GREEN_DARK, display: "flex" },
   modalOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 50 },
   modal: { background: "#fff", borderRadius: 18, padding: 26, width: 300, maxWidth: "100%", textAlign: "center", position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 },
-  modalClose: { position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", color: "#8A948D" },
+  modalClose: { position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", color: TEXTE_DOUX },
   modalTitre: { fontSize: 17, fontWeight: 700, margin: "4px 0 0" },
-  modalSousTitre: { fontSize: 12.5, color: "#8A948D", margin: "0 0 10px" },
+  modalSousTitre: { fontSize: 12.5, color: TEXTE_DOUX, margin: "0 0 10px" },
   qrImage: { width: 220, height: 220, imageRendering: "pixelated" },
   downloadBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 600, textDecoration: "none", marginTop: 10 },
   regenererBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: CLAY, border: "1.5px solid #E0BBA9", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginTop: 8 },
   activerBtn: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: GREEN, color: "#fff", border: "none", borderRadius: 9, padding: "11px 16px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", width: "100%", marginTop: 6 },
   docListe: { display: "flex", flexDirection: "column", gap: 8, margin: "10px 0" },
-  docLigne: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F4F1EA", borderRadius: 10, padding: "9px 12px" },
+  docLigne: { display: "flex", justifyContent: "space-between", alignItems: "center", background: FOND_PAGE, borderRadius: 10, padding: "9px 12px" },
   docNom: { fontSize: 13.5, fontWeight: 600, color: INK },
-  docMeta: { fontSize: 11.5, color: "#8A948D", marginTop: 2 },
+  docMeta: { fontSize: 12, color: TEXTE_DOUX, marginTop: 2 },
   docForm: { display: "flex", flexDirection: "column", gap: 8, marginTop: 12, paddingTop: 12, borderTop: "1px solid #ECE9DF" },
 };

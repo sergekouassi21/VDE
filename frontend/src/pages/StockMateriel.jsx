@@ -5,7 +5,7 @@ import {
   getReceptionsEquipement, creerReceptionEquipement, modifierReceptionEquipement, supprimerReceptionEquipement,
   getMouvementsEquipement, creerMouvementEquipement, modifierMouvementEquipement, supprimerMouvementEquipement,
 } from "../api/client";
-import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+import { GREEN, GREEN_DARK, INK, CLAY, TEXTE_DOUX, TEXTE_META, TEXTE_GRIS, FOND_PAGE, FOND_PAGE_ALT, ALERTE, ALERTE_FOND } from "../theme";
 import { estDirectionOuAdmin } from "../utils/auth";
 import { ajouterMaterielEnAttente, listerMaterielEnAttente } from "../offline/queueMateriel";
 import { synchroniserMaterielEnAttente } from "../offline/syncMateriel";
@@ -533,7 +533,7 @@ export default function StockMateriel() {
                               onChange={(e) => setBrouillonReception((b) => ({ ...b, quantite: e.target.value }))} />
                           ) : `+${nf(r.quantite)}`}
                         </td>
-                        <td style={{ ...styles.td, color: "#6B756E" }}>
+                        <td style={{ ...styles.td, color: TEXTE_GRIS }}>
                           {enEdition ? (
                             <input style={styles.tableInput} value={brouillonReception.observation}
                               onChange={(e) => setBrouillonReception((b) => ({ ...b, observation: e.target.value }))} />
@@ -596,7 +596,7 @@ export default function StockMateriel() {
                               onChange={(e) => setBrouillonMouvement((b) => ({ ...b, quantite: e.target.value }))} />
                           ) : nf(m.quantite)}
                         </td>
-                        <td style={{ ...styles.td, color: "#6B756E" }}>
+                        <td style={{ ...styles.td, color: TEXTE_GRIS }}>
                           {enEdition ? (
                             <input style={styles.tableInput} value={brouillonMouvement.observation}
                               onChange={(e) => setBrouillonMouvement((b) => ({ ...b, observation: e.target.value }))} />
@@ -636,33 +636,33 @@ export default function StockMateriel() {
 }
 
 const styles = {
-  page: { minHeight: "100vh", background: "#F1EEE6", fontFamily: "'Inter', sans-serif", color: INK, padding: "0 0 30px" },
+  page: { minHeight: "100vh", background: FOND_PAGE_ALT, fontFamily: "inherit", color: INK, padding: "0 0 30px" },
   wrap: { maxWidth: 1100, margin: "0 auto", padding: "24px 20px" },
   head: { marginBottom: 20 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
   h2: { fontSize: 16, fontWeight: 700, margin: "24px 0 12px", letterSpacing: -.2 },
-  sous: { fontSize: 13, color: "#6B756E", margin: "6px 0 0" },
-  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
+  sous: { fontSize: 13, color: TEXTE_GRIS, margin: "6px 0 0" },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: ALERTE_FOND, color: ALERTE, fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
   formCard: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 18, marginBottom: 16, display: "flex", flexDirection: "column", gap: 12 },
   tabs: { display: "flex", gap: 6 },
-  tab: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#F4F1EA", border: "1px solid #ECE9DF", color: "#7A857F", padding: "8px 8px", borderRadius: 10, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" },
+  tab: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: FOND_PAGE, border: "1px solid #ECE9DF", color: TEXTE_META, padding: "8px 8px", borderRadius: 10, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" },
   tabOn: { background: GREEN, borderColor: GREEN, color: "#fff", fontWeight: 600 },
   fieldRow: { display: "flex", gap: 12, flexWrap: "wrap" },
-  field: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: "#6B756E", flex: "1 1 160px" },
-  fieldLabel: { fontSize: 11.5 },
+  field: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: TEXTE_GRIS, flex: "1 1 160px" },
+  fieldLabel: { fontSize: 12 },
   input: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
   submitBtn: { alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6, background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
-  empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
+  empty: { padding: 24, textAlign: "center", color: TEXTE_DOUX, fontSize: 13.5, margin: 0 },
   tableWrap: { overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
-  th: { textAlign: "left", padding: "12px 16px", fontSize: 11.5, textTransform: "uppercase", letterSpacing: .5, color: "#8A948D", borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
+  th: { textAlign: "left", padding: "12px 16px", fontSize: 12, textTransform: "uppercase", letterSpacing: .5, color: TEXTE_DOUX, borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
   td: { padding: "11px 16px", borderBottom: "1px solid #F2F0E8", color: INK, whiteSpace: "nowrap" },
   tableInputNum: { width: 70, border: "1px solid #DDE2DE", borderRadius: 6, padding: "5px 8px", fontSize: 13, fontFamily: "inherit", color: INK, textAlign: "right" },
   tableInput: { width: "100%", maxWidth: 140, border: "1px solid #DDE2DE", borderRadius: 6, padding: "5px 8px", fontSize: 13, fontFamily: "inherit", color: INK },
   actionsRow: { display: "flex", gap: 4, justifyContent: "flex-end" },
-  actionBtn: { background: "#F4F1EA", border: "none", color: GREEN_DARK, width: 28, height: 28, borderRadius: 7, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
-  erreur: { color: "#9E4527", fontSize: 12.5, margin: "12px 0 0" },
-  note: { fontSize: 12, color: "#8A948D", marginTop: 14, lineHeight: 1.5 },
+  actionBtn: { background: FOND_PAGE, border: "none", color: GREEN_DARK, width: 28, height: 28, borderRadius: 7, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
+  erreur: { color: ALERTE, fontSize: 12.5, margin: "12px 0 0" },
+  note: { fontSize: 12, color: TEXTE_DOUX, marginTop: 14, lineHeight: 1.5 },
 };

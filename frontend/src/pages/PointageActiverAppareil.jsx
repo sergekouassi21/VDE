@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { CheckCircle2, Smartphone } from "lucide-react";
 import { verifierAppareilPointage, setAppareilPointageToken } from "../api/client";
-import { GREEN, GREEN_DARK, CREAM, INK } from "../theme";
+import { GREEN, GREEN_DARK, CREAM, INK, TEXTE_GRIS } from "../theme";
 
 export default function PointageActiverAppareil() {
   const { token } = useParams();
@@ -48,7 +48,7 @@ export default function PointageActiverAppareil() {
 const styles = {
   page: {
     minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-    background: `linear-gradient(160deg, ${GREEN} 0%, ${GREEN_DARK} 100%)`, fontFamily: "'Inter', sans-serif", padding: 16,
+    background: `linear-gradient(160deg, ${GREEN} 0%, ${GREEN_DARK} 100%)`, fontFamily: "inherit", padding: 16,
   },
   card: {
     background: CREAM, borderRadius: 20, padding: "32px 28px", width: 340, maxWidth: "100%",
@@ -57,5 +57,5 @@ const styles = {
   },
   logo: { height: 48, width: 48, borderRadius: 12, objectFit: "cover", marginBottom: 4 },
   titre: { fontSize: 18, fontWeight: 700, margin: 0, color: INK },
-  txt: { fontSize: 13.5, color: "#6B756E", margin: 0, lineHeight: 1.5 },
+  txt: { fontSize: 13.5, color: TEXTE_GRIS, margin: 0, lineHeight: 1.5 },
 };

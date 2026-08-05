@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X, History, Users, Clock, TrendingUp, Wheat, Syringe, Search, ScrollText, Lock, Phone, ArrowRightLeft, Wrench, RefreshCw, MoreHorizontal } from "lucide-react";
 // Chargées à la demande (par route) plutôt qu'au premier accès : sans ça, un
@@ -35,11 +35,12 @@ function RequireAuth({ children }) {
   return children;
 }
 
-// Ventes reserve a Direction/Admin — chef, sous-chef et superviseur n'y ont
-// pas acces, meme en tapant l'URL directement.
-function RequireDirectionOuAdmin({ children }) {
+// Ventes, paie, rentabilite... reserves a Direction/Admin — chef, sous-chef
+// et superviseur n'y ont pas acces, meme en tapant l'URL directement.
+// Utilise comme route parente : rend ses routes filles via <Outlet />.
+function RequireDirectionOuAdmin() {
   if (!estDirectionOuAdmin()) return <Navigate to="/" replace />;
-  return children;
+  return <Outlet />;
 }
 
 // Chaque type d'utilisateur arrive sur son propre écran après connexion —
@@ -191,12 +192,20 @@ function ProfilMenu() {
 
   if (!nom) return null;
 
+  const description = [nom, roleAffiche, telephone].filter(Boolean).join(" — ");
+
   return (
-    <div className="profil-menu profil-panel">
-      {photo ? <img src={photo} alt="" className="profil-avatar" /> : <span className="profil-avatar-vide">{initiales(nom)}</span>}
-      <p className="profil-nom">{nom}</p>
-      {roleAffiche && <span className="profil-role">{roleAffiche}</span>}
-      {telephone && <p className="profil-telephone"><Phone size={13} /> {telephone}</p>}
+    <div className="profil-inline" title={description}>
+      {photo
+        ? <img src={photo} alt="" className="profil-avatar" />
+        : <span className="profil-avatar-vide">{initiales(nom)}</span>}
+      <span className="profil-textes">
+        <span className="profil-nom">{nom}</span>
+        <span className="profil-meta">
+          {roleAffiche}
+          {telephone && <span className="profil-telephone"><Phone size={11} /> {telephone}</span>}
+        </span>
+      </span>
     </div>
   );
 }
@@ -318,11 +327,13 @@ function NavBar() {
       <div className="nav-top">
         <img src="/logo.png" alt="Volailles de l'Est" style={navStyles.brand} />
         <GlobalSearch />
-        <button className="nav-hamburger" style={navStyles.hamburger} onClick={() => setOuvert((o) => !o)} aria-label="Menu">
-          {ouvert ? <X size={22} /> : <Menu size={22} />}
-        </button>
       </div>
       <ProfilMenu />
+      {/* Sorti de .nav-top pour pouvoir le placer APRÈS la carte de profil
+          dans la rangée du haut sur mobile (cf. index.css). */}
+      <button className="nav-hamburger" style={navStyles.hamburger} onClick={() => setOuvert((o) => !o)} aria-label="Menu">
+        {ouvert ? <X size={22} /> : <Menu size={22} />}
+      </button>
       <div className={`nav-links${ouvert ? " open" : ""}`}>
         <Link to="/tableau-de-bord" style={navStyles.link}>
           <LayoutDashboard size={16} /> Tableau de bord
@@ -382,23 +393,44 @@ function NavBar() {
   );
 }
 
-function Layout({ children }) {
+// Route parente de toutes les pages authentifiées. Monté une seule fois pour
+// toute la session : c'est ce qui empêche la NavBar — et donc les 6 requêtes
+// de useBadgeAlertes — de se relancer à chaque changement de page.
+//
+// Auparavant, chaque route portait son propre <Layout>. React Router ne pose
+// pas de `key` sur les routes rendues, donc React réconcilie par type et
+// position : tant que deux routes avaient la MÊME forme d'emballage, le
+// Layout était réutilisé, mais dès qu'on passait d'une route simple à une
+// route protégée par RequireDirectionOuAdmin (typiquement Tableau de bord ->
+// Ventes, deux onglets voisins de la barre du bas), les types ne
+// correspondaient plus, tout le sous-arbre était démonté et les 6 requêtes
+// repartaient. Cf. analyse du 05/08/2026.
+//
+// Le <Suspense> est ici, autour de l'Outlet, et non au-dessus : la barre de
+// navigation et la carte de profil restent affichées pendant qu'une page
+// chargée à la demande arrive, au lieu que tout l'écran soit remplacé par
+// « Chargement... ».
+function Layout() {
   return (
     <>
       <NavBar />
-      <div className="page-content-mobile-pad" style={{ paddingTop: NAV_HEIGHT }}>{children}</div>
+      <div className="page-content-mobile-pad" style={{ paddingTop: NAV_HEIGHT }}>
+        <Suspense fallback={<div style={{ padding: 20 }}>Chargement...</div>}>
+          <Outlet />
+        </Suspense>
+      </div>
     </>
   );
 }
 
 const navStyles = {
-  nav: { background: GREEN_DARK, color: "#fff", fontFamily: "'Inter', sans-serif", fontSize: 14 },
+  nav: { background: GREEN_DARK, color: "#fff", fontFamily: "inherit", fontSize: 14 },
   hamburger: { background: "none", border: "none", color: "#fff", cursor: "pointer", padding: 4 },
   brand: { height: 36, width: 36, borderRadius: 8, objectFit: "cover" },
   link: { color: "#fff", textDecoration: "none", display: "flex", alignItems: "center", gap: 6, opacity: .9 },
   logout: { marginLeft: "auto", background: "none", border: "none", color: "#fff", opacity: .8, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: "inherit", fontSize: 14 },
   badge: {
-    background: "#E05A3C", color: "#fff", fontSize: 10.5, fontWeight: 700, lineHeight: 1,
+    background: "#E05A3C", color: "#fff", fontSize: 12, fontWeight: 700, lineHeight: 1,
     borderRadius: 999, padding: "2px 6px", minWidth: 15, textAlign: "center",
   },
 };
@@ -409,19 +441,19 @@ const searchStyles = {
   panel: {
     position: "fixed", top: NAV_HEIGHT + 8, left: 12, right: 12, maxWidth: 420, margin: "0 auto",
     background: "#fff", borderRadius: 14, boxShadow: "0 16px 44px rgba(0,0,0,.28)", padding: 10, zIndex: 200,
-    maxHeight: "70vh", overflowY: "auto", fontFamily: "'Inter', sans-serif",
+    maxHeight: "70vh", overflowY: "auto", fontFamily: "inherit",
   },
   input: { width: "100%", padding: "10px 12px", borderRadius: 9, border: "1px solid #DDE2DE", fontSize: 14, fontFamily: "inherit", color: "#1A2420", boxSizing: "border-box" },
   info: { textAlign: "center", fontSize: 12.5, color: "#8A948D", margin: "12px 0 4px" },
   resultats: { marginTop: 8, display: "flex", flexDirection: "column", gap: 10 },
   group: { display: "flex", flexDirection: "column", gap: 2 },
-  groupTitre: { fontSize: 10.5, fontWeight: 700, color: "#8A948D", textTransform: "uppercase", letterSpacing: .5, padding: "2px 8px" },
+  groupTitre: { fontSize: 12, fontWeight: 700, color: "#8A948D", textTransform: "uppercase", letterSpacing: .5, padding: "2px 8px" },
   row: {
     display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, width: "100%",
     background: "none", border: "none", borderRadius: 8, padding: "8px 8px", cursor: "pointer",
     fontSize: 13.5, color: "#1A2420", fontFamily: "inherit", textAlign: "left",
   },
-  meta: { fontSize: 11.5, color: "#7A857F", whiteSpace: "nowrap" },
+  meta: { fontSize: 12, color: "#7A857F", whiteSpace: "nowrap" },
 };
 
 const INTERVALLE_VERIF_MAJ_MS = 30 * 60 * 1000;
@@ -462,7 +494,7 @@ function MiseAJourDisponible() {
 const majStyles = {
   bandeau: {
     display: "flex", alignItems: "center", justifyContent: "center", gap: 14, flexWrap: "wrap",
-    background: GREEN_DARK, color: "#fff", fontFamily: "'Inter', sans-serif", fontSize: 13,
+    background: GREEN_DARK, color: "#fff", fontFamily: "inherit", fontSize: 13,
     padding: "10px 16px",
   },
   bouton: {
@@ -478,53 +510,38 @@ export default function App() {
       <MiseAJourDisponible />
       <Suspense fallback={<div style={{ padding: 20 }}>Chargement...</div>}>
       <Routes>
+        {/* Écrans publics — pas de session, pas de barre de navigation. */}
         <Route path="/connexion" element={<Login />} />
         <Route path="/pointage/:token" element={<PointageScan />} />
         <Route path="/pointage/temporaire/:token" element={<PointageBadgeTemporaire />} />
         <Route path="/pointage/absence/:token" element={<PointageBadgeAbsence />} />
         <Route path="/pointage/appareil/:token" element={<PointageActiverAppareil />} />
-        <Route path="/" element={
-          <RequireAuth><AccueilSelonRole /></RequireAuth>
-        } />
-        <Route path="/point-journalier" element={
-          <RequireAuth><Layout><PointJournalier /></Layout></RequireAuth>
-        } />
-        <Route path="/tableau-de-bord" element={
-          <RequireAuth><Layout><Dashboard /></Layout></RequireAuth>
-        } />
-        <Route path="/ventes" element={
-          <RequireAuth><RequireDirectionOuAdmin><Layout><Ventes /></Layout></RequireDirectionOuAdmin></RequireAuth>
-        } />
-        <Route path="/historique" element={
-          <RequireAuth><Layout><Historique /></Layout></RequireAuth>
-        } />
-        <Route path="/vaccinations" element={
-          <RequireAuth><Layout><Vaccinations /></Layout></RequireAuth>
-        } />
-        <Route path="/transferts" element={
-          <RequireAuth><Layout><Transferts /></Layout></RequireAuth>
-        } />
-        <Route path="/materiel" element={
-          <RequireAuth><Layout><StockMateriel /></Layout></RequireAuth>
-        } />
-        <Route path="/employes" element={
-          <RequireAuth><RequireDirectionOuAdmin><Layout><PointageEmployes /></Layout></RequireDirectionOuAdmin></RequireAuth>
-        } />
-        <Route path="/heures-travaillees" element={
-          <RequireAuth><RequireDirectionOuAdmin><Layout><PointageHistorique /></Layout></RequireDirectionOuAdmin></RequireAuth>
-        } />
-        <Route path="/rentabilite" element={
-          <RequireAuth><RequireDirectionOuAdmin><Layout><Rentabilite /></Layout></RequireDirectionOuAdmin></RequireAuth>
-        } />
-        <Route path="/achats-aliment" element={
-          <RequireAuth><RequireDirectionOuAdmin><Layout><AchatsAliment /></Layout></RequireDirectionOuAdmin></RequireAuth>
-        } />
-        <Route path="/journal-audit" element={
-          <RequireAuth><RequireDirectionOuAdmin><Layout><JournalAudit /></Layout></RequireDirectionOuAdmin></RequireAuth>
-        } />
-        <Route path="/securite" element={
-          <RequireAuth><RequireDirectionOuAdmin><Layout><Securite /></Layout></RequireDirectionOuAdmin></RequireAuth>
-        } />
+
+        {/* Simple redirection vers l'accueil du rôle : inutile d'afficher la
+            barre de navigation pour ça, donc hors du Layout. */}
+        <Route path="/" element={<RequireAuth><AccueilSelonRole /></RequireAuth>} />
+
+        {/* Toutes les pages authentifiées partagent UN SEUL Layout, monté une
+            fois pour la session. */}
+        <Route element={<RequireAuth><Layout /></RequireAuth>}>
+          <Route path="/point-journalier" element={<PointJournalier />} />
+          <Route path="/tableau-de-bord" element={<Dashboard />} />
+          <Route path="/historique" element={<Historique />} />
+          <Route path="/vaccinations" element={<Vaccinations />} />
+          <Route path="/transferts" element={<Transferts />} />
+          <Route path="/materiel" element={<StockMateriel />} />
+
+          {/* Réservé à Direction/Admin, y compris en tapant l'URL. */}
+          <Route element={<RequireDirectionOuAdmin />}>
+            <Route path="/ventes" element={<Ventes />} />
+            <Route path="/employes" element={<PointageEmployes />} />
+            <Route path="/heures-travaillees" element={<PointageHistorique />} />
+            <Route path="/rentabilite" element={<Rentabilite />} />
+            <Route path="/achats-aliment" element={<AchatsAliment />} />
+            <Route path="/journal-audit" element={<JournalAudit />} />
+            <Route path="/securite" element={<Securite />} />
+          </Route>
+        </Route>
       </Routes>
       </Suspense>
     </BrowserRouter>

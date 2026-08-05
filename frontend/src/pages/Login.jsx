@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login, getMoi } from "../api/client";
-import { GREEN, GREEN_DARK, CREAM, INK } from "../theme";
+import { GREEN, GREEN_DARK, CREAM, INK, TEXTE_META, TEXTE_GRIS, ALERTE } from "../theme";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -113,7 +113,7 @@ export default function Login() {
 const styles = {
   page: {
     minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-    background: `linear-gradient(160deg, ${GREEN} 0%, ${GREEN_DARK} 100%)`, fontFamily: "'Inter', sans-serif",
+    background: `linear-gradient(160deg, ${GREEN} 0%, ${GREEN_DARK} 100%)`, fontFamily: "inherit",
   },
   card: {
     background: CREAM, borderRadius: 20, padding: "36px 32px", width: 340,
@@ -123,18 +123,18 @@ const styles = {
     height: 56, width: 56, borderRadius: 12, objectFit: "cover", alignSelf: "flex-start", marginBottom: 6,
   },
   titre: { fontSize: 22, fontWeight: 700, margin: 0, color: INK },
-  sousTitre: { fontSize: 13, color: "#6B756E", margin: "0 0 12px" },
+  sousTitre: { fontSize: 13, color: TEXTE_GRIS, margin: "0 0 12px" },
   input: {
     border: "1px solid #DDE2DE", borderRadius: 9, padding: "11px 13px", fontSize: 15,
     fontFamily: "inherit", background: "#fff", color: INK,
   },
-  erreur: { color: "#9E4527", fontSize: 13, margin: 0 },
+  erreur: { color: ALERTE, fontSize: 13, margin: 0 },
   bouton: {
     background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "13px",
     fontSize: 15, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginTop: 8,
   },
   retourBtn: {
-    background: "none", border: "none", color: "#7A857F", fontSize: 13, fontFamily: "inherit",
+    background: "none", border: "none", color: TEXTE_META, fontSize: 13, fontFamily: "inherit",
     cursor: "pointer", padding: "4px 0",
   },
 };

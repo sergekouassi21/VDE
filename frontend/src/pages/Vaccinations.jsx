@@ -6,7 +6,7 @@ import {
   getVisitesTechniques, creerVisiteTechnique, supprimerVisiteTechnique,
   getEmployesFerme, getEvaluationsEmployes, creerEvaluationEmploye, supprimerEvaluationEmploye,
 } from "../api/client";
-import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+import { GREEN, GREEN_DARK, INK, CLAY, TEXTE_DOUX, BORD, FOND_PAGE, FOND_PAGE_ALT, ALERTE, ALERTE_FOND } from "../theme";
 import { ajouterEvenementFaitEnAttente, listerEvenementsFaitsEnAttente } from "../offline/queueVaccinations";
 import { synchroniserEvenementsFaitsEnAttente } from "../offline/syncVaccinations";
 import { estDirectionOuAdmin, estTechnicien } from "../utils/auth";
@@ -16,7 +16,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 const FORM_VIDE = { type: "VACCIN", nom: "", date_prevue: todayISO(), notes: "" };
 
 const LABEL_STATUT = { EN_RETARD: "En retard", A_VENIR: "À venir", FAIT: "Fait" };
-const COULEUR_STATUT = { EN_RETARD: CLAY, A_VENIR: GREEN_DARK, FAIT: "#8A948D" };
+const COULEUR_STATUT = { EN_RETARD: CLAY, A_VENIR: GREEN_DARK, FAIT: TEXTE_DOUX };
 
 const JOURS_SEMAINE = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -713,38 +713,38 @@ function LigneEvaluation({ evaluation: ev, onSupprimer, onTelecharger }) {
 }
 
 const styles = {
-  page: { minHeight: "100vh", background: "#F1EEE6", fontFamily: "'Inter', sans-serif", color: INK, padding: "0 0 30px" },
+  page: { minHeight: "100vh", background: FOND_PAGE_ALT, fontFamily: "inherit", color: INK, padding: "0 0 30px" },
   wrap: { maxWidth: 800, margin: "0 auto", padding: "24px 20px" },
   head: { marginBottom: 20 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
-  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: ALERTE_FOND, color: ALERTE, fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
   filters: { display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" },
   select: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 13.5, fontFamily: "inherit", color: INK },
-  vueToggle: { display: "flex", gap: 4, background: "#ECE9DF", borderRadius: 10, padding: 3 },
-  vueBtn: { display: "flex", alignItems: "center", gap: 5, background: "transparent", color: "#8A948D", border: "none", borderRadius: 8, padding: "6px 11px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  vueToggle: { display: "flex", gap: 4, background: BORD, borderRadius: 10, padding: 3 },
+  vueBtn: { display: "flex", alignItems: "center", gap: 5, background: "transparent", color: TEXTE_DOUX, border: "none", borderRadius: 8, padding: "6px 11px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   vueBtnOn: { background: "#fff", color: GREEN_DARK, boxShadow: "0 1px 3px rgba(18,61,38,.12)" },
   addBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 10, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginLeft: "auto" },
   formCard: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 18, marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
   input: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK, flex: "1 1 160px" },
   submitBtn: { background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
-  erreur: { color: "#9E4527", fontSize: 12.5, margin: 0, width: "100%" },
+  erreur: { color: ALERTE, fontSize: 12.5, margin: 0, width: "100%" },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
   resumeHead: { display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", fontSize: 13, fontWeight: 600, color: GREEN_DARK, borderBottom: "1px solid #ECE9DF" },
-  empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
+  empty: { padding: 24, textAlign: "center", color: TEXTE_DOUX, fontSize: 13.5, margin: 0 },
   liste: { display: "flex", flexDirection: "column" },
   ligne: { display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid #F2F0E8" },
   ligneInfo: { display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 },
   ligneNom: { fontSize: 13.5, fontWeight: 600, color: INK },
-  ligneMeta: { fontSize: 11.5, color: "#8A948D" },
-  badge: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: .3, whiteSpace: "nowrap" },
-  iconBtn: { background: "#F4F1EA", border: "1px solid #ECE9DF", borderRadius: 8, padding: 6, cursor: "pointer", display: "flex" },
+  ligneMeta: { fontSize: 12, color: TEXTE_DOUX },
+  badge: { fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: .3, whiteSpace: "nowrap" },
+  iconBtn: { background: FOND_PAGE, border: "1px solid #ECE9DF", borderRadius: 8, padding: 6, cursor: "pointer", display: "flex" },
   calNav: { display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", borderBottom: "1px solid #ECE9DF" },
-  navBtn: { background: "#F4F1EA", border: "1px solid #ECE9DF", borderRadius: 8, padding: 6, cursor: "pointer", display: "flex", color: INK },
+  navBtn: { background: FOND_PAGE, border: "1px solid #ECE9DF", borderRadius: 8, padding: 6, cursor: "pointer", display: "flex", color: INK },
   calMoisLabel: { fontSize: 14.5, fontWeight: 700, color: GREEN_DARK, minWidth: 150, textAlign: "center" },
   ajourdhuiBtn: { marginLeft: "auto", background: "transparent", border: `1px solid ${GREEN}`, color: GREEN_DARK, borderRadius: 8, padding: "6px 11px", fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   calGrilleEntetes: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid #ECE9DF" },
-  calEntete: { textAlign: "center", fontSize: 11, fontWeight: 700, color: "#8A948D", padding: "8px 0", textTransform: "uppercase", letterSpacing: .3 },
+  calEntete: { textAlign: "center", fontSize: 12, fontWeight: 700, color: TEXTE_DOUX, padding: "8px 0", textTransform: "uppercase", letterSpacing: .3 },
   calGrille: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)" },
   calJour: {
     aspectRatio: "1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
@@ -757,9 +757,9 @@ const styles = {
   calJourNum: { fontSize: 12.5, fontWeight: 600 },
   calPastilles: { display: "flex", gap: 3, alignItems: "center", flexWrap: "wrap", justifyContent: "center" },
   calPastille: { width: 6, height: 6, borderRadius: "50%" },
-  calPlus: { fontSize: 9, fontWeight: 700, color: "#8A948D" },
+  calPlus: { fontSize: 12, fontWeight: 700, color: TEXTE_DOUX },
   grilleCriteres: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 8, background: "#FAF9F5", border: "1px solid #ECE9DF", borderRadius: 10, padding: 12 },
   critereLigne: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 },
   critereLabel: { fontSize: 12, color: INK, flex: 1 },
-  critereSelect: { padding: "5px 8px", borderRadius: 8, border: "1px solid #DAD5C7", fontSize: 11.5, fontFamily: "inherit", color: INK, background: "#fff" },
+  critereSelect: { padding: "5px 8px", borderRadius: 8, border: "1px solid #DAD5C7", fontSize: 12, fontFamily: "inherit", color: INK, background: "#fff" },
 };

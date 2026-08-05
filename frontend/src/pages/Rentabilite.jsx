@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { TrendingUp, TrendingDown, Download } from "lucide-react";
 import { getRentabilite, getRapportMensuel } from "../api/client";
-import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+import { GREEN, GREEN_DARK, INK, CLAY, TEXTE_DOUX, TEXTE_META, FOND_PAGE_ALT } from "../theme";
 import { genererRapportMensuel, telechargerPdf } from "../utils/pdf";
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -125,23 +125,23 @@ export default function Rentabilite() {
 }
 
 const styles = {
-  page: { minHeight: "100vh", background: "#F1EEE6", fontFamily: "'Inter', sans-serif", color: INK, padding: "0 0 30px" },
+  page: { minHeight: "100vh", background: FOND_PAGE_ALT, fontFamily: "inherit", color: INK, padding: "0 0 30px" },
   wrap: { maxWidth: 1100, margin: "0 auto", padding: "24px 20px" },
   head: { marginBottom: 20 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
   filters: { display: "flex", gap: 14, alignItems: "center", marginBottom: 16, flexWrap: "wrap" },
-  dateLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "#7A857F" },
+  dateLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: TEXTE_META },
   date: { padding: "8px 10px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
-  hint: { fontSize: 12.5, color: "#8A948D" },
+  hint: { fontSize: 12.5, color: TEXTE_DOUX },
   rapportBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 10, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginLeft: "auto" },
-  prixSacHint: { fontSize: 11, color: "#8A948D", fontWeight: 400 },
+  prixSacHint: { fontSize: 12, color: TEXTE_DOUX, fontWeight: 400 },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
-  empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
+  empty: { padding: 24, textAlign: "center", color: TEXTE_DOUX, fontSize: 13.5, margin: 0 },
   tableWrap: { overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
-  th: { textAlign: "left", padding: "12px 16px", fontSize: 11.5, textTransform: "uppercase", letterSpacing: .5, color: "#8A948D", borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
+  th: { textAlign: "left", padding: "12px 16px", fontSize: 12, textTransform: "uppercase", letterSpacing: .5, color: TEXTE_DOUX, borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
   td: { padding: "11px 16px", borderBottom: "1px solid #F2F0E8", color: INK, whiteSpace: "nowrap" },
   tdTotal: { padding: "12px 16px", color: INK, fontWeight: 700, borderTop: "2px solid #ECE9DF", whiteSpace: "nowrap" },
-  note: { fontSize: 12, color: "#8A948D", marginTop: 14, lineHeight: 1.5 },
+  note: { fontSize: 12, color: TEXTE_DOUX, marginTop: 14, lineHeight: 1.5 },
 };

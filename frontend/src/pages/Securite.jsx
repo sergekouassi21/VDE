@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { ShieldCheck, ShieldOff, Smartphone } from "lucide-react";
 import { getStatut2FA, getQrConfigurer2FA, confirmer2FA, desactiver2FA } from "../api/client";
-import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+import { GREEN, GREEN_DARK, INK, CLAY, TEXTE_DOUX, TEXTE_META, TEXTE_GRIS, FOND_PAGE_ALT, ALERTE } from "../theme";
 
 export default function Securite() {
   const [actif, setActif] = useState(null);
@@ -86,7 +86,7 @@ export default function Securite() {
                 </>
               ) : (
                 <>
-                  <div style={styles.statutHead}><ShieldOff size={20} color="#8A948D" /><span>Désactivée</span></div>
+                  <div style={styles.statutHead}><ShieldOff size={20} color={TEXTE_DOUX} /><span>Désactivée</span></div>
                   <p style={styles.texte}>Ajoute une étape de vérification (code à 6 chiffres) à la connexion, via une application comme Google Authenticator ou Authy.</p>
                   <button style={styles.submitBtn} onClick={demarrerConfiguration} disabled={envoi}>
                     <Smartphone size={15} /> {envoi ? "Génération..." : "Activer la double authentification"}
@@ -129,20 +129,20 @@ export default function Securite() {
 }
 
 const styles = {
-  page: { minHeight: "100vh", background: "#F1EEE6", fontFamily: "'Inter', sans-serif", color: INK, padding: "0 0 30px" },
+  page: { minHeight: "100vh", background: FOND_PAGE_ALT, fontFamily: "inherit", color: INK, padding: "0 0 30px" },
   wrap: { maxWidth: 520, margin: "0 auto", padding: "24px 20px" },
   head: { marginBottom: 20 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 22 },
-  empty: { textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
+  empty: { textAlign: "center", color: TEXTE_DOUX, fontSize: 13.5, margin: 0 },
   statutBox: { display: "flex", flexDirection: "column", gap: 10 },
   statutHead: { display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700 },
-  texte: { fontSize: 13.5, color: "#6B756E", lineHeight: 1.5, margin: 0 },
+  texte: { fontSize: 13.5, color: TEXTE_GRIS, lineHeight: 1.5, margin: 0 },
   submitBtn: { display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "11px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", alignSelf: "flex-start" },
   dangerBtn: { display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: "#fff", color: CLAY, border: "1.5px solid #E0BBA9", borderRadius: 10, padding: "11px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", alignSelf: "flex-start" },
-  cancelBtn: { background: "none", border: "none", color: "#7A857F", fontSize: 13, fontFamily: "inherit", cursor: "pointer", padding: "4px 0" },
-  erreur: { color: "#9E4527", fontSize: 12.5, margin: 0 },
+  cancelBtn: { background: "none", border: "none", color: TEXTE_META, fontSize: 13, fontFamily: "inherit", cursor: "pointer", padding: "4px 0" },
+  erreur: { color: ALERTE, fontSize: 12.5, margin: 0 },
   qrBox: { display: "flex", flexDirection: "column", gap: 10, alignItems: "center", textAlign: "center" },
   qrImage: { width: 200, height: 200, imageRendering: "pixelated" },
   input: { width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 15, fontFamily: "inherit", color: INK, textAlign: "center" },

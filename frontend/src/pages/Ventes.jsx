@@ -4,9 +4,10 @@ import {
   getFermes, getClients, getFactures, getFacturesCreances, getVentes, getVentesResume,
   creerFacture, encaisserVersement, updateSortieOeuf, deleteSortieOeuf, getHistoriquePrixClient,
 } from "../api/client";
-import { GREEN, GREEN_DARK, INK, CLAY, formatCartons } from "../theme";
+import { GREEN, GREEN_DARK, INK, CLAY, formatCartons, TEXTE_DOUX, TEXTE_META, TEXTE_SOMBRE, FOND_PAGE, FOND_PAGE_ALT, FOND_CARTE, ALERTE, ALERTE_FOND, VERT_FOND } from "../theme";
 import { genererPdfFacture, genererPdfCreances, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { mettreEnCache, lireCache } from "../offline/cache";
+import ChampNombre from "../components/ChampNombre";
 
 const CACHE_CLE_VENTES = "ventes-donnees";
 
@@ -353,11 +354,11 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
           <div style={styles.ligneGrid}>
             <label style={styles.miniField}>
               <span style={styles.miniLabel}>Quantité ({pluriel(d.produit.unite, d.qte)})</span>
-              <input type="number" inputMode="decimal" style={styles.miniInput} placeholder="0" value={d.quantite} onChange={(e) => setLigne(i, "quantite", e.target.value)} />
+              <ChampNombre decimal style={styles.miniInput} placeholder="0" value={d.quantite} onChange={(v) => setLigne(i, "quantite", v)} />
             </label>
             <label style={styles.miniField}>
               <span style={styles.miniLabel}>Prix / {d.produit.plateaux ? "plateau" : d.produit.unite}</span>
-              <input type="number" inputMode="numeric" style={styles.miniInput} placeholder="0" value={d.prix_unitaire} onChange={(e) => setLigne(i, "prix_unitaire", e.target.value)} />
+              <ChampNombre style={styles.miniInput} placeholder="0" value={d.prix_unitaire} onChange={(v) => setLigne(i, "prix_unitaire", v)} />
             </label>
           </div>
           <div style={styles.ligneCalc}>
@@ -382,7 +383,7 @@ function NouvelleFacture({ fermes, clients, onCreee, totalVentesOeufs }) {
         <div style={styles.card}>
           <label style={styles.field}>
             <span style={styles.fieldLabel}>Avance versée</span>
-            <input type="number" inputMode="numeric" style={styles.input} placeholder="0" value={avance} onChange={(e) => setAvance(e.target.value)} />
+            <ChampNombre style={styles.input} placeholder="0" value={avance} onChange={setAvance} />
           </label>
         </div>
       )}
@@ -505,7 +506,7 @@ function Creances({ creances, onEncaisse }) {
                   <p style={styles.relanceIndispo}>Aucun téléphone enregistré pour ce client — impossible de relancer par WhatsApp.</p>
                 )}
                 <div style={styles.encaisseInputRow}>
-                  <input type="number" inputMode="numeric" style={styles.miniInput} placeholder="Montant reçu" value={montant} onChange={(e) => setMontant(e.target.value)} />
+                  <ChampNombre style={styles.miniInput} placeholder="Montant reçu" value={montant} onChange={setMontant} />
                   <button style={styles.soldeBtn} onClick={() => setMontant(String(f.reste_du))}>Tout solder</button>
                 </div>
                 <button style={{ ...styles.encaisseBtn, ...((Number(montant) || 0) <= 0 || envoi ? styles.submitDis : {}) }}
@@ -639,8 +640,8 @@ function Historique({ factures, ventesManuelles, onRafraichir, resume }) {
                     <td style={styles.td}>{v.ferme}</td>
                     <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>
                       {enEdition ? (
-                        <input type="number" style={styles.tableInput} value={brouillon.quantite}
-                          onChange={(e) => setBrouillon((b) => ({ ...b, quantite: e.target.value }))} />
+                        <ChampNombre decimal style={styles.tableInput} value={brouillon.quantite}
+                          onChange={(v) => setBrouillon((b) => ({ ...b, quantite: v }))} />
                       ) : nf(v.quantite)}
                     </td>
                     <td style={styles.td}>
@@ -658,7 +659,7 @@ function Historique({ factures, ventesManuelles, onRafraichir, resume }) {
                       ) : (
                         <div style={styles.actionsRow}>
                           <button style={styles.actionBtn} disabled={envoi} onClick={() => commencerEdition(v)}><Pencil size={14} /></button>
-                          <button style={{ ...styles.actionBtn, color: "#C6603A" }} disabled={envoi} onClick={() => supprimer(v)}><Trash2 size={14} /></button>
+                          <button style={{ ...styles.actionBtn, color: CLAY }} disabled={envoi} onClick={() => supprimer(v)}><Trash2 size={14} /></button>
                         </div>
                       )}
                     </td>
@@ -678,14 +679,14 @@ function PayBtn({ active, onClick, icon, txt }) {
 }
 
 const styles = {
-  page: { minHeight: "100vh", background: "#F1EEE6", fontFamily: "'Inter', sans-serif", color: INK, padding: "0 0 40px" },
+  page: { minHeight: "100vh", background: FOND_PAGE_ALT, fontFamily: "inherit", color: INK, padding: "0 0 40px" },
   wrap: { maxWidth: 640, margin: "0 auto", padding: "24px 20px" },
   head: { marginBottom: 14 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
-  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: ALERTE_FOND, color: ALERTE, fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
   tabs: { display: "flex", gap: 6, marginBottom: 16 },
-  tab: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#fff", border: "1px solid #ECE9DF", color: "#7A857F", padding: "10px 8px", borderRadius: 10, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" },
+  tab: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#fff", border: "1px solid #ECE9DF", color: TEXTE_META, padding: "10px 8px", borderRadius: 10, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" },
   tabOn: { background: GREEN, borderColor: GREEN, color: "#fff", fontWeight: 600 },
   body: { display: "flex", flexDirection: "column", gap: 0 },
   card: { background: "#fff", borderRadius: 12, border: "1px solid #ECE9DF", padding: "12px 14px", marginBottom: 12 },
@@ -694,40 +695,40 @@ const styles = {
   stockGlobalVal: { fontSize: 20, fontWeight: 700 },
   fieldRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
   prixHistoBox: { background: "#F4F9F6", border: "1px solid #DCEAE1", borderRadius: 10, padding: "10px 12px", margin: "4px 0 10px", display: "flex", flexDirection: "column", gap: 6 },
-  prixHistoTitre: { fontSize: 11.5, fontWeight: 600, color: GREEN_DARK, textTransform: "uppercase", letterSpacing: .3 },
+  prixHistoTitre: { fontSize: 12, fontWeight: 600, color: GREEN_DARK, textTransform: "uppercase", letterSpacing: .3 },
   prixHistoLigne: { display: "flex", flexDirection: "column", gap: 2 },
   prixHistoProduit: { fontSize: 12.5, fontWeight: 600, color: INK },
   prixHistoValeurs: { display: "flex", gap: 10, flexWrap: "wrap" },
   prixHistoValeur: { fontSize: 12.5, color: GREEN_DARK, fontWeight: 600 },
-  prixHistoDate: { fontSize: 11, color: "#8A948D", fontWeight: 400 },
+  prixHistoDate: { fontSize: 12, color: TEXTE_DOUX, fontWeight: 400 },
   field: { display: "flex", flexDirection: "column", gap: 5, padding: "6px 0" },
-  fieldLabel: { fontSize: 12, color: "#7A857F", fontWeight: 500 },
-  input: { border: "1px solid #DDE2DE", borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: "inherit", background: "#FCFCFA", color: INK },
+  fieldLabel: { fontSize: 12, color: TEXTE_META, fontWeight: 500 },
+  input: { border: "1px solid #DDE2DE", borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: "inherit", background: FOND_CARTE, color: INK },
   sectionLabel: { fontSize: 12, fontWeight: 600, color: GREEN_DARK, textTransform: "uppercase", letterSpacing: .6, margin: "14px 0 8px" },
   ligne: { background: "#fff", borderRadius: 12, border: "1px solid #ECE9DF", padding: "12px", marginBottom: 8 },
   ligneTop: { display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" },
-  select: { flex: 1, minWidth: 140, border: "1px solid #DDE2DE", borderRadius: 8, padding: "9px 10px", fontSize: 13.5, fontFamily: "inherit", background: "#FCFCFA", color: INK },
-  delBtn: { background: "#FBF0EB", border: "none", color: "#C6603A", width: 34, height: 34, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  select: { flex: 1, minWidth: 140, border: "1px solid #DDE2DE", borderRadius: 8, padding: "9px 10px", fontSize: 13.5, fontFamily: "inherit", background: FOND_CARTE, color: INK },
+  delBtn: { background: "#FBF0EB", border: "none", color: CLAY, width: 34, height: 34, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   ligneGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
   miniField: { display: "flex", flexDirection: "column", gap: 4 },
-  miniLabel: { fontSize: 11, color: "#8A948D", fontWeight: 500 },
-  miniInput: { flex: 1, width: "100%", border: "1px solid #DDE2DE", background: "#F4F1EA", borderRadius: 8, padding: "8px 10px", fontSize: 15, fontWeight: 600, fontFamily: "inherit", color: INK },
+  miniLabel: { fontSize: 12, color: TEXTE_DOUX, fontWeight: 500 },
+  miniInput: { flex: 1, width: "100%", border: "1px solid #DDE2DE", background: FOND_PAGE, borderRadius: 8, padding: "8px 10px", fontSize: 15, fontWeight: 600, fontFamily: "inherit", color: INK },
   ligneCalc: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, paddingTop: 10, borderTop: "1px solid #F2F0E8" },
-  calcExpr: { fontSize: 12, color: "#8A948D" },
+  calcExpr: { fontSize: 12, color: TEXTE_DOUX },
   ligneTotal: { fontWeight: 700, fontSize: 16, color: GREEN_DARK },
-  note: { fontSize: 11, color: "#A0A89F", marginTop: 8, fontStyle: "italic" },
-  addBtn: { width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#EAF3EE", border: `1px dashed ${GREEN}`, color: GREEN_DARK, padding: "11px", borderRadius: 10, fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer", marginTop: 4 },
+  note: { fontSize: 12, color: "#A0A89F", marginTop: 8, fontStyle: "italic" },
+  addBtn: { width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: VERT_FOND, border: `1px dashed ${GREEN}`, color: GREEN_DARK, padding: "11px", borderRadius: 10, fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer", marginTop: 4 },
   payRow: { display: "flex", gap: 7 },
-  payBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, background: "#fff", border: "1px solid #ECE9DF", color: "#5A655F", padding: "11px 6px", borderRadius: 11, fontSize: 12.5, fontFamily: "inherit", cursor: "pointer", fontWeight: 500 },
-  payBtnOn: { background: "#EAF3EE", borderColor: GREEN, color: GREEN_DARK, fontWeight: 600 },
+  payBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, background: "#fff", border: "1px solid #ECE9DF", color: TEXTE_SOMBRE, padding: "11px 6px", borderRadius: 11, fontSize: 12.5, fontFamily: "inherit", cursor: "pointer", fontWeight: 500 },
+  payBtnOn: { background: VERT_FOND, borderColor: GREEN, color: GREEN_DARK, fontWeight: 600 },
   warnBox: { background: "#FBF0EB", border: "1px solid #F0D9CC", borderRadius: 10, padding: "10px 12px", margin: "12px 0", display: "flex", flexDirection: "column", gap: 6 },
-  warnLine: { display: "flex", gap: 7, alignItems: "flex-start", fontSize: 12.5, color: "#9E4527" },
+  warnLine: { display: "flex", gap: 7, alignItems: "flex-start", fontSize: 12.5, color: ALERTE },
   totalCard: { background: "#fff", borderRadius: 14, border: "1px solid #ECE9DF", padding: "14px 16px", margin: "8px 0 0" },
   totalRow: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 15 },
   totalVal: { fontWeight: 700, fontSize: 22, color: INK },
   resteRow: { marginTop: 10, paddingTop: 10, borderTop: "1px solid #F2F0E8", color: CLAY },
   resteVal: { fontWeight: 700, fontSize: 18, color: CLAY },
-  erreur: { color: "#9E4527", background: "#FBF0EB", borderRadius: 10, padding: "10px 14px", fontSize: 13, marginTop: 12 },
+  erreur: { color: ALERTE, background: "#FBF0EB", borderRadius: 10, padding: "10px 14px", fontSize: 13, marginTop: 12 },
   submit: { marginTop: 16, width: "100%", background: GREEN, color: "#fff", border: "none", borderRadius: 13, padding: "16px", fontSize: 16, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 },
   submitDis: { background: "#C9CFC8", cursor: "not-allowed" },
   synced: { textAlign: "center", fontSize: 12.5, color: GREEN_DARK, marginTop: 14, lineHeight: 1.5 },
@@ -743,26 +744,26 @@ const styles = {
   creanceCard: { background: "#fff", borderRadius: 12, border: "1px solid #ECE9DF", marginBottom: 8, overflow: "hidden" },
   creanceRowBtn: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", padding: "13px 14px", cursor: "pointer", fontFamily: "inherit", textAlign: "left" },
   encaisseZone: { padding: "4px 14px 14px", borderTop: "1px solid #F2F0E8" },
-  recapRow: { display: "flex", justifyContent: "space-between", fontSize: 13.5, color: "#5A655F", padding: "6px 0" },
+  recapRow: { display: "flex", justifyContent: "space-between", fontSize: 13.5, color: TEXTE_SOMBRE, padding: "6px 0" },
   recapReste: { fontWeight: 700, color: CLAY, fontSize: 15, borderTop: "1px solid #F2F0E8", marginTop: 4, paddingTop: 8 },
-  histo: { background: "#F4F1EA", borderRadius: 9, padding: "8px 11px", margin: "10px 0" },
-  histoTitre: { fontSize: 11, fontWeight: 600, color: "#8A948D", textTransform: "uppercase", letterSpacing: .5, marginBottom: 5 },
+  histo: { background: FOND_PAGE, borderRadius: 9, padding: "8px 11px", margin: "10px 0" },
+  histoTitre: { fontSize: 12, fontWeight: 600, color: TEXTE_DOUX, textTransform: "uppercase", letterSpacing: .5, marginBottom: 5 },
   histoLigne: { display: "flex", justifyContent: "space-between", fontSize: 12.5, color: GREEN_DARK, padding: "3px 0" },
   encaisseInputRow: { display: "flex", gap: 8, marginTop: 10, alignItems: "stretch" },
-  soldeBtn: { background: "#EAF3EE", border: `1px solid ${GREEN}`, color: GREEN_DARK, borderRadius: 8, padding: "0 14px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" },
+  soldeBtn: { background: VERT_FOND, border: `1px solid ${GREEN}`, color: GREEN_DARK, borderRadius: 8, padding: "0 14px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" },
   encaisseBtn: { width: "100%", marginTop: 10, background: GREEN, color: "#fff", border: "none", borderRadius: 11, padding: "13px", fontSize: 15, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 },
-  noAlert: { fontSize: 13, color: GREEN, background: "#EAF3EE", borderRadius: 10, padding: "14px", textAlign: "center", margin: "0 0 8px" },
-  retardWarn: { display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: "#9E4527", background: "#FDEEE8", borderRadius: 10, padding: "9px 13px", margin: "0 0 10px", fontWeight: 500 },
-  retardBadge: { marginLeft: 8, fontSize: 10.5, fontWeight: 700, color: "#9E4527", background: "#FDEEE8", borderRadius: 6, padding: "1px 6px", textTransform: "uppercase", letterSpacing: .3 },
+  noAlert: { fontSize: 13, color: GREEN, background: VERT_FOND, borderRadius: 10, padding: "14px", textAlign: "center", margin: "0 0 8px" },
+  retardWarn: { display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: ALERTE, background: ALERTE_FOND, borderRadius: 10, padding: "9px 13px", margin: "0 0 10px", fontWeight: 500 },
+  retardBadge: { marginLeft: 8, fontSize: 12, fontWeight: 700, color: ALERTE, background: ALERTE_FOND, borderRadius: 6, padding: "1px 6px", textTransform: "uppercase", letterSpacing: .3 },
   creanceClient: { fontSize: 15, fontWeight: 600, color: INK },
-  creanceMeta: { fontSize: 11.5, color: "#8A948D", marginTop: 3 },
+  creanceMeta: { fontSize: 12, color: TEXTE_DOUX, marginTop: 3 },
   creanceRight: { display: "flex", alignItems: "center", gap: 8 },
   creanceMontant: { fontWeight: 700, fontSize: 15, color: CLAY },
-  empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
+  empty: { padding: 24, textAlign: "center", color: TEXTE_DOUX, fontSize: 13.5, margin: 0 },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
-  th: { textAlign: "left", padding: "12px 16px", fontSize: 11.5, textTransform: "uppercase", letterSpacing: .5, color: "#8A948D", borderBottom: "1px solid #ECE9DF" },
+  th: { textAlign: "left", padding: "12px 16px", fontSize: 12, textTransform: "uppercase", letterSpacing: .5, color: TEXTE_DOUX, borderBottom: "1px solid #ECE9DF" },
   td: { padding: "11px 16px", borderBottom: "1px solid #F2F0E8", color: INK },
   tableInput: { width: "100%", maxWidth: 140, border: "1px solid #DDE2DE", borderRadius: 6, padding: "5px 8px", fontSize: 13, fontFamily: "inherit", color: INK },
   actionsRow: { display: "flex", gap: 4, justifyContent: "flex-end" },
-  actionBtn: { background: "#F4F1EA", border: "none", color: GREEN_DARK, width: 28, height: 28, borderRadius: 7, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
+  actionBtn: { background: FOND_PAGE, border: "none", color: GREEN_DARK, width: 28, height: 28, borderRadius: 7, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
 };

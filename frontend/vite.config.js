@@ -43,6 +43,11 @@ export default defineConfig({
         name: "Volailles de l'Est — Point Journalier",
         short_name: 'VDE',
         description: "Saisie du point journalier et pilotage des fermes avicoles",
+        // L'appli est entièrement en français : sans ces deux champs, le
+        // système lit le nom et la description dans la langue par défaut du
+        // navigateur, et Chrome propose de « traduire » l'appli installée.
+        lang: 'fr',
+        dir: 'ltr',
         theme_color: '#1E5A38',
         background_color: '#EDEAE0',
         display: 'standalone',
@@ -67,7 +72,22 @@ export default defineConfig({
             options: {
               cacheName: 'vde-api-cache',
               networkTimeoutSeconds: 4,
-              cacheableResponse: { statuses: [0, 200] },
+              // Uniquement 200 : le statut 0 (réponse opaque) était accepté
+              // jusqu'ici, or une réponse opaque a un corps illisible — la
+              // mettre en cache revient à mémoriser une page vide et à la
+              // resservir plus tard comme si c'était la vraie donnée.
+              cacheableResponse: { statuses: [200] },
+              // Sans expiration, le cache grossissait indéfiniment et pouvait
+              // resservir des chiffres vieux de plusieurs semaines. 7 jours
+              // couvre largement une coupure réseau de terrain ; au-delà,
+              // mieux vaut ne rien afficher que d'afficher faux — le bandeau
+              // de fraîcheur (cf. components/BandeauFraicheur) prend le
+              // relais pour tout ce qui reste dans cette fenêtre.
+              expiration: {
+                maxEntries: 80,
+                maxAgeSeconds: 7 * 24 * 60 * 60,
+                purgeOnQuotaError: true,
+              },
             },
           },
         ],

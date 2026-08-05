@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { Clock, CheckCircle2, LogIn, LogOut, Search, ChevronLeft, Camera, WifiOff } from "lucide-react";
 import { getEmployesBadgeTemporaire, validerBadgeTemporaire } from "../api/client";
-import { GREEN, GREEN_DARK, CREAM, INK, CLAY } from "../theme";
+import { GREEN, GREEN_DARK, CREAM, INK, CLAY, TEXTE_DOUX, TEXTE_GRIS, FOND_DOUX, ALERTE, ALERTE_FOND, VERT_FOND } from "../theme";
 import CaptureSelfie from "../components/CaptureSelfie";
 import { ajouterPointageEnAttente, listerPointagesEnAttente } from "../offline/queuePointage";
 import { synchroniserPointagesEnAttente } from "../offline/syncPointage";
@@ -206,7 +206,7 @@ export default function PointageBadgeTemporaire() {
         <p style={styles.ferme}>Choisis l'employé qui a oublié ou perdu son badge</p>
 
         <div style={styles.rechercheWrap}>
-          <Search size={15} color="#8A948D" />
+          <Search size={15} color={TEXTE_DOUX} />
           <input
             style={styles.recherche}
             placeholder="Rechercher un nom..."
@@ -241,7 +241,7 @@ export default function PointageBadgeTemporaire() {
 const styles = {
   page: {
     minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-    background: `linear-gradient(160deg, ${GREEN} 0%, ${GREEN_DARK} 100%)`, fontFamily: "'Inter', sans-serif", padding: 16,
+    background: `linear-gradient(160deg, ${GREEN} 0%, ${GREEN_DARK} 100%)`, fontFamily: "inherit", padding: 16,
   },
   card: {
     background: CREAM, borderRadius: 20, padding: "32px 28px", width: 340, maxWidth: "100%",
@@ -250,22 +250,22 @@ const styles = {
   },
   retour: {
     display: "flex", alignItems: "center", gap: 4, alignSelf: "flex-start", background: "none", border: "none",
-    color: "#6B756E", fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 4,
+    color: TEXTE_GRIS, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 4,
   },
   logo: { height: 48, width: 48, borderRadius: 12, objectFit: "cover", marginBottom: 4 },
   photo: { height: 80, width: 80, borderRadius: "50%", objectFit: "cover", marginBottom: 4 },
   nom: { fontSize: 20, fontWeight: 700, margin: 0, color: INK },
-  ferme: { fontSize: 13, color: "#6B756E", margin: "0 0 10px" },
+  ferme: { fontSize: 13, color: TEXTE_GRIS, margin: "0 0 10px" },
   statut: { fontSize: 14, color: INK, margin: "6px 0 8px" },
-  selfieNote: { fontSize: 11.5, color: "#8A948D", margin: "0 0 14px" },
+  selfieNote: { fontSize: 12, color: TEXTE_DOUX, margin: "0 0 14px" },
   bouton: {
     display: "flex", alignItems: "center", gap: 8, background: GREEN, color: "#fff", border: "none",
     borderRadius: 12, padding: "14px 22px", fontSize: 15.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", width: "100%", justifyContent: "center",
   },
-  attente: { fontSize: 14, color: "#6B756E" },
-  erreur: { fontSize: 14, color: "#9E4527", margin: 0 },
-  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12, fontWeight: 500, padding: "8px 12px", borderRadius: 10, width: "100%", marginBottom: 6 },
-  txtHorsLigne: { fontSize: 13, color: "#6B756E", margin: "0 0 10px", lineHeight: 1.5 },
+  attente: { fontSize: 14, color: TEXTE_GRIS },
+  erreur: { fontSize: 14, color: ALERTE, margin: 0 },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: ALERTE_FOND, color: ALERTE, fontSize: 12, fontWeight: 500, padding: "8px 12px", borderRadius: 10, width: "100%", marginBottom: 6 },
+  txtHorsLigne: { fontSize: 13, color: TEXTE_GRIS, margin: "0 0 10px", lineHeight: 1.5 },
   recap: { width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginTop: 6 },
   recapTitre: { fontSize: 16, fontWeight: 700, color: INK, margin: "6px 0 10px" },
   recapLigne: { display: "flex", justifyContent: "space-between", width: "100%", fontSize: 13.5, color: "#4C544E", padding: "5px 0", borderBottom: "1px solid #ECE9DF" },
@@ -277,8 +277,8 @@ const styles = {
     border: "1px solid #ECE9DF", borderRadius: 10, padding: "10px 12px", cursor: "pointer", fontFamily: "inherit",
   },
   ligneNom: { fontSize: 14, fontWeight: 600, color: INK },
-  ligneFerme: { fontSize: 11.5, color: "#8A948D", marginTop: 1 },
-  badgeEtat: { fontSize: 10.5, fontWeight: 600, color: "#8A948D", background: "#F2F0E8", padding: "3px 8px", borderRadius: 7, whiteSpace: "nowrap" },
-  badgeEnCours: { color: GREEN_DARK, background: "#EAF3EE" },
-  badgeTermine: { color: "#6B756E", background: "#EDEAE0" },
+  ligneFerme: { fontSize: 12, color: TEXTE_DOUX, marginTop: 1 },
+  badgeEtat: { fontSize: 12, fontWeight: 600, color: TEXTE_DOUX, background: FOND_DOUX, padding: "3px 8px", borderRadius: 7, whiteSpace: "nowrap" },
+  badgeEnCours: { color: GREEN_DARK, background: VERT_FOND },
+  badgeTermine: { color: TEXTE_GRIS, background: "#EDEAE0" },
 };

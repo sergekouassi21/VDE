@@ -5,7 +5,7 @@ import {
   getFermes, getPointsJournaliers, deletePointJournalier, corrigerPointJournalier, getBandes, getBilanBande,
   getComparaisonBandes, getCloturesMensuelles, cloturerMois, rouvrirMois,
 } from "../api/client";
-import { GREEN, GREEN_DARK, INK, CLAY, formatSacs, formatColis } from "../theme";
+import { GREEN, GREEN_DARK, INK, CLAY, formatSacs, formatColis, TEXTE_DOUX, TEXTE_META, TEXTE_GRIS, FOND_PAGE, FOND_PAGE_ALT, ALERTE, ALERTE_FOND, VERT_FOND } from "../theme";
 import { genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { mettreEnCache, lireCache } from "../offline/cache";
 import { estDirectionOuAdmin, estTechnicien } from "../utils/auth";
@@ -478,36 +478,36 @@ function DetailItem({ label, value, danger }) {
 }
 
 const styles = {
-  page: { minHeight: "100vh", background: "#F1EEE6", fontFamily: "'Inter', sans-serif", color: INK, padding: "0 0 30px" },
+  page: { minHeight: "100vh", background: FOND_PAGE_ALT, fontFamily: "inherit", color: INK, padding: "0 0 30px" },
   wrap: { maxWidth: 1000, margin: "0 auto", padding: "24px 20px" },
   head: { marginBottom: 20 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
-  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: ALERTE_FOND, color: ALERTE, fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
   filters: { display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" },
   select: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 13.5, fontFamily: "inherit", color: INK },
-  dateLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "#7A857F" },
+  dateLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: TEXTE_META },
   date: { padding: "8px 10px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
-  clear: { padding: "8px 14px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 12.5, cursor: "pointer", color: "#7A857F", fontFamily: "inherit" },
+  clear: { padding: "8px 14px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 12.5, cursor: "pointer", color: TEXTE_META, fontFamily: "inherit" },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
   resumeHead: { display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", fontSize: 13, fontWeight: 600, color: GREEN_DARK, borderBottom: "1px solid #ECE9DF" },
-  badgeEnCours: { marginLeft: 8, fontSize: 10.5, fontWeight: 700, color: GREEN_DARK, background: "#EAF3EE", borderRadius: 6, padding: "1px 6px", textTransform: "uppercase", letterSpacing: .3 },
-  clotureRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontSize: 12.5, color: GREEN_DARK, background: "#F4F1EA", borderRadius: 9, padding: "7px 11px" },
-  rowUrgente: { background: "#FDEEE8" },
-  empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
+  badgeEnCours: { marginLeft: 8, fontSize: 12, fontWeight: 700, color: GREEN_DARK, background: VERT_FOND, borderRadius: 6, padding: "1px 6px", textTransform: "uppercase", letterSpacing: .3 },
+  clotureRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontSize: 12.5, color: GREEN_DARK, background: FOND_PAGE, borderRadius: 9, padding: "7px 11px" },
+  rowUrgente: { background: ALERTE_FOND },
+  empty: { padding: 24, textAlign: "center", color: TEXTE_DOUX, fontSize: 13.5, margin: 0 },
   tableWrap: { overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
-  th: { textAlign: "left", padding: "12px 16px", fontSize: 11.5, textTransform: "uppercase", letterSpacing: .5, color: "#8A948D", borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
+  th: { textAlign: "left", padding: "12px 16px", fontSize: 12, textTransform: "uppercase", letterSpacing: .5, color: TEXTE_DOUX, borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
   td: { padding: "11px 16px", borderBottom: "1px solid #F2F0E8", color: INK, whiteSpace: "nowrap" },
   detailCell: { padding: "14px 16px 18px 40px", background: "#FBFAF6", borderBottom: "1px solid #F2F0E8" },
   detailGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "10px 20px" },
   detailItem: { display: "flex", flexDirection: "column", gap: 2 },
-  detailLabel: { fontSize: 11, color: "#8A948D" },
+  detailLabel: { fontSize: 12, color: TEXTE_DOUX },
   detailValue: { fontSize: 13.5, fontWeight: 600, color: GREEN_DARK },
-  sortiesDetail: { marginTop: 14, background: "#F4F1EA", borderRadius: 9, padding: "8px 11px" },
-  sortiesTitre: { fontSize: 11, fontWeight: 600, color: "#8A948D", textTransform: "uppercase", letterSpacing: .5, marginBottom: 5 },
+  sortiesDetail: { marginTop: 14, background: FOND_PAGE, borderRadius: 9, padding: "8px 11px" },
+  sortiesTitre: { fontSize: 12, fontWeight: 600, color: TEXTE_DOUX, textTransform: "uppercase", letterSpacing: .5, marginBottom: 5 },
   sortieLigne: { display: "flex", justifyContent: "space-between", fontSize: 12.5, color: GREEN_DARK, padding: "3px 0" },
-  observation: { marginTop: 12, fontSize: 12.5, color: "#6B756E", fontStyle: "italic", margin: "12px 0 0" },
+  observation: { marginTop: 12, fontSize: 12.5, color: TEXTE_GRIS, fontStyle: "italic", margin: "12px 0 0" },
   pdfRow: { display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" },
   pdfBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 9, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   pdfBtnLink: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 9, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", textDecoration: "none" },

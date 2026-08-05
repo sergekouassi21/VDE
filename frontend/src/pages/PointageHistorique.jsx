@@ -6,7 +6,7 @@ import {
   getResumePaie,
 } from "../api/client";
 import { genererFichePaie, telechargerPdf, visualiserPdf } from "../utils/pdf";
-import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+import { GREEN, GREEN_DARK, INK, CLAY, TEXTE_DOUX, TEXTE_META, TEXTE_GRIS, FOND_PAGE, FOND_PAGE_ALT, ALERTE } from "../theme";
 
 const LABEL_MODE_PAIEMENT = {
   WAVE: "Wave", ORANGE_MONEY: "Orange Money", MTN_MONEY: "MTN Money",
@@ -376,7 +376,7 @@ export default function PointageHistorique() {
                       <td style={styles.td}>{new Date(a.date).toLocaleDateString("fr-FR")}</td>
                       <td style={styles.td}>{a.employe_nom}</td>
                       <td style={styles.td}>{a.ferme_nom}</td>
-                      <td style={{ ...styles.td, color: "#6B756E" }}>{a.motif || "—"}</td>
+                      <td style={{ ...styles.td, color: TEXTE_GRIS }}>{a.motif || "—"}</td>
                       <td style={{ ...styles.td, display: "flex", gap: 8 }}>
                         <button style={{ ...styles.iconBtn, color: GREEN }} onClick={() => validerAbs(a)} title="Valider (payée)">
                           <Check size={14} />
@@ -404,7 +404,7 @@ export default function PointageHistorique() {
                       <td style={styles.td}>{new Date(a.date).toLocaleDateString("fr-FR")}</td>
                       <td style={styles.td}>{a.employe_nom}</td>
                       <td style={styles.td}>{a.ferme_nom}</td>
-                      <td style={{ ...styles.td, color: "#6B756E" }}>{a.motif || "—"}</td>
+                      <td style={{ ...styles.td, color: TEXTE_GRIS }}>{a.motif || "—"}</td>
                       <td style={{ ...styles.td, width: 1 }}>
                         <button style={{ ...styles.iconBtn, color: CLAY }} onClick={() => supprimerAbs(a)} title="Annuler cette absence">
                           <Trash2 size={14} />
@@ -561,42 +561,42 @@ export default function PointageHistorique() {
 }
 
 const styles = {
-  page: { minHeight: "100vh", background: "#F1EEE6", fontFamily: "'Inter', sans-serif", color: INK, padding: "0 0 30px" },
+  page: { minHeight: "100vh", background: FOND_PAGE_ALT, fontFamily: "inherit", color: INK, padding: "0 0 30px" },
   wrap: { maxWidth: 1100, margin: "0 auto", padding: "24px 20px" },
   head: { marginBottom: 20 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
   filters: { display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" },
   select: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 13.5, fontFamily: "inherit", color: INK },
-  dateLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "#7A857F" },
+  dateLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: TEXTE_META },
   date: { padding: "8px 10px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
-  clear: { padding: "8px 14px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 12.5, cursor: "pointer", color: "#7A857F", fontFamily: "inherit" },
+  clear: { padding: "8px 14px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 12.5, cursor: "pointer", color: TEXTE_META, fontFamily: "inherit" },
   addBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: CLAY, border: "1.5px solid #E0BBA9", borderRadius: 10, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginLeft: "auto" },
   formCard: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 18, marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
   input: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK, flex: "1 1 160px" },
   submitBtn: { background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
-  erreur: { color: "#9E4527", fontSize: 12.5, margin: 0, width: "100%" },
+  erreur: { color: ALERTE, fontSize: 12.5, margin: 0, width: "100%" },
   totaux: { display: "flex", gap: 12, marginBottom: 16 },
   totalItem: { background: "#fff", borderRadius: 14, border: "1px solid #ECE9DF", padding: "12px 18px", display: "flex", flexDirection: "column", gap: 2 },
-  totalLabel: { fontSize: 11, color: "#8A948D", textTransform: "uppercase", letterSpacing: .5 },
+  totalLabel: { fontSize: 12, color: TEXTE_DOUX, textTransform: "uppercase", letterSpacing: .5 },
   totalValeur: { fontSize: 18, fontWeight: 700, color: GREEN_DARK },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
   resumeHead: { display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", fontSize: 13, fontWeight: 600, color: GREEN_DARK, borderBottom: "1px solid #ECE9DF" },
   pdfBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
-  empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
+  empty: { padding: 24, textAlign: "center", color: TEXTE_DOUX, fontSize: 13.5, margin: 0 },
   tableWrap: { overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
-  th: { textAlign: "left", padding: "12px 16px", fontSize: 11.5, textTransform: "uppercase", letterSpacing: .5, color: "#8A948D", borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
+  th: { textAlign: "left", padding: "12px 16px", fontSize: 12, textTransform: "uppercase", letterSpacing: .5, color: TEXTE_DOUX, borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
   td: { padding: "11px 16px", borderBottom: "1px solid #F2F0E8", color: INK, whiteSpace: "nowrap" },
-  iconBtn: { background: "#F4F1EA", border: "1px solid #ECE9DF", borderRadius: 8, padding: 6, cursor: "pointer", color: GREEN_DARK, display: "flex" },
+  iconBtn: { background: FOND_PAGE, border: "1px solid #ECE9DF", borderRadius: 8, padding: 6, cursor: "pointer", color: GREEN_DARK, display: "flex" },
   selfieThumb: { width: 30, height: 30, borderRadius: "50%", objectFit: "cover", border: `1.5px solid ${GREEN}` },
   modalOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 50 },
   modal: { background: "#fff", borderRadius: 18, padding: 26, width: 320, maxWidth: "100%", position: "relative", display: "flex", flexDirection: "column", gap: 10 },
-  modalClose: { position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", color: "#8A948D" },
+  modalClose: { position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", color: TEXTE_DOUX },
   modalTitre: { fontSize: 17, fontWeight: 700, margin: "4px 0 0" },
-  modalSousTitre: { fontSize: 12.5, color: "#8A948D", margin: "0 0 8px" },
-  champLabel: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: "#6B756E" },
+  modalSousTitre: { fontSize: 12.5, color: TEXTE_DOUX, margin: "0 0 8px" },
+  champLabel: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: TEXTE_GRIS },
   grillePaie: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
   champInput: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
-  erreurEdit: { color: "#9E4527", fontSize: 12.5, margin: 0 },
+  erreurEdit: { color: ALERTE, fontSize: 12.5, margin: 0 },
 };

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Trash2, Wheat } from "lucide-react";
 import { getFermes, getFournisseurs, getCommandesAliment, creerCommandeAliment, supprimerCommandeAliment } from "../api/client";
-import { GREEN, GREEN_DARK, INK, CLAY } from "../theme";
+import { GREEN, GREEN_DARK, INK, CLAY, TEXTE_DOUX, TEXTE_GRIS, FOND_PAGE, FOND_PAGE_ALT, ALERTE } from "../theme";
+import ChampNombre from "../components/ChampNombre";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const separeMilliers = (n) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
@@ -120,7 +121,7 @@ export default function AchatsAliment() {
             </label>
             <label style={styles.field}>
               <span style={styles.fieldLabel}>Quantité (sacs)</span>
-              <input style={styles.input} type="number" min="0.01" step="0.01" value={form.quantite_sacs} onChange={(e) => setForm({ ...form, quantite_sacs: e.target.value })} required />
+              <ChampNombre decimal style={styles.input} value={form.quantite_sacs} onChange={(v) => setForm({ ...form, quantite_sacs: v })} required />
             </label>
             <label style={styles.field}>
               <span style={styles.fieldLabel}>Prix unitaire (F/sac)</span>
@@ -201,31 +202,31 @@ export default function AchatsAliment() {
 }
 
 const styles = {
-  page: { minHeight: "100vh", background: "#F1EEE6", fontFamily: "'Inter', sans-serif", color: INK, padding: "0 0 30px" },
+  page: { minHeight: "100vh", background: FOND_PAGE_ALT, fontFamily: "inherit", color: INK, padding: "0 0 30px" },
   wrap: { maxWidth: 1100, margin: "0 auto", padding: "24px 20px" },
   head: { marginBottom: 20 },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
   formCard: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 18, marginBottom: 16, display: "flex", flexDirection: "column", gap: 12 },
   fieldRow: { display: "flex", gap: 12, flexWrap: "wrap" },
-  field: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: "#6B756E", flex: "1 1 160px" },
-  fieldLabel: { fontSize: 11.5 },
+  field: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: TEXTE_GRIS, flex: "1 1 160px" },
+  fieldLabel: { fontSize: 12 },
   input: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
-  montantPreview: { padding: "9px 12px", borderRadius: 10, background: "#F4F1EA", fontSize: 14, fontWeight: 700, color: GREEN_DARK },
+  montantPreview: { padding: "9px 12px", borderRadius: 10, background: FOND_PAGE, fontSize: 14, fontWeight: 700, color: GREEN_DARK },
   submitBtn: { alignSelf: "flex-start", background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
-  erreur: { color: "#9E4527", fontSize: 12.5, margin: 0 },
+  erreur: { color: ALERTE, fontSize: 12.5, margin: 0 },
   filters: { display: "flex", gap: 10, marginBottom: 16 },
   select: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 13.5, fontFamily: "inherit", color: INK },
   totaux: { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" },
   totalItem: { background: "#fff", borderRadius: 14, border: "1px solid #ECE9DF", padding: "12px 18px", display: "flex", flexDirection: "column", gap: 2 },
-  totalLabel: { fontSize: 11, color: "#8A948D", textTransform: "uppercase", letterSpacing: .5 },
+  totalLabel: { fontSize: 12, color: TEXTE_DOUX, textTransform: "uppercase", letterSpacing: .5 },
   totalValeur: { fontSize: 18, fontWeight: 700, color: GREEN_DARK },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
-  empty: { padding: 24, textAlign: "center", color: "#8A948D", fontSize: 13.5, margin: 0 },
+  empty: { padding: 24, textAlign: "center", color: TEXTE_DOUX, fontSize: 13.5, margin: 0 },
   tableWrap: { overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
-  th: { textAlign: "left", padding: "12px 16px", fontSize: 11.5, textTransform: "uppercase", letterSpacing: .5, color: "#8A948D", borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
+  th: { textAlign: "left", padding: "12px 16px", fontSize: 12, textTransform: "uppercase", letterSpacing: .5, color: TEXTE_DOUX, borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
   td: { padding: "11px 16px", borderBottom: "1px solid #F2F0E8", color: INK, whiteSpace: "nowrap" },
-  iconBtn: { background: "#F4F1EA", border: "1px solid #ECE9DF", borderRadius: 8, padding: 6, cursor: "pointer", color: CLAY, display: "flex" },
-  note: { fontSize: 12, color: "#8A948D", marginTop: 14, lineHeight: 1.5 },
+  iconBtn: { background: FOND_PAGE, border: "1px solid #ECE9DF", borderRadius: 8, padding: 6, cursor: "pointer", color: CLAY, display: "flex" },
+  note: { fontSize: 12, color: TEXTE_DOUX, marginTop: 14, lineHeight: 1.5 },
 };

@@ -21,6 +21,7 @@ from django.urls import include, path
 
 from exploitation.deux_facteurs import (
     connexion,
+    deconnexion,
     deux_facteurs_confirmer,
     deux_facteurs_configurer,
     deux_facteurs_desactiver,
@@ -30,6 +31,7 @@ from exploitation.deux_facteurs import (
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/login/', connexion, name='api-login'),
+    path('api/auth/logout/', deconnexion, name='api-logout'),
     path('api/auth/2fa/statut/', deux_facteurs_statut, name='api-2fa-statut'),
     path('api/auth/2fa/configurer/', deux_facteurs_configurer, name='api-2fa-configurer'),
     path('api/auth/2fa/confirmer/', deux_facteurs_confirmer, name='api-2fa-confirmer'),

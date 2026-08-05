@@ -195,6 +195,31 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 
+    # Render redirige déjà HTTP vers HTTPS à son niveau ; ceci est la
+    # ceinture en plus des bretelles, au cas où l'appli serait un jour servie
+    # ailleurs. Sans risque pour le ping anti-veille de
+    # .github/workflows/keep-alive.yml, qui appelle déjà l'URL en https://.
+    SECURE_SSL_REDIRECT = True
+
+    # HSTS : indique au navigateur de ne plus JAMAIS tenter cette adresse en
+    # clair pendant la durée indiquée. C'est ce qui bloque une attaque de
+    # rétrogradation sur un réseau public (wifi d'hôtel, partage de connexion
+    # inconnu) — un scénario réel pour Direction en déplacement.
+    #
+    # Attention, c'est en partie irréversible : le navigateur mémorise la
+    # consigne et l'applique même si on retire le réglage du serveur. D'où la
+    # montée en puissance par paliers, pilotée par variable d'environnement :
+    #   1h (défaut ci-dessous) -> vérifier que tout va bien pendant quelques
+    #   jours -> 86400 (1 jour) -> 31536000 (1 an) une fois serein.
+    #
+    # includeSubDomains et preload restent désactivés par défaut : ils
+    # engagent TOUS les sous-domaines présents et futurs, et le preload est
+    # quasi impossible à annuler. `check --deploy` les signalera (W005/W021) —
+    # c'est un choix, pas un oubli.
+    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_HSTS_SECONDS', '3600'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get('DJANGO_HSTS_SUBDOMAINS', 'False') == 'True'
+    SECURE_HSTS_PRELOAD = os.environ.get('DJANGO_HSTS_PRELOAD', 'False') == 'True'
+
 # Base publique du frontend, utilisée pour générer l'URL encodée dans les QR
 # codes de pointage (le backend n'a sinon aucun moyen de connaître l'adresse
 # du frontend Netlify).
@@ -252,9 +277,21 @@ LOGGING = {
 }
 
 REST_FRAMEWORK = {
+    # TokenAuthentication en premier : DRF n'utilise que le PREMIER
+    # authentificateur de cette liste pour décider s'il annonce un en-tête
+    # WWW-Authenticate. SessionAuthentication n'en fournit pas, donc tant
+    # qu'elle était en tête, DRF dégradait tous les échecs d'authentification
+    # en 403 — indiscernables d'un vrai refus d'autorisation. Le frontend ne
+    # pouvait donc pas distinguer « ton jeton n'est plus valable, reconnecte-
+    # toi » de « tu n'as pas le droit d'ouvrir cette page », et un
+    # intercepteur générique aurait déconnecté un technicien qui touche
+    # simplement un écran réservé à la Direction. Avec Token en tête :
+    # 401 = jeton absent/invalide, 403 = authentifié mais pas autorisé.
+    # L'ordre ne change rien à l'authentification elle-même — les deux
+    # classes restent essayées, /admin/ continue d'utiliser la session.
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',

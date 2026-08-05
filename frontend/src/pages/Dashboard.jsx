@@ -2,9 +2,11 @@ import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import { Egg, TrendingUp, AlertTriangle, AlertCircle, Skull, Package, ChevronRight, Activity, Wheat, Droplet } from "lucide-react";
 import { getDashboard, getEmployes, getAbsences, getEvenementsSante, getFacturesCreances, getPointages, corrigerPointage, getRentabilite, getRapportMensuel } from "../api/client";
-import { GREEN, GREEN_DARK, INK, formatSacs, formatColis, AGE_REFORME_SEMAINES, KG_PAR_SAC } from "../theme";
+import { GREEN, GREEN_DARK, INK, formatSacs, formatColis, AGE_REFORME_SEMAINES, KG_PAR_SAC, TEXTE_DOUX, TEXTE_META, TEXTE_GRIS, FOND_PAGE, FOND_PAGE_ALT, FOND_DOUX, ALERTE, ALERTE_FOND, VERT_FOND, CLAY } from "../theme";
 import { calculerAlertes, signatureAlertes, JOURS_CREANCE_RETARD, joursDepuis, estPointageOublie } from "../alertes";
 import { estDirectionOuAdmin as estDirectionOuAdminRole } from "../utils/auth";
+import { useEnLigne } from "../utils/reseau";
+import BandeauFraicheur from "../components/BandeauFraicheur";
 
 const nf = (v) => (v ?? 0).toLocaleString("fr-FR");
 
@@ -25,6 +27,12 @@ export default function Dashboard() {
   const [rapportMoisPrecedent, setRapportMoisPrecedent] = useState(null);
   const [sel, setSel] = useState(null);
   const [chargement, setChargement] = useState(true);
+  // Horodatage renvoyé par le serveur avec les chiffres, et mis en cache
+  // avec eux : il date donc réellement ce qui est affiché, même quand la
+  // réponse vient du service worker plutôt que du réseau.
+  const [genereLe, setGenereLe] = useState(null);
+  const [erreurChargement, setErreurChargement] = useState(false);
+  const enLigne = useEnLigne();
 
   // Le pointage/la paie sont confidentiels à Direction/Admin (mêmes règles
   // que partout ailleurs dans l'appli) — le tableau de bord, lui, est
@@ -53,10 +61,20 @@ export default function Dashboard() {
     // soit démonté (navigation rapide vers une autre page) — cf. audit du
     // 30/07/2026.
     let annule = false;
-    getDashboard().then((data) => {
-      if (annule) return;
-      setFermes(data.fermes); setEvolutionMois(data.evolution_mois); setChargement(false);
-    });
+    getDashboard()
+      .then((data) => {
+        if (annule) return;
+        setFermes(data.fermes); setEvolutionMois(data.evolution_mois); setChargement(false);
+        setGenereLe(data.genere_le || null);
+        setErreurChargement(false);
+      })
+      .catch(() => {
+        // Sans ce catch, un échec laissait la page bloquée indéfiniment sur
+        // « Chargement… » : `chargement` n'était jamais remis à false.
+        if (annule) return;
+        setChargement(false);
+        setErreurChargement(true);
+      });
     getEvenementsSante({ non_faits: "true" }).then((evts) => {
       if (annule) return;
       setEvenementsSanteEnRetard(evts.filter((e) => e.statut === "EN_RETARD"));
@@ -136,7 +154,7 @@ export default function Dashboard() {
   // LigneVisite) — cohérence entre les deux écrans où le score apparaît.
   const couleurScoreBiosecurite = (v) => {
     const ratio = v.score_biosecurite / v.score_biosecurite_max;
-    return ratio >= 0.75 ? GREEN_DARK : ratio >= 0.5 ? "#B08B2E" : "#9E4527";
+    return ratio >= 0.75 ? GREEN_DARK : ratio >= 0.5 ? "#B08B2E" : ALERTE;
   };
 
   const kpi = useMemo(() => {
@@ -251,6 +269,18 @@ export default function Dashboard() {
           <div style={styles.date}>{new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</div>
         </header>
 
+        <BandeauFraicheur enLigne={enLigne} genereLe={genereLe} />
+
+        {erreurChargement && (
+          <div style={styles.erreurChargement} role="status">
+            <AlertCircle size={16} style={{ flex: "none" }} />
+            <span>
+              Impossible de récupérer les chiffres et aucune copie n'est disponible sur cet appareil.
+              Réessayez au retour du réseau.
+            </span>
+          </div>
+        )}
+
         <div style={styles.alertesTop}>
           <Card titre={`Alertes (${alertes.length})`} danger>
             {alertes.length === 0 ? (
@@ -292,7 +322,7 @@ export default function Dashboard() {
               <div key={f.id} style={{ ...styles.kpiFermeCard, ...(gravite === "haut" ? styles.kpiFermeCardHaut : gravite === "moy" ? styles.kpiFermeCardMoy : {}) }}>
                 <div style={styles.kpiFermeNom}>
                   {f.nom}
-                  {gravite === "haut" && <AlertTriangle size={13} color="#9E4527" style={{ marginLeft: 6, verticalAlign: -2 }} />}
+                  {gravite === "haut" && <AlertTriangle size={13} color={ALERTE} style={{ marginLeft: 6, verticalAlign: -2 }} />}
                   {/* Forme différente (pas juste une couleur plus pâle) pour rester
                       lisible en plein soleil ou pour un daltonien — cf. audit du 30/07/2026. */}
                   {gravite === "moy" && <AlertCircle size={13} color="#B8860B" style={{ marginLeft: 6, verticalAlign: -2 }} />}
@@ -301,7 +331,7 @@ export default function Dashboard() {
                   {f.type === "PONTE" && (
                     <div style={styles.kpiFermeStat}>
                       <span style={styles.kpiFermeLabel}>Ponte</span>
-                      <span style={{ ...styles.kpiFermeValeur, color: t < 60 ? "#9E4527" : GREEN_DARK }}>{t.toFixed(0)} %</span>
+                      <span style={{ ...styles.kpiFermeValeur, color: t < 60 ? ALERTE : GREEN_DARK }}>{t.toFixed(0)} %</span>
                     </div>
                   )}
                   {f.type === "PONTE" && (
@@ -317,7 +347,7 @@ export default function Dashboard() {
                   </div>
                   <div style={styles.kpiFermeStat}>
                     <span style={styles.kpiFermeLabel}>Mortalité</span>
-                    <span style={{ ...styles.kpiFermeValeur, color: (f.dernier_point?.morts || 0) > 5 ? "#9E4527" : INK }}>{nf(f.dernier_point?.morts || 0)}</span>
+                    <span style={{ ...styles.kpiFermeValeur, color: (f.dernier_point?.morts || 0) > 5 ? ALERTE : INK }}>{nf(f.dernier_point?.morts || 0)}</span>
                     <span style={styles.kpiFermeMois}>{nf(f.mois?.morts || 0)} ce mois</span>
                   </div>
                   {f.type === "PONTE" && (
@@ -346,7 +376,7 @@ export default function Dashboard() {
                   {f.type === "PONTE" && (f.dernier_point?.production_oeufs || 0) > 0 && (
                     <div style={styles.kpiFermeStat}>
                       <span style={styles.kpiFermeLabel}>Taux de casse</span>
-                      <span style={{ ...styles.kpiFermeValeur, color: tauxCasseJour(f) > 5 ? "#9E4527" : INK }}>{tauxCasseJour(f).toFixed(1)} %</span>
+                      <span style={{ ...styles.kpiFermeValeur, color: tauxCasseJour(f) > 5 ? ALERTE : INK }}>{tauxCasseJour(f).toFixed(1)} %</span>
                     </div>
                   )}
                   {f.type === "CHAIR" && f.dernier_point?.poids_moyen_grammes != null && (
@@ -355,7 +385,7 @@ export default function Dashboard() {
                       <span
                         style={{
                           ...styles.kpiFermeValeur,
-                          color: f.dernier_point.poids_cible_grammes != null && Number(f.dernier_point.poids_moyen_grammes) < f.dernier_point.poids_cible_grammes ? "#9E4527" : GREEN_DARK,
+                          color: f.dernier_point.poids_cible_grammes != null && Number(f.dernier_point.poids_moyen_grammes) < f.dernier_point.poids_cible_grammes ? ALERTE : GREEN_DARK,
                         }}
                       >
                         {nf(Math.round(f.dernier_point.poids_moyen_grammes))} g
@@ -393,8 +423,8 @@ export default function Dashboard() {
                 <FinItem label="Revenus" value={`${nf(Math.round(rentabilite.total.revenus))} FCFA`} />
                 <FinItem label="Coût aliment" value={`${nf(Math.round(rentabilite.total.cout_aliment))} FCFA`} />
                 <FinItem label="Coût paie" value={`${nf(Math.round(rentabilite.total.cout_paie))} FCFA`} />
-                <FinItem label="Marge" value={`${nf(Math.round(rentabilite.total.marge))} FCFA`} accent={rentabilite.total.marge >= 0 ? GREEN_DARK : "#9E4527"} />
-                <FinItem label="Créances totales" value={`${nf(Math.round(creancesTotal))} FCFA`} accent={creancesTotal > 0 ? "#9E4527" : undefined} />
+                <FinItem label="Marge" value={`${nf(Math.round(rentabilite.total.marge))} FCFA`} accent={rentabilite.total.marge >= 0 ? GREEN_DARK : ALERTE} />
+                <FinItem label="Créances totales" value={`${nf(Math.round(creancesTotal))} FCFA`} accent={creancesTotal > 0 ? ALERTE : undefined} />
               </div>
             </Card>
 
@@ -417,7 +447,7 @@ export default function Dashboard() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#EEEBE2" vertical={false} />
                     <XAxis dataKey="nom" tickLine={false} axisLine={false} />
                     <YAxis tickLine={false} axisLine={false} />
-                    <Tooltip cursor={{ fill: "#F4F1EA" }} contentStyle={tooltipStyle} formatter={(v, n) => [`${v} g`, n === "reel" ? "Réel" : "Cible"]} />
+                    <Tooltip cursor={{ fill: FOND_PAGE }} contentStyle={tooltipStyle} formatter={(v, n) => [`${v} g`, n === "reel" ? "Réel" : "Cible"]} />
                     <Bar dataKey="reel" name="reel" radius={[6, 6, 0, 0]} fill={GREEN} />
                     <Bar dataKey="cible" name="cible" radius={[6, 6, 0, 0]} fill="#C6A15B" />
                   </BarChart>
@@ -436,8 +466,8 @@ export default function Dashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#EEEBE2" vertical={false} />
                   <XAxis dataKey="nom" tickLine={false} axisLine={false} />
                   <YAxis domain={[0, 100]} tickLine={false} axisLine={false} />
-                  <Tooltip cursor={{ fill: "#F4F1EA" }} contentStyle={tooltipStyle} formatter={(v) => [`${v} %`, "Taux"]} />
-                  <ReferenceLine y={60} stroke="#C6603A" strokeDasharray="4 4" label={{ value: "seuil 60%", fontSize: 10, fill: "#C6603A", position: "right" }} />
+                  <Tooltip cursor={{ fill: FOND_PAGE }} contentStyle={tooltipStyle} formatter={(v) => [`${v} %`, "Taux"]} />
+                  <ReferenceLine y={60} stroke={CLAY} strokeDasharray="4 4" label={{ value: "seuil 60%", fontSize: 12, fill: CLAY, position: "right" }} />
                   <Bar dataKey="taux" radius={[6, 6, 0, 0]} fill={GREEN} />
                 </BarChart>
               </ResponsiveContainer>
@@ -467,7 +497,7 @@ export default function Dashboard() {
                     <XAxis dataKey="date" tickLine={false} axisLine={false} />
                     <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
                     <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v} sujets`, "Mortalité"]} />
-                    <Line type="monotone" dataKey="morts" stroke="#C6603A" strokeWidth={2.5} dot={{ r: 3, fill: "#C6603A" }} />
+                    <Line type="monotone" dataKey="morts" stroke={CLAY} strokeWidth={2.5} dot={{ r: 3, fill: CLAY }} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -479,7 +509,7 @@ export default function Dashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#EEEBE2" vertical={false} />
                   <XAxis dataKey="nom" tickLine={false} axisLine={false} />
                   <YAxis tickLine={false} axisLine={false} />
-                  <Tooltip cursor={{ fill: "#F4F1EA" }} contentStyle={tooltipStyle} formatter={(v) => [`${v} g`, "Aliment"]} />
+                  <Tooltip cursor={{ fill: FOND_PAGE }} contentStyle={tooltipStyle} formatter={(v) => [`${v} g`, "Aliment"]} />
                   <Bar dataKey="valeur" radius={[6, 6, 0, 0]} fill="#C6A15B" />
                 </BarChart>
               </ResponsiveContainer>
@@ -491,7 +521,7 @@ export default function Dashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#EEEBE2" vertical={false} />
                   <XAxis dataKey="nom" tickLine={false} axisLine={false} />
                   <YAxis tickLine={false} axisLine={false} />
-                  <Tooltip cursor={{ fill: "#F4F1EA" }} contentStyle={tooltipStyle} formatter={(v) => [`${v} L`, "Eau"]} />
+                  <Tooltip cursor={{ fill: FOND_PAGE }} contentStyle={tooltipStyle} formatter={(v) => [`${v} L`, "Eau"]} />
                   <Bar dataKey="valeur" radius={[6, 6, 0, 0]} fill="#4A90A4" />
                 </BarChart>
               </ResponsiveContainer>
@@ -606,7 +636,7 @@ function Kpi({ icon, label, value, sub, accent, mois }) {
   );
 }
 function Card({ titre, children, danger }) {
-  return (<section style={styles.card}><div style={{ ...styles.cardHead, ...(danger ? { color: "#9E4527" } : {}) }}>{titre}</div>{children}</section>);
+  return (<section style={styles.card}><div style={{ ...styles.cardHead, ...(danger ? { color: ALERTE } : {}) }}>{titre}</div>{children}</section>);
 }
 // Action inline sur l'alerte "pointage oublié" — heure pré-remplie à 17h00
 // (pas l'heure du clic, qui serait fausse si on valide le lendemain),
@@ -660,7 +690,7 @@ function TendanceItem({ label, actuel, precedent, unite, inverse }) {
   const pct = precedent ? (delta / Math.abs(precedent)) * 100 : null;
   const hausse = delta > 0;
   const favorable = delta === 0 ? null : inverse ? !hausse : hausse;
-  const couleur = favorable === null ? "#8A948D" : favorable ? GREEN_DARK : "#9E4527";
+  const couleur = favorable === null ? TEXTE_DOUX : favorable ? GREEN_DARK : ALERTE;
   const fleche = delta === 0 ? "→" : hausse ? "↑" : "↓";
   return (
     <div style={styles.tendanceItem}>
@@ -675,63 +705,67 @@ function TendanceItem({ label, actuel, precedent, unite, inverse }) {
 
 const tooltipStyle = { background: "#fff", border: "1px solid #ECE9DF", borderRadius: 10, fontSize: 12, boxShadow: "0 6px 20px rgba(0,0,0,.1)" };
 const styles = {
-  page: { minHeight: "100vh", background: "#F1EEE6", fontFamily: "'Inter', sans-serif", color: INK, padding: "0 0 30px" },
+  page: { minHeight: "100vh", background: FOND_PAGE_ALT, fontFamily: "inherit", color: INK, padding: "0 0 30px" },
   wrap: { maxWidth: 1080, margin: "0 auto", padding: "24px 20px" },
   head: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20 },
+  erreurChargement: {
+    display: "flex", alignItems: "center", gap: 8, background: ALERTE_FOND, color: ALERTE,
+    fontSize: 13.5, fontWeight: 500, padding: "10px 16px", marginBottom: 14, borderRadius: 10, lineHeight: 1.35,
+  },
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 30, fontWeight: 700, margin: 0, letterSpacing: -.5 },
-  date: { fontSize: 13, color: "#7A857F", textTransform: "capitalize" },
+  date: { fontSize: 13, color: TEXTE_META, textTransform: "capitalize" },
   alertesTop: { marginBottom: 18 },
   kpiRow: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 18 },
   kpi: { background: "#fff", borderRadius: 14, padding: "14px 16px", border: "1px solid #ECE9DF" },
   kpiAccent: { background: `linear-gradient(150deg, ${GREEN}, ${GREEN_DARK})`, color: "#fff", border: "none" },
-  kpiIcon: { width: 30, height: 30, borderRadius: 8, background: "#EAF3EE", display: "flex", alignItems: "center", justifyContent: "center", color: GREEN, marginBottom: 9 },
+  kpiIcon: { width: 30, height: 30, borderRadius: 8, background: VERT_FOND, display: "flex", alignItems: "center", justifyContent: "center", color: GREEN, marginBottom: 9 },
   kpiVal: { fontSize: 22, fontWeight: 700 },
   kpiSub: { fontSize: 12, fontWeight: 400, opacity: .7 },
-  kpiLabel: { fontSize: 11.5, opacity: .78, marginTop: 2 },
-  kpiMois: { fontSize: 10.5, opacity: .65, marginTop: 4, borderTop: "1px solid rgba(0,0,0,.06)", paddingTop: 4 },
+  kpiLabel: { fontSize: 12, opacity: .78, marginTop: 2 },
+  kpiMois: { fontSize: 12, opacity: .65, marginTop: 4, borderTop: "1px solid rgba(0,0,0,.06)", paddingTop: 4 },
   kpiFermeGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12, marginBottom: 18 },
   kpiFermeCard: { background: "#fff", borderRadius: 14, padding: "13px 15px", border: "1px solid #ECE9DF", borderLeft: "4px solid transparent" },
-  kpiFermeCardHaut: { borderLeftColor: "#C6603A", background: "#FFF9F6" },
+  kpiFermeCardHaut: { borderLeftColor: CLAY, background: "#FFF9F6" },
   kpiFermeCardMoy: { borderLeftColor: "#E8A93B", background: "#FFFCF3" },
   kpiFermeNom: { fontSize: 13.5, fontWeight: 700, color: GREEN_DARK, marginBottom: 8 },
   kpiFermeStats: { display: "flex", flexWrap: "wrap", gap: "6px 14px" },
   kpiFermeStat: { display: "flex", flexDirection: "column", gap: 1, minWidth: 60 },
-  kpiFermeLabel: { fontSize: 10, color: "#8A948D", textTransform: "uppercase", letterSpacing: .3 },
+  kpiFermeLabel: { fontSize: 12, color: TEXTE_DOUX, textTransform: "uppercase", letterSpacing: .3 },
   kpiFermeValeur: { fontSize: 15, fontWeight: 700, color: INK },
-  kpiFermeMois: { fontSize: 9.5, color: "#8A948D" },
+  kpiFermeMois: { fontSize: 12, color: TEXTE_DOUX },
   directionRow: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, marginBottom: 16 },
   finGrid: { display: "flex", flexWrap: "wrap", gap: "10px 20px" },
   finItem: { display: "flex", flexDirection: "column", gap: 3, minWidth: 100 },
   finValeur: { fontSize: 16, fontWeight: 700, color: INK },
   tendanceGrid: { display: "flex", flexDirection: "column", gap: 12 },
   tendanceItem: { display: "flex", flexDirection: "column", gap: 3 },
-  tendanceDelta: { fontSize: 11.5, fontWeight: 500 },
+  tendanceDelta: { fontSize: 12, fontWeight: 500 },
   grid: { display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 16 },
   col: { display: "flex", flexDirection: "column", gap: 16 },
   card: { background: "#fff", borderRadius: 16, padding: "16px 18px", border: "1px solid #ECE9DF" },
   cardHead: { fontSize: 14.5, fontWeight: 600, color: GREEN_DARK, marginBottom: 12 },
-  legend: { fontSize: 11, textAlign: "center", margin: "6px 0 0", color: "#7A857F" },
-  noAlert: { fontSize: 13, color: GREEN, background: "#EAF3EE", borderRadius: 10, padding: "14px", textAlign: "center", margin: 0 },
+  legend: { fontSize: 12, textAlign: "center", margin: "6px 0 0", color: TEXTE_META },
+  noAlert: { fontSize: 13, color: GREEN, background: VERT_FOND, borderRadius: 10, padding: "14px", textAlign: "center", margin: 0 },
   alertList: { display: "flex", flexDirection: "column", gap: 8 },
-  alertItem: { display: "flex", gap: 9, alignItems: "flex-start", background: "#FBF0EB", color: "#9E4527", padding: "10px 12px", borderRadius: 10, fontSize: 12.5, lineHeight: 1.4 },
+  alertItem: { display: "flex", gap: 9, alignItems: "flex-start", background: "#FBF0EB", color: ALERTE, padding: "10px 12px", borderRadius: 10, fontSize: 12.5, lineHeight: 1.4 },
   alertHaut: { background: "#F7E4DC", fontWeight: 500 },
   validationRow: { display: "flex", gap: 6, alignItems: "center", marginTop: 6 },
-  validationHeure: { padding: "5px 8px", borderRadius: 7, border: "1px solid #E3BBA8", fontSize: 12.5, fontFamily: "inherit", color: "#9E4527" },
+  validationHeure: { padding: "5px 8px", borderRadius: 7, border: "1px solid #E3BBA8", fontSize: 12.5, fontFamily: "inherit", color: ALERTE },
   validationBtn: { background: GREEN, color: "#fff", border: "none", borderRadius: 7, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   fermeList: { display: "flex", flexDirection: "column", gap: 2 },
   fermeRow: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 8px", border: "none", background: "none", borderBottom: "1px solid #F2F0E8", cursor: "pointer", textAlign: "left", fontFamily: "inherit", width: "100%" },
   fermeNom: { fontSize: 14.5, fontWeight: 600, color: INK },
-  fermeMeta: { fontSize: 11.5, color: "#8A948D", marginTop: 2 },
+  fermeMeta: { fontSize: 12, color: TEXTE_DOUX, marginTop: 2 },
   fermeRight: { display: "flex", alignItems: "center", gap: 8 },
-  tauxBadge: { fontSize: 14, fontWeight: 700, color: GREEN_DARK, background: "#EAF3EE", padding: "3px 9px", borderRadius: 8 },
-  tauxBadgeAlert: { color: "#9E4527", background: "#F7E4DC" },
-  badgeVide: { fontSize: 11, color: "#95A09A", background: "#F2F0E8", padding: "3px 9px", borderRadius: 8 },
+  tauxBadge: { fontSize: 14, fontWeight: 700, color: GREEN_DARK, background: VERT_FOND, padding: "3px 9px", borderRadius: 8 },
+  tauxBadgeAlert: { color: ALERTE, background: "#F7E4DC" },
+  badgeVide: { fontSize: 12, color: "#95A09A", background: FOND_DOUX, padding: "3px 9px", borderRadius: 8 },
   fermeDetail: { padding: "10px 8px 14px", background: "#FBFAF6", borderRadius: 10, marginBottom: 4 },
   fermeDetailGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "8px 12px" },
   fermeDetailItem: { display: "flex", flexDirection: "column", gap: 1 },
-  fermeDetailLabel: { fontSize: 10, color: "#8A948D", textTransform: "uppercase", letterSpacing: .3 },
+  fermeDetailLabel: { fontSize: 12, color: TEXTE_DOUX, textTransform: "uppercase", letterSpacing: .3 },
   fermeDetailValeur: { fontSize: 13, fontWeight: 600, color: GREEN_DARK },
-  fermeObservation: { fontSize: 12, color: "#6B756E", fontStyle: "italic", margin: "10px 0 0" },
-  foot: { textAlign: "center", fontSize: 11, color: "#A8AEA4", marginTop: 22, lineHeight: 1.5 },
+  fermeObservation: { fontSize: 12, color: TEXTE_GRIS, fontStyle: "italic", margin: "10px 0 0" },
+  foot: { textAlign: "center", fontSize: 12, color: "#A8AEA4", marginTop: 22, lineHeight: 1.5 },
 };

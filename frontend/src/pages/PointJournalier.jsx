@@ -5,11 +5,12 @@ import {
   getFermes, soumettrePointJournalier, declarerBande, terminerBande, getBilanBande, getPointJournalier,
   getPointsJournaliers, getEmployesFerme, getCommandesAliment, creerEvenementSante,
 } from "../api/client";
-import { GREEN, GREEN_DARK, CREAM, INK, CLAY, formatSacs, formatColis, AGE_REFORME_SEMAINES, UNITES_PAR_COLIS } from "../theme";
+import { GREEN, GREEN_DARK, CREAM, INK, CLAY, formatSacs, formatColis, AGE_REFORME_SEMAINES, UNITES_PAR_COLIS, TEXTE_DOUX, TEXTE_META, TEXTE_GRIS, TEXTE_SOMBRE, FOND_PAGE, FOND_CARTE, ALERTE, ALERTE_FOND, VERT_FOND } from "../theme";
 import { genererPdfPointJournalier, genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { ajouterSoumissionEnAttente, listerSoumissionsEnAttente } from "../offline/queue";
 import { synchroniserSoumissionsEnAttente } from "../offline/sync";
 import { estDirectionOuAdmin } from "../utils/auth";
+import ChampNombre from "../components/ChampNombre";
 
 const partageDisponible = typeof navigator !== "undefined" && !!navigator.share;
 
@@ -795,10 +796,13 @@ function BilanItem({ label, value }) {
 function Section({ icon, titre, children }) {
   return (<section style={styles.section}><div style={styles.sectionHead}>{icon}<span>{titre}</span></div><div style={styles.sectionBody}>{children}</div></section>);
 }
+// `step` sert uniquement à savoir si le champ accepte des décimales : "0.1"
+// pour les sacs d'aliment et les litres d'eau, "1" pour un effectif.
 function FieldNum({ label, value, onChange, unit, big, step }) {
+  const decimal = String(step ?? "1").includes(".");
   return (<label style={styles.field}><span style={styles.fieldLabel}>{label}</span><div style={styles.inputWrap}>
-    <input type="number" inputMode="decimal" step={step || "1"} min="0" style={{ ...styles.input, ...(big ? { fontSize: 22, fontWeight: 700 } : {}) }}
-      value={value} onChange={(e) => onChange(e.target.value)} placeholder="0" />{unit && <span style={styles.unit}>{unit}</span>}</div></label>);
+    <ChampNombre decimal={decimal} style={{ ...styles.input, ...(big ? { fontSize: 22, fontWeight: 700 } : {}) }}
+      value={value} onChange={onChange} placeholder="0" />{unit && <span style={styles.unit}>{unit}</span>}</div></label>);
 }
 function FieldText({ label, value, onChange, placeholder }) {
   return (<label style={styles.field}><span style={styles.fieldLabel}>{label}</span>
@@ -814,7 +818,7 @@ function FieldCalc({ label, value, unit, hint, strong, danger }) {
 function Alerte({ txt }) { return <div style={styles.alerte}><AlertTriangle size={15} /><span>{txt}</span></div>; }
 
 const styles = {
-  page: { minHeight: "100vh", background: "#EDEAE0", fontFamily: "'Inter', sans-serif", padding: "0 0 40px", color: INK },
+  page: { minHeight: "100vh", background: "#EDEAE0", fontFamily: "inherit", padding: "0 0 40px", color: INK },
   shell: { maxWidth: 440, margin: "0 auto", background: CREAM, minHeight: "100vh", boxShadow: "0 0 60px rgba(0,0,0,.08)" },
   header: { background: `linear-gradient(160deg, ${GREEN} 0%, ${GREEN_DARK} 100%)`, color: "#fff", padding: "18px 20px 20px", borderRadius: "0 0 22px 22px" },
   headTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
@@ -830,57 +834,57 @@ const styles = {
   selectSub: { opacity: .8, fontWeight: 400, fontSize: 13 },
   dropdown: { position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 12px 32px rgba(0,0,0,.22)", zIndex: 20, overflow: "hidden", padding: 5 },
   option: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", border: "none", background: "none", color: INK, fontSize: 15, cursor: "pointer", borderRadius: 8, fontFamily: "inherit" },
-  optionActive: { background: "#EAF3EE", color: GREEN_DARK, fontWeight: 600 },
-  optionMeta: { fontSize: 13, color: "#7A857F" },
+  optionActive: { background: VERT_FOND, color: GREEN_DARK, fontWeight: 600 },
+  optionMeta: { fontSize: 13, color: TEXTE_META },
   ageRow: { marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,.12)", borderRadius: 11, padding: "10px 14px" },
   ageBox: { display: "flex", flexDirection: "column", gap: 2 },
-  ageLabel: { fontSize: 11, opacity: .8, textTransform: "uppercase", letterSpacing: .6 },
+  ageLabel: { fontSize: 12, opacity: .8, textTransform: "uppercase", letterSpacing: .6 },
   ageVal: { fontSize: 19, fontWeight: 700 },
   ageUnit: { fontSize: 13, fontWeight: 400, opacity: .85 },
-  ageAuto: { fontSize: 11, opacity: .8, textAlign: "right" },
+  ageAuto: { fontSize: 12, opacity: .8, textAlign: "right" },
   section: { padding: "0 16px", marginTop: 18 },
   sectionHead: { display: "flex", alignItems: "center", gap: 7, color: GREEN_DARK, fontWeight: 600, fontSize: 12.5, textTransform: "uppercase", letterSpacing: .7, marginBottom: 9 },
   sectionBody: { background: "#fff", borderRadius: 14, padding: "6px 14px", border: "1px solid #ECE9DF" },
   field: { display: "flex", flexDirection: "column", padding: "11px 0", borderBottom: "1px solid #F2F0E8" },
   fieldCalc: { background: "linear-gradient(90deg,#F4F9F6,transparent)", margin: "0 -14px", padding: "11px 14px" },
   fieldCalcDanger: { background: "linear-gradient(90deg,#FCEEE8,transparent)" },
-  fieldLabel: { fontSize: 13.5, color: "#5A655F", fontWeight: 500, marginBottom: 5, display: "flex", alignItems: "center", gap: 6 },
-  autoTag: { fontSize: 9.5, background: GREEN, color: "#fff", padding: "1px 6px", borderRadius: 5, fontWeight: 600, letterSpacing: .5, textTransform: "uppercase" },
+  fieldLabel: { fontSize: 13.5, color: TEXTE_SOMBRE, fontWeight: 500, marginBottom: 5, display: "flex", alignItems: "center", gap: 6 },
+  autoTag: { fontSize: 12, background: GREEN, color: "#fff", padding: "1px 6px", borderRadius: 5, fontWeight: 600, letterSpacing: .5, textTransform: "uppercase" },
   inputWrap: { display: "flex", alignItems: "center", gap: 8 },
-  input: { flex: 1, border: "1px solid #DDE2DE", borderRadius: 9, padding: "10px 12px", fontSize: 16, fontFamily: "inherit", width: "100%", background: "#FCFCFA", color: INK },
+  input: { flex: 1, border: "1px solid #DDE2DE", borderRadius: 9, padding: "10px 12px", fontSize: 16, fontFamily: "inherit", width: "100%", background: FOND_CARTE, color: INK },
   unit: { fontSize: 12.5, color: "#95A09A", whiteSpace: "nowrap", fontWeight: 500 },
   row2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
   calcVal: { display: "flex", alignItems: "baseline", gap: 6, color: GREEN_DARK },
-  hint: { fontSize: 11, color: "#A0A89F", marginTop: 3, fontStyle: "italic" },
-  textarea: { width: "100%", border: "1px solid #DDE2DE", borderRadius: 9, padding: "10px 12px", fontSize: 15, fontFamily: "inherit", resize: "vertical", background: "#FCFCFA", color: INK },
+  hint: { fontSize: 12, color: "#A0A89F", marginTop: 3, fontStyle: "italic" },
+  textarea: { width: "100%", border: "1px solid #DDE2DE", borderRadius: 9, padding: "10px 12px", fontSize: 15, fontFamily: "inherit", resize: "vertical", background: FOND_CARTE, color: INK },
   tauxCard: { margin: "18px 16px 0", background: `linear-gradient(135deg,${GREEN} 0%,${GREEN_DARK} 100%)`, color: "#fff", borderRadius: 16, padding: "18px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" },
   tauxCardAlerte: { background: `linear-gradient(135deg,${CLAY} 0%,#9E4527 100%)` },
   tauxLeft: { display: "flex", alignItems: "center", gap: 9, fontSize: 15, fontWeight: 500 },
   tauxVal: { fontWeight: 700, fontSize: 34 },
-  alerte: { margin: "10px 16px 0", display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", padding: "10px 13px", borderRadius: 10, fontSize: 13, fontWeight: 500 },
+  alerte: { margin: "10px 16px 0", display: "flex", alignItems: "center", gap: 8, background: ALERTE_FOND, color: ALERTE, padding: "10px 13px", borderRadius: 10, fontSize: 13, fontWeight: 500 },
   submit: { margin: "22px 16px 0", width: "calc(100% - 32px)", background: GREEN, color: "#fff", border: "none", borderRadius: 13, padding: "16px", fontSize: 16, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 },
   submitDone: { background: GREEN_DARK },
   synced: { textAlign: "center", fontSize: 12.5, color: GREEN_DARK, margin: "10px 16px 0" },
-  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12.5, fontWeight: 500, padding: "9px 16px", margin: "14px 16px 0", borderRadius: 10 },
-  modifBanner: { display: "flex", alignItems: "center", gap: 8, background: "#EAF3EE", color: GREEN_DARK, fontSize: 12.5, fontWeight: 500, padding: "9px 16px", margin: "14px 16px 0", borderRadius: 10 },
-  checkboxRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#5A655F", padding: "10px 0 4px", cursor: "pointer" },
-  sortieFactureBox: { background: "#F4F1EA", borderRadius: 9, padding: "8px 11px", margin: "10px 0 0" },
-  sortiesTitreFacture: { fontSize: 11, fontWeight: 600, color: "#8A948D", textTransform: "uppercase", letterSpacing: .5, marginBottom: 5 },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: ALERTE_FOND, color: ALERTE, fontSize: 12.5, fontWeight: 500, padding: "9px 16px", margin: "14px 16px 0", borderRadius: 10 },
+  modifBanner: { display: "flex", alignItems: "center", gap: 8, background: VERT_FOND, color: GREEN_DARK, fontSize: 12.5, fontWeight: 500, padding: "9px 16px", margin: "14px 16px 0", borderRadius: 10 },
+  checkboxRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: TEXTE_SOMBRE, padding: "10px 0 4px", cursor: "pointer" },
+  sortieFactureBox: { background: FOND_PAGE, borderRadius: 9, padding: "8px 11px", margin: "10px 0 0" },
+  sortiesTitreFacture: { fontSize: 12, fontWeight: 600, color: TEXTE_DOUX, textTransform: "uppercase", letterSpacing: .5, marginBottom: 5 },
   sortieRowFacture: { display: "flex", justifyContent: "space-between", fontSize: 12.5, color: GREEN_DARK, padding: "3px 0" },
-  conflitBox: { display: "flex", flexDirection: "column", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 13, fontWeight: 500, padding: "12px 16px", margin: "10px 16px 0", borderRadius: 10, textAlign: "center" },
-  conflitBtn: { background: "#9E4527", color: "#fff", border: "none", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
-  interditTxt: { textAlign: "center", fontSize: 13, color: "#9E4527", margin: "18px 16px 0", fontWeight: 500 },
+  conflitBox: { display: "flex", flexDirection: "column", alignItems: "center", gap: 8, background: ALERTE_FOND, color: ALERTE, fontSize: 13, fontWeight: 500, padding: "12px 16px", margin: "10px 16px 0", borderRadius: 10, textAlign: "center" },
+  conflitBtn: { background: ALERTE, color: "#fff", border: "none", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  interditTxt: { textAlign: "center", fontSize: 13, color: ALERTE, margin: "18px 16px 0", fontWeight: 500 },
   pdfBtn: { margin: "10px 16px 0", width: "calc(100% - 32px)", background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 13, padding: "13px", fontSize: 14.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 },
-  foot: { textAlign: "center", fontSize: 11, color: "#B5BBB2", margin: "24px 0 0", letterSpacing: .5 },
+  foot: { textAlign: "center", fontSize: 12, color: "#B5BBB2", margin: "24px 0 0", letterSpacing: .5 },
   vide: { margin: "28px 16px 0", background: "#fff", border: "1px dashed #C9CFC8", borderRadius: 16, padding: "34px 24px", textAlign: "center" },
   videIcon: { fontSize: 40, marginBottom: 8 },
   videTitre: { fontWeight: 700, fontSize: 18, color: INK, margin: "0 0 8px" },
-  videTxt: { fontSize: 13.5, color: "#6B756E", lineHeight: 1.5, margin: "0 0 20px" },
+  videTxt: { fontSize: 13.5, color: TEXTE_GRIS, lineHeight: 1.5, margin: "0 0 20px" },
   videBtn: { background: GREEN, color: "#fff", border: "none", borderRadius: 11, padding: "12px 22px", fontSize: 14.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", width: "100%" },
-  magasinNote: { fontSize: 12, color: GREEN_DARK, background: "#EAF3EE", borderRadius: 8, padding: "7px 11px", margin: "6px 0 2px", fontWeight: 500 },
+  magasinNote: { fontSize: 12, color: GREEN_DARK, background: VERT_FOND, borderRadius: 8, padding: "7px 11px", margin: "6px 0 2px", fontWeight: 500 },
   sortieList: { display: "flex", flexDirection: "column", gap: 6, padding: "10px 0 4px" },
   sortieRow: { display: "flex", alignItems: "center", gap: 8, background: "#F4F9F6", borderRadius: 9, padding: "8px 10px" },
-  sortieType: { fontSize: 11, fontWeight: 700, color: GREEN_DARK, background: "#fff", borderRadius: 6, padding: "2px 7px", textTransform: "uppercase" },
+  sortieType: { fontSize: 12, fontWeight: 700, color: GREEN_DARK, background: "#fff", borderRadius: 6, padding: "2px 7px", textTransform: "uppercase" },
   sortieDetail: { flex: 1, fontSize: 13, color: INK },
   sortieRemove: { border: "none", background: "none", color: CLAY, cursor: "pointer", fontSize: 14, padding: "0 2px" },
   sortieForm: { display: "flex", flexDirection: "column", gap: 8, padding: "10px 0" },
@@ -888,15 +892,15 @@ const styles = {
   clotureBtn: { marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: "100%", background: "rgba(255,255,255,.14)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", borderRadius: 11, padding: "10px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   modalOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 50 },
   modal: { background: "#fff", borderRadius: 18, padding: 26, width: 340, maxWidth: "100%", position: "relative", display: "flex", flexDirection: "column", gap: 10, maxHeight: "90vh", overflowY: "auto" },
-  modalClose: { position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", color: "#8A948D" },
+  modalClose: { position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", color: TEXTE_DOUX },
   modalTitre: { fontSize: 17, fontWeight: 700, margin: "4px 0 0", color: INK },
-  modalSousTitre: { fontSize: 12.5, color: "#8A948D", margin: "0 0 8px" },
-  champLabel: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: "#6B756E" },
+  modalSousTitre: { fontSize: 12.5, color: TEXTE_DOUX, margin: "0 0 8px" },
+  champLabel: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: TEXTE_GRIS },
   champInput: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
-  erreurEdit: { color: "#9E4527", fontSize: 12.5, margin: 0 },
+  erreurEdit: { color: ALERTE, fontSize: 12.5, margin: 0 },
   submitBtnCloture: { background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "11px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginTop: 4 },
   bilanGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px" },
   bilanItem: { display: "flex", flexDirection: "column", gap: 2 },
-  bilanLabel: { fontSize: 10.5, color: "#8A948D", textTransform: "uppercase", letterSpacing: .3 },
+  bilanLabel: { fontSize: 12, color: TEXTE_DOUX, textTransform: "uppercase", letterSpacing: .3 },
   bilanValeur: { fontSize: 14, fontWeight: 700, color: GREEN_DARK },
 };

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Clock, CheckCircle2, LogIn, LogOut, Camera, WifiOff, RefreshCw } from "lucide-react";
 import { getInfosPointageScan, validerPointageScan } from "../api/client";
-import { GREEN, GREEN_DARK, CREAM, INK, CLAY } from "../theme";
+import { GREEN, GREEN_DARK, CREAM, INK, CLAY, TEXTE_DOUX, TEXTE_GRIS, ALERTE, ALERTE_FOND } from "../theme";
 import CaptureSelfie from "../components/CaptureSelfie";
 import { ajouterPointageEnAttente, listerPointagesEnAttente } from "../offline/queuePointage";
 import { synchroniserPointagesEnAttente } from "../offline/syncPointage";
@@ -217,7 +217,7 @@ export default function PointageScan() {
 const styles = {
   page: {
     minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-    background: `linear-gradient(160deg, ${GREEN} 0%, ${GREEN_DARK} 100%)`, fontFamily: "'Inter', sans-serif", padding: 16,
+    background: `linear-gradient(160deg, ${GREEN} 0%, ${GREEN_DARK} 100%)`, fontFamily: "inherit", padding: 16,
   },
   card: {
     background: CREAM, borderRadius: 20, padding: "32px 28px", width: 340, maxWidth: "100%",
@@ -227,18 +227,18 @@ const styles = {
   logo: { height: 48, width: 48, borderRadius: 12, objectFit: "cover", marginBottom: 4 },
   photo: { height: 80, width: 80, borderRadius: "50%", objectFit: "cover", marginBottom: 4 },
   nom: { fontSize: 20, fontWeight: 700, margin: 0, color: INK },
-  ferme: { fontSize: 13, color: "#6B756E", margin: "0 0 10px" },
+  ferme: { fontSize: 13, color: TEXTE_GRIS, margin: "0 0 10px" },
   statut: { fontSize: 14, color: INK, margin: "6px 0 8px" },
-  selfieNote: { fontSize: 11.5, color: "#8A948D", margin: "0 0 14px" },
+  selfieNote: { fontSize: 12, color: TEXTE_DOUX, margin: "0 0 14px" },
   bouton: {
     display: "flex", alignItems: "center", gap: 8, background: GREEN, color: "#fff", border: "none",
     borderRadius: 12, padding: "14px 22px", fontSize: 15.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", width: "100%", justifyContent: "center",
   },
-  attente: { fontSize: 14, color: "#6B756E" },
-  erreur: { fontSize: 14, color: "#9E4527", margin: 0 },
-  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: "#FDEEE8", color: "#9E4527", fontSize: 12, fontWeight: 500, padding: "8px 12px", borderRadius: 10, width: "100%", marginBottom: 6 },
-  txtHorsLigne: { fontSize: 13, color: "#6B756E", margin: "0 0 10px", lineHeight: 1.5 },
-  reessayerBtn: { display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "#6B756E", fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", marginTop: 10, padding: 0 },
+  attente: { fontSize: 14, color: TEXTE_GRIS },
+  erreur: { fontSize: 14, color: ALERTE, margin: 0 },
+  offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: ALERTE_FOND, color: ALERTE, fontSize: 12, fontWeight: 500, padding: "8px 12px", borderRadius: 10, width: "100%", marginBottom: 6 },
+  txtHorsLigne: { fontSize: 13, color: TEXTE_GRIS, margin: "0 0 10px", lineHeight: 1.5 },
+  reessayerBtn: { display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: TEXTE_GRIS, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", marginTop: 10, padding: 0 },
   recap: { width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginTop: 6 },
   recapTitre: { fontSize: 16, fontWeight: 700, color: INK, margin: "6px 0 10px" },
   recapLigne: { display: "flex", justifyContent: "space-between", width: "100%", fontSize: 13.5, color: "#4C544E", padding: "5px 0", borderBottom: "1px solid #ECE9DF" },

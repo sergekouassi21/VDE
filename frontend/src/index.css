@@ -2,9 +2,30 @@
   box-sizing: border-box;
 }
 
+:root {
+  /* Pile système — rendue en Roboto sur Android, San Francisco sur iOS,
+     Segoe UI sur Windows. Aucune police à télécharger : zéro octet de plus
+     sur une connexion de zone rurale, aucun texte invisible pendant le
+     chargement, et disponible immédiatement hors-ligne. C'est déjà ce qui
+     s'affichait en réalité — 'Inter' était déclarée mais jamais chargée
+     (ni @font-face, ni lien), donc chaque page retombait silencieusement
+     sur une police de repli, et pas toujours la même selon l'endroit.
+     Source unique : tout le reste de l'appli hérite d'ici. */
+  --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: var(--police);
+}
+
+/* Les champs de formulaire n'héritent pas de la police par défaut dans les
+   navigateurs. Sans cette règle, un <input> ou un <button> qui oublie son
+   `fontFamily: "inherit"` retombe sur la police par défaut du navigateur —
+   c'est la cause classique d'un formulaire qui « ne ressemble pas au
+   reste » de la page. */
+input, select, textarea, button {
+  font-family: inherit;
 }
 
 #root {
@@ -44,7 +65,6 @@ input:focus, textarea:focus, button:focus {
   gap: 18px;
   flex: 1;
 }
-
 /* Barre d'onglets basse — mobile uniquement (cf. media query ci-dessous),
    masquée sur desktop où le menu du haut suffit. Cf. conversation du
    05/08/2026 avec Serge. */
@@ -59,132 +79,114 @@ input:focus, textarea:focus, button:focus {
   z-index: 500;
 }
 
-/* Carte de profil — toujours visible en haut à droite de l'écran, sous la
-   barre de nav, sur chaque page (cf. conversation du 30/07/2026 avec
-   Serge). Position fixe indépendante du flux flex de la nav, qui diffère
-   entre desktop et mobile. */
-.profil-menu {
-  position: fixed;
-  top: 60px;
-  right: 12px;
-  z-index: 150;
-}
+/* Identité de la personne connectée — visible sur chaque page (cf.
+   conversation du 30/07/2026 avec Serge).
 
-/* Contenu de la carte de profil — en classes CSS (pas en style inline React)
-   précisément pour pouvoir la réduire sur petit écran via la media query
-   ci-dessous, sans quoi elle cache des données de la page en dessous sur
-   téléphone (cf. conversation du 31/07/2026 avec Serge). */
-.profil-panel {
-  width: 200px;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .22);
-  padding: 14px 16px;
-  font-family: 'Inter', sans-serif;
+   Auparavant c'était une carte en `position: fixed` posée par-dessus le coin
+   supérieur droit de TOUTES les pages. Elle masquait le contenu, et la
+   réponse apportée le 31/07 — la rétrécir — avait fait tomber ses textes à
+   7,5 px, illisibles en plein soleil sur un téléphone d'entrée de gamme.
+   Elle vit maintenant dans le flux de la barre de navigation : plus rien
+   n'est recouvert, et les textes peuvent retrouver une taille lisible.
+   Cf. analyse du 05/08/2026. */
+.profil-inline {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
-  gap: 4px;
+  gap: 9px;
+  min-width: 0;
+  color: #fff;
+  /* Placée en dernier visuellement sur grand écran alors qu'elle vient avant
+     .nav-links dans le DOM — cet ordre du DOM est celui qu'il faut sur
+     mobile, où elle doit rester dans la rangée du haut. */
+  order: 10;
+  margin-left: auto;
 }
 .profil-avatar, .profil-avatar-vide {
-  width: 56px;
-  height: 56px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  margin-bottom: 4px;
+  flex: none;
 }
 .profil-avatar {
   object-fit: cover;
 }
 .profil-avatar-vide {
-  background: #EAF3EE;
-  color: #123D26;
+  background: rgba(255, 255, 255, .18);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 700;
+}
+.profil-textes {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
 }
 .profil-nom {
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 700;
-  color: #1A2420;
-  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.profil-role {
-  font-size: 10.5px;
-  font-weight: 600;
-  color: #123D26;
-  background: #EAF3EE;
-  border-radius: 6px;
-  padding: 2px 8px;
-  text-transform: uppercase;
-  letter-spacing: .4px;
+.profil-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, .78);
+  white-space: nowrap;
 }
 .profil-telephone {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12.5px;
-  color: #6B756E;
-  margin: 6px 0 0;
+  gap: 4px;
 }
 
 @media (max-width: 720px) {
-  /* Carte de profil réduite sur téléphone — la version pleine taille
-     débordait sur le contenu de la page (cf. conversation du 31/07/2026). */
-  .profil-panel {
-    width: 132px;
-    padding: 7px 8px;
-    gap: 2px;
-    border-radius: 10px;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, .18);
-  }
-  .profil-avatar, .profil-avatar-vide {
-    width: 30px;
-    height: 30px;
-    font-size: 12px;
-    margin-bottom: 1px;
-  }
-  .profil-nom {
-    font-size: 10px;
-  }
-  .profil-role {
-    font-size: 7.5px;
-    padding: 1px 5px;
-    letter-spacing: .2px;
-  }
-  .profil-telephone {
-    font-size: 8.5px;
-    gap: 3px;
-    margin-top: 2px;
-  }
-  .profil-telephone svg {
-    width: 10px;
-    height: 10px;
-  }
-
+  /* Rangée du haut sur téléphone : [logo + recherche] [profil] [menu].
+     La barre s'enroule (flex-wrap) pour que le panneau de liens déplié passe
+     sur toute la largeur en dessous, sans casser cette rangée. */
   .nav-bar {
-    flex-direction: column;
-    align-items: stretch;
+    flex-wrap: wrap;
+    align-items: center;
     height: auto;
-    padding: 0;
+    padding: 0 14px;
+    gap: 10px;
   }
   .nav-top {
-    justify-content: space-between;
+    flex: 1;
+    min-width: 0;
     height: 52px;
-    padding: 0 20px;
-    box-sizing: border-box;
+    gap: 6px;
+  }
+  .profil-inline {
+    order: 0;
+    margin-left: 0;
+    max-width: 48%;
+    gap: 7px;
+  }
+  /* Le numéro de téléphone reste dans l'infobulle et sur grand écran : sur
+     un téléphone, il pousserait le nom hors de la rangée. */
+  .profil-telephone {
+    display: none;
   }
   .nav-hamburger {
     display: flex;
+    order: 1;
   }
   .nav-links {
     display: none;
+    order: 2;
+    flex-basis: 100%;
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
-    padding: 8px 20px 18px;
+    padding: 2px 6px 16px;
   }
   .nav-links.open {
     display: flex;
@@ -217,12 +219,17 @@ input:focus, textarea:focus, button:focus {
     align-items: center;
     justify-content: center;
     gap: 2px;
-    color: rgba(255, 255, 255, .68);
+    color: rgba(255, 255, 255, .78);
     text-decoration: none;
     background: none;
     border: none;
     font-family: inherit;
-    font-size: 10px;
+    /* 11 px et non 12 comme ailleurs : cinq onglets doivent tenir sur la
+       largeur d'un téléphone d'entrée de gamme (360 px), et « Rentabilité »
+       déborderait à 12. C'est le seul endroit de l'appli sous le plancher de
+       lisibilité, et c'est une contrainte de place assumée — le contraste a
+       été remonté (.78 au lieu de .68) pour compenser. */
+    font-size: 11px;
     cursor: pointer;
   }
   .bottom-tab-item.active {
@@ -234,7 +241,7 @@ input:focus, textarea:focus, button:focus {
     right: -8px;
     background: #E05A3C;
     color: #fff;
-    font-size: 9px;
+    font-size: 10.5px;
     font-weight: 700;
     line-height: 1;
     border-radius: 999px;
