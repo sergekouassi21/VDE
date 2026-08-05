@@ -690,9 +690,12 @@ const styles = {
   tabOn: { background: GREEN, borderColor: GREEN, color: "#fff", fontWeight: 600 },
   body: { display: "flex", flexDirection: "column", gap: 0 },
   card: { background: "#fff", borderRadius: 12, border: "1px solid #ECE9DF", padding: "12px 14px", marginBottom: 12 },
-  stockGlobal: { display: "flex", justifyContent: "space-between", alignItems: "center", background: `linear-gradient(150deg, ${GREEN}, ${GREEN_DARK})`, color: "#fff", borderRadius: 14, padding: "14px 18px", marginBottom: 14 },
-  stockGlobalLabel: { fontSize: 12.5, opacity: .9 },
-  stockGlobalVal: { fontSize: 20, fontWeight: 700 },
+  // gap + flexWrap : sans eux, le libellé (long) venait chevaucher la valeur
+  // sur un écran étroit — « ...Point Journalier0 carton ». Le chiffre passe
+  // maintenant à la ligne plutôt que de se faire recouvrir.
+  stockGlobal: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, background: `linear-gradient(150deg, ${GREEN}, ${GREEN_DARK})`, color: "#fff", borderRadius: 14, padding: "14px 18px", marginBottom: 14 },
+  stockGlobalLabel: { fontSize: 12.5, opacity: .9, flex: "1 1 170px", minWidth: 0 },
+  stockGlobalVal: { fontSize: 20, fontWeight: 700, whiteSpace: "nowrap" },
   fieldRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
   prixHistoBox: { background: "#F4F9F6", border: "1px solid #DCEAE1", borderRadius: 10, padding: "10px 12px", margin: "4px 0 10px", display: "flex", flexDirection: "column", gap: 6 },
   prixHistoTitre: { fontSize: 12, fontWeight: 600, color: GREEN_DARK, textTransform: "uppercase", letterSpacing: .3 },
@@ -701,9 +704,14 @@ const styles = {
   prixHistoValeurs: { display: "flex", gap: 10, flexWrap: "wrap" },
   prixHistoValeur: { fontSize: 12.5, color: GREEN_DARK, fontWeight: 600 },
   prixHistoDate: { fontSize: 12, color: TEXTE_DOUX, fontWeight: 400 },
-  field: { display: "flex", flexDirection: "column", gap: 5, padding: "6px 0" },
+  // minWidth:0 — sans lui, une colonne `1fr` de grille refuse de descendre
+  // sous la largeur naturelle de son <input> (~183 px). Deux colonnes
+  // suffisaient donc à pousser la page à 411 px sur un écran de 360, ce qui
+  // décalait aussi la barre de navigation en position:fixed et faisait sortir
+  // le bouton menu de l'écran. Cf. captures du 06/08/2026 à 360 px.
+  field: { display: "flex", flexDirection: "column", gap: 5, padding: "6px 0", minWidth: 0 },
   fieldLabel: { fontSize: 12, color: TEXTE_META, fontWeight: 500 },
-  input: { border: "1px solid #DDE2DE", borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: "inherit", background: FOND_CARTE, color: INK },
+  input: { width: "100%", minWidth: 0, border: "1px solid #DDE2DE", borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: "inherit", background: FOND_CARTE, color: INK },
   sectionLabel: { fontSize: 12, fontWeight: 600, color: GREEN_DARK, textTransform: "uppercase", letterSpacing: .6, margin: "14px 0 8px" },
   ligne: { background: "#fff", borderRadius: 12, border: "1px solid #ECE9DF", padding: "12px", marginBottom: 8 },
   ligneTop: { display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" },

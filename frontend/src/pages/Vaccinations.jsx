@@ -720,8 +720,11 @@ const styles = {
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
   offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: ALERTE_FOND, color: ALERTE, fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
   filters: { display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" },
-  select: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 13.5, fontFamily: "inherit", color: INK },
-  vueToggle: { display: "flex", gap: 4, background: BORD, borderRadius: 10, padding: 3 },
+  // flex + minWidth:0 : le sélecteur de ferme prenait toute la ligne à sa
+  // largeur naturelle, ne laissant pas la place au groupe de boutons de vue,
+  // qui débordait alors de l'écran (378 px sur un téléphone de 360).
+  select: { flex: "1 1 150px", minWidth: 0, padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 13.5, fontFamily: "inherit", color: INK },
+  vueToggle: { display: "flex", flexWrap: "wrap", gap: 4, background: BORD, borderRadius: 10, padding: 3 },
   vueBtn: { display: "flex", alignItems: "center", gap: 5, background: "transparent", color: TEXTE_DOUX, border: "none", borderRadius: 8, padding: "6px 11px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   vueBtnOn: { background: "#fff", color: GREEN_DARK, boxShadow: "0 1px 3px rgba(18,61,38,.12)" },
   addBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 10, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginLeft: "auto" },
