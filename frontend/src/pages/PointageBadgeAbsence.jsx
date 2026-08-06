@@ -22,7 +22,17 @@ export default function PointageBadgeAbsence() {
   const charger = useCallback(() => {
     getEmployesBadgeAbsence(token)
       .then((data) => { setEmployes(data); setChargement(false); })
-      .catch(() => { setErreur("Badge invalide. Contactez la direction."); setChargement(false); });
+      .catch((err) => {
+        // Trois causes bien distinctes, qui appellent trois gestes
+        // différents : attendre le réseau, changer de téléphone, ou prévenir
+        // la direction. Un message unique les confondrait toutes.
+        setErreur(!err.response
+          ? "Pas de réseau — impossible de charger la liste des employés. Réessaie une fois la connexion revenue."
+          : err.response.status === 403
+          ? "Ce téléphone n'est pas celui autorisé pour le pointage. Utilise le téléphone habituel, ou fais activer celui-ci par la direction."
+          : "Badge invalide. Contactez la direction.");
+        setChargement(false);
+      });
   }, [token]);
 
   useEffect(() => { charger(); }, [charger]);

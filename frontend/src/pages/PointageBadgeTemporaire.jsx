@@ -44,8 +44,14 @@ export default function PointageBadgeTemporaire() {
         // même pas charger la liste des employés depuis ce badge de secours
         // (cf. conversation du 29/07/2026 avec Serge — l'ancien message
         // "Badge temporaire invalide" était trompeur en cas de coupure).
+        // Le 403 est distinct d'un badge invalide : le badge est bon, c'est
+        // le TÉLÉPHONE qui n'est pas celui autorisé par la Direction. Sans
+        // cette distinction, on chercherait un problème de QR alors qu'il
+        // suffit de prendre le bon appareil.
         setErreur(!err.response
           ? "Pas de réseau — impossible de charger la liste des employés. Réessaie une fois la connexion revenue."
+          : err.response.status === 403
+          ? "Ce téléphone n'est pas celui autorisé pour le pointage. Utilise le téléphone habituel, ou fais activer celui-ci par la direction."
           : "Badge temporaire invalide. Contactez la direction.");
         setChargement(false);
       });

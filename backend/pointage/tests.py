@@ -13,7 +13,8 @@ from exploitation.models import Ferme, Magasin, ProfilUtilisateur, RoleUtilisate
 from exploitation.views import employes_ferme
 
 from .models import (
-    Absence, AppareilPointage, BadgeTemporaire, DocumentEmploye, Employe, EvaluationEmploye, LignePaie,
+    Absence, AppareilPointage, BadgeAbsence, BadgeTemporaire, DocumentEmploye, Employe, EvaluationEmploye,
+    LignePaie,
     Pointage, StatutAbsence,
 )
 from .views import (
@@ -29,6 +30,9 @@ from .views import (
     appareil_pointage_regenerer,
     appareil_pointage_statut,
     appareil_pointage_verifier,
+    badge_absence_declarer,
+    badge_absence_employes,
+    badge_temporaire_employes,
     badge_temporaire_valider,
     resume_paie,
     scan_info,
@@ -100,6 +104,81 @@ class SelfiePointageTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         pointage = Pointage.objects.get(employe=self.employe)
         self.assertTrue(bool(pointage.photo_debut))
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class BadgesPublicsAppareilTests(TestCase):
+    """Sur les quatre endpoints publics du pointage, deux seulement
+    vérifiaient l'appareil autorisé. Le badge d'absence — qui ÉCRIT — n'en
+    avait aucun, et les deux listes d'employés non plus : une photo du QR
+    affiché à la ferme suffisait à obtenir tout l'organigramme, ou à déclarer
+    n'importe qui absent, depuis n'importe quel téléphone.
+    Cf. audit de sécurité du 06/08/2026."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        magasin = Magasin.objects.create(nom="Magasin badges")
+        ferme = Ferme.objects.create(nom="Ferme badges", type=TypeFerme.PONTE, nombre_chambres=1, magasin=magasin)
+        self.employe = Employe.objects.create(nom="Employe Badge")
+        self.employe.fermes.add(ferme)
+        self.badge_secours = BadgeTemporaire.objects.create()
+        self.badge_absence = BadgeAbsence.objects.create()
+
+    # --- Liste du personnel via le badge de secours ---
+
+    def test_liste_secours_refusee_depuis_un_appareil_inconnu(self):
+        AppareilPointage.objects.create()
+        req = self.factory.get(f"/api/pointage/badge-temporaire/{self.badge_secours.token}/employes/")
+        resp = badge_temporaire_employes(req, token=str(self.badge_secours.token))
+        self.assertEqual(resp.status_code, 403)
+
+    def test_liste_secours_acceptee_depuis_l_appareil_autorise(self):
+        appareil = AppareilPointage.objects.create()
+        req = self.factory.get(
+            f"/api/pointage/badge-temporaire/{self.badge_secours.token}/employes/",
+            HTTP_X_APPAREIL_TOKEN=str(appareil.token),
+        )
+        resp = badge_temporaire_employes(req, token=str(self.badge_secours.token))
+        self.assertEqual(resp.status_code, 200)
+
+    # --- Liste du personnel via le badge d'absence ---
+
+    def test_liste_absence_refusee_depuis_un_appareil_inconnu(self):
+        AppareilPointage.objects.create()
+        req = self.factory.get(f"/api/pointage/badge-absence/{self.badge_absence.token}/employes/")
+        resp = badge_absence_employes(req, token=str(self.badge_absence.token))
+        self.assertEqual(resp.status_code, 403)
+
+    # --- Déclaration d'absence : une ÉCRITURE ---
+
+    def test_declarer_absence_refusee_depuis_un_appareil_inconnu(self):
+        """Le test le plus important : c'est une écriture, elle touche la paie."""
+        AppareilPointage.objects.create()
+        req = self.factory.post(
+            f"/api/pointage/badge-absence/{self.badge_absence.token}/declarer/",
+            {"employe": self.employe.id, "date": timezone.localdate().isoformat(), "motif": "Maladie"},
+        )
+        resp = badge_absence_declarer(req, token=str(self.badge_absence.token))
+        self.assertEqual(resp.status_code, 403)
+        self.assertFalse(Absence.objects.filter(employe=self.employe).exists())
+
+    def test_declarer_absence_acceptee_depuis_l_appareil_autorise(self):
+        appareil = AppareilPointage.objects.create()
+        req = self.factory.post(
+            f"/api/pointage/badge-absence/{self.badge_absence.token}/declarer/",
+            {"employe": self.employe.id, "date": timezone.localdate().isoformat(), "motif": "Maladie"},
+            HTTP_X_APPAREIL_TOKEN=str(appareil.token),
+        )
+        resp = badge_absence_declarer(req, token=str(self.badge_absence.token))
+        self.assertEqual(resp.status_code, 201)
+        self.assertTrue(Absence.objects.filter(employe=self.employe).exists())
+
+    def test_sans_appareil_configure_tout_continue_de_fonctionner(self):
+        """Transition en douceur : tant que la Direction n'a activé aucun
+        téléphone, les badges restent utilisables — sinon le correctif
+        bloquerait le pointage du jour au lendemain."""
+        req = self.factory.get(f"/api/pointage/badge-absence/{self.badge_absence.token}/employes/")
+        self.assertEqual(badge_absence_employes(req, token=str(self.badge_absence.token)).status_code, 200)
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())

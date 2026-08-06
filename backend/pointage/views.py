@@ -879,8 +879,18 @@ def badge_temporaire_qr(request):
 def badge_temporaire_employes(request, token):
     """Public — sert de repli pour un employé qui a oublié/perdu son badge.
     Liste tous les employés actifs avec leur état du jour, pour que le
-    superviseur choisisse manuellement la bonne personne."""
+    superviseur choisisse manuellement la bonne personne.
+
+    Vérifie l'appareil, comme la validation qui suit : cette liste nomme TOUT
+    le personnel actif et ses fermes. Sans ce contrôle, une simple photo du QR
+    de secours affiché à la ferme suffisait à obtenir l'organigramme complet
+    depuis n'importe quel téléphone. Cf. audit de sécurité du 06/08/2026."""
     get_object_or_404(BadgeTemporaire, token=token)
+    if not _appareil_autorise(request):
+        return Response(
+            {"detail": "Cet appareil n'est pas autorisé à utiliser le badge de secours."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
     ferme_id = request.query_params.get("ferme")
     employes = Employe.objects.filter(actif=True).prefetch_related("fermes")
     if ferme_id:
@@ -930,8 +940,16 @@ def badge_absence_qr(request):
 @throttle_classes([ThrottlePointagePublic])
 def badge_absence_employes(request, token):
     """Public — liste des employés actifs pour que le superviseur choisisse
-    qui est absent avant de saisir le motif."""
+    qui est absent avant de saisir le motif.
+
+    Même exposition que le badge de secours : cette liste nomme tout le
+    personnel actif. Vérification d'appareil pour la même raison."""
     get_object_or_404(BadgeAbsence, token=token)
+    if not _appareil_autorise(request):
+        return Response(
+            {"detail": "Cet appareil n'est pas autorisé à signaler une absence."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
     ferme_id = request.query_params.get("ferme")
     employes = Employe.objects.filter(actif=True).prefetch_related("fermes")
     if ferme_id:
@@ -954,6 +972,16 @@ def badge_absence_declarer(request, token):
     consultatif contre une double déclaration concurrente (cf. conversation
     du 01/08/2026 avec Serge)."""
     get_object_or_404(BadgeAbsence, token=token)
+    # Écriture publique : elle doit exiger l'appareil autorisé, exactement
+    # comme scan_valider et badge_temporaire_valider. Ce contrôle manquait
+    # ici alors que ce badge est tout aussi partagé — une photo du QR affiché
+    # à la ferme permettait de déclarer n'importe quel employé absent, depuis
+    # n'importe quel téléphone. Cf. audit de sécurité du 06/08/2026.
+    if not _appareil_autorise(request):
+        return Response(
+            {"detail": "Cet appareil n'est pas autorisé à signaler une absence."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
     employe_id = request.data.get("employe")
     date = request.data.get("date")
     motif = (request.data.get("motif") or "").strip()
