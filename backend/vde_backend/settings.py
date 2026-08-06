@@ -240,8 +240,11 @@ BREVO_SMTP_LOGIN = os.environ.get('BREVO_SMTP_LOGIN', '')
 BREVO_SMTP_KEY = os.environ.get('BREVO_SMTP_KEY', '')
 if BREVO_SMTP_LOGIN and BREVO_SMTP_KEY:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_HOST = 'smtp-relay.brevo.com'
-    EMAIL_PORT = 587
+    EMAIL_HOST = os.environ.get('DJANGO_EMAIL_HOST', 'smtp-relay.brevo.com')
+    # Port réglable sans redéploiement : un envoi qui RESTE BLOQUÉ au lieu
+    # d'échouer signale un port filtré par l'hébergeur, pas un mauvais mot de
+    # passe. Brevo écoute aussi sur 2525, précisément pour ce cas.
+    EMAIL_PORT = int(os.environ.get('DJANGO_EMAIL_PORT', '587'))
     EMAIL_USE_TLS = True
     EMAIL_HOST_USER = BREVO_SMTP_LOGIN
     EMAIL_HOST_PASSWORD = BREVO_SMTP_KEY
