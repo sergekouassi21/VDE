@@ -7,6 +7,7 @@ from django.db import models
 from django.utils import timezone
 
 from exploitation.models import Ferme
+from exploitation.stockage import stockage_documents_prives, stockage_images_privees
 
 # Base de calcul standard (Côte d'Ivoire) pour convertir un salaire mensuel
 # fixe en taux horaire : un mois compte 26 jours ouvrables, une journée de
@@ -45,7 +46,9 @@ class Employe(models.Model):
     jour_repos = models.IntegerField(choices=JOURS_SEMAINE, null=True, blank=True, help_text="Jour de repos hebdomadaire de cet employé")
     qr_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     actif = models.BooleanField(default=True)
-    photo = models.ImageField(upload_to="employes/", blank=True, null=True)
+    photo = models.ImageField(
+        upload_to="employes/", blank=True, null=True, storage=stockage_images_privees,
+    )
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="employe_pointage",
@@ -109,24 +112,9 @@ class TypeDocumentEmploye(models.TextChoices):
     AUTRE = "AUTRE", "Autre document"
 
 
-def _storage_documents_employes():
-    # PDF/scans quelconques, pas forcément des images — MediaCloudinaryStorage
-    # (utilisé pour Employe.photo) refuse les fichiers non-image, il faut le
-    # stockage "raw" de Cloudinary pour accepter n'importe quel type.
-    #
-    # Stockage PRIVÉ : RawMediaCloudinaryStorage téléversait en livraison
-    # publique, donc la CNI d'un employé était téléchargeable par quiconque
-    # connaissait l'URL, sans authentification. Cf. pointage/stockage.py et
-    # l'audit de sécurité du 06/08/2026.
-    from django.conf import settings
-
-    if settings.CLOUDINARY_STORAGE.get("CLOUD_NAME"):
-        from .stockage import StockagePriveDocuments
-
-        return StockagePriveDocuments()
-    from django.core.files.storage import FileSystemStorage
-
-    return FileSystemStorage()
+# Les stockages privés vivent dans exploitation (application de base), pour
+# être partagés avec ProfilUtilisateur.photo — cf. exploitation/stockage.py.
+_storage_documents_employes = stockage_documents_prives
 
 
 class DocumentEmploye(models.Model):
@@ -166,8 +154,12 @@ class Pointage(models.Model):
     date = models.DateField()
     heure_debut = models.DateTimeField(null=True, blank=True)
     heure_fin = models.DateTimeField(null=True, blank=True)
-    photo_debut = models.ImageField(upload_to="pointages_selfies/", blank=True, null=True)
-    photo_fin = models.ImageField(upload_to="pointages_selfies/", blank=True, null=True)
+    photo_debut = models.ImageField(
+        upload_to="pointages_selfies/", blank=True, null=True, storage=stockage_images_privees,
+    )
+    photo_fin = models.ImageField(
+        upload_to="pointages_selfies/", blank=True, null=True, storage=stockage_images_privees,
+    )
     # Le badge temporaire de secours n'a aucun jeton personnel à vérifier
     # (n'importe qui choisit n'importe quel nom dans la liste) — signaler
     # quand il a servi, pour l'arrivée et/ou le départ indépendamment (un
