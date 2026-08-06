@@ -109,7 +109,7 @@ const styles = {
   modal: { background: CREAM, borderRadius: 18, padding: 22, width: 320, maxWidth: "100%", position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" },
   close: { position: "absolute", top: 10, right: 10, background: "none", border: "none", cursor: "pointer", color: TEXTE_DOUX },
   titre: { fontSize: 16, fontWeight: 700, margin: 0, color: INK },
-  txt: { fontSize: 13, color: TEXTE_GRIS, margin: 0, lineHeight: 1.5 },
+  txt: { fontSize: 14, color: TEXTE_GRIS, margin: 0, lineHeight: 1.5 },
   erreurTxt: { fontSize: 12.5, color: CLAY, margin: 0 },
   videoWrap: { width: 220, height: 220, borderRadius: "50%", overflow: "hidden", background: "#000", display: "flex", alignItems: "center", justifyContent: "center" },
   video: { width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" },

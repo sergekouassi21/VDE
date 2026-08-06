@@ -27,7 +27,8 @@ from exploitation.models import ActionAudit, Ferme, LigneFacture, PointJournalie
 from exploitation.permissions import EstDirectionOuAdmin, IsFermeAccessibleTechnicienInclus
 from exploitation.permissions import est_direction_ou_admin as _est_direction_ou_admin
 from exploitation.permissions import est_technicien as _est_technicien
-from exploitation.views import _limite_borne
+from exploitation.pagination import PaginationOptionnelle
+from exploitation.views import _borner_si_non_pagine, _limite_borne
 
 # Espaces de noms pour pg_advisory_xact_lock (cf. exploitation/calculs.py,
 # _LOCK_CLASSID_*) — classid 1 à 3 y sont déjà pris (numéro de facture, nom
@@ -245,13 +246,14 @@ class PointageViewSet(AuditMixin, viewsets.ModelViewSet):
         if date_fin:
             qs = qs.filter(date__lte=date_fin)
 
-        qs = qs.order_by("-date")
-        # Borne la réponse de list() seulement — trancher casserait
-        # get_object() pour retrieve/patch/delete (cf. exploitation/views.py,
-        # même garde-fou, audit du 01/08/2026 : ce viewset avait été oublié).
-        if self.action == "list":
-            qs = qs[:_limite_borne(self.request, 500)]
-        return qs
+        # `-id` en second critère : plusieurs pointages partagent la même
+        # date, et sans départage stable deux pages successives pourraient
+        # réafficher ou sauter des lignes.
+        qs = qs.order_by("-date", "-id")
+        # _borner_si_non_pagine porte les deux garde-fous : ne jamais trancher
+        # les actions par id (get_object() ne peut pas filtrer une queryset
+        # découpée), ni quand le client demande une page.
+        return _borner_si_non_pagine(self, qs)
 
     @transaction.atomic
     def partial_update(self, request, *args, **kwargs):

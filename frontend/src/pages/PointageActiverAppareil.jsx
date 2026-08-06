@@ -57,5 +57,5 @@ const styles = {
   },
   logo: { height: 48, width: 48, borderRadius: 12, objectFit: "cover", marginBottom: 4 },
   titre: { fontSize: 18, fontWeight: 700, margin: 0, color: INK },
-  txt: { fontSize: 13.5, color: TEXTE_GRIS, margin: 0, lineHeight: 1.5 },
+  txt: { fontSize: 14, color: TEXTE_GRIS, margin: 0, lineHeight: 1.5 },
 };

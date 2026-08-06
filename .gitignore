@@ -4,9 +4,15 @@ dev-dist/
 .env
 .env.local
 
+# Cloudflare — état local de wrangler, recréé à chaque déploiement
+.wrangler/
+
 # Django
 backend/venv/
 backend/db.sqlite3
+# Bases de test jetables créées pour vérifier une modification sans toucher
+# à la base de développement
+backend/db_apercu.sqlite3
 backend/staticfiles/
 backend/media/
 **/__pycache__/

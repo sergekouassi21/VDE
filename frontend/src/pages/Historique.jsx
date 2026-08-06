@@ -9,6 +9,7 @@ import { GREEN, GREEN_DARK, INK, CLAY, formatSacs, formatColis, TEXTE_DOUX, TEXT
 import { genererPdfHistoriquePoint, genererBilanBande, telechargerPdf, partagerPdf } from "../utils/pdf";
 import { mettreEnCache, lireCache } from "../offline/cache";
 import { estDirectionOuAdmin, estTechnicien } from "../utils/auth";
+import Pagination from "../components/Pagination";
 
 const CACHE_CLE_HISTORIQUE = "historique-points";
 
@@ -49,6 +50,10 @@ export default function Historique() {
   const [envoi, setEnvoi] = useState(false);
   const [envoiBilan, setEnvoiBilan] = useState(null);
   const [horsLigneDepuis, setHorsLigneDepuis] = useState(null);
+  // Pagination : cette liste grossit chaque jour. Le serveur la bornait
+  // silencieusement aux 500 saisies les plus récentes — on croyait tout voir.
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [clotures, setClotures] = useState([]);
   const aujourdhui = new Date();
   const [nouvelleCloture, setNouvelleCloture] = useState({ annee: aujourdhui.getFullYear(), mois: aujourdhui.getMonth() + 1 });
@@ -109,9 +114,14 @@ export default function Historique() {
     if (fermeId) params.ferme = fermeId;
     if (dateDebut) params.date_debut = dateDebut;
     if (dateFin) params.date_fin = dateFin;
+    // `page` déclenche la pagination côté serveur : sans ce paramètre, la
+    // réponse reste un tableau simple (cf. PaginationOptionnelle).
+    params.page = page;
     getPointsJournaliers(params)
       .then((data) => {
-        setPoints(data);
+        // Réponse paginée : { count, next, previous, results }.
+        setPoints(data.results ?? data);
+        setTotal(data.count ?? (data.results ?? data).length);
         setChargement(false);
         setHorsLigneDepuis(null);
         mettreEnCache(CACHE_CLE_HISTORIQUE, data);
@@ -122,11 +132,13 @@ export default function Historique() {
         // vide — lecture seule, les filtres ne se ré-appliquent qu'au
         // retour du réseau.
         const cache = await lireCache(CACHE_CLE_HISTORIQUE);
-        setPoints(cache?.donnees || []);
+        const d = cache?.donnees;
+        setPoints(d?.results ?? d ?? []);
+        setTotal(d?.count ?? (d?.results ?? d ?? []).length);
         setHorsLigneDepuis(cache?.sauvegardeLe || Date.now());
         setChargement(false);
       });
-  }, [fermeId, dateDebut, dateFin]);
+  }, [fermeId, dateDebut, dateFin, page]);
 
   useEffect(() => { rafraichir(); }, [rafraichir]);
 
@@ -188,20 +200,20 @@ export default function Historique() {
         )}
 
         <div style={styles.filters}>
-          <select style={styles.select} value={fermeId} onChange={(e) => setFermeId(e.target.value)}>
+          <select style={styles.select} value={fermeId} onChange={(e) => { setFermeId(e.target.value); setPage(1); }}>
             <option value="">Toutes les fermes</option>
             {fermes.map((f) => <option key={f.id} value={f.id}>{f.nom}</option>)}
           </select>
           <label style={styles.dateLabel}>
             Du
-            <input type="date" style={styles.date} value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} />
+            <input type="date" style={styles.date} value={dateDebut} onChange={(e) => { setDateDebut(e.target.value); setPage(1); }} />
           </label>
           <label style={styles.dateLabel}>
             Au
-            <input type="date" style={styles.date} value={dateFin} onChange={(e) => setDateFin(e.target.value)} />
+            <input type="date" style={styles.date} value={dateFin} onChange={(e) => { setDateFin(e.target.value); setPage(1); }} />
           </label>
           {(fermeId || dateDebut || dateFin) && (
-            <button style={styles.clear} onClick={() => { setFermeId(""); setDateDebut(""); setDateFin(""); }}>
+            <button style={styles.clear} onClick={() => { setFermeId(""); setDateDebut(""); setDateFin(""); setPage(1); }}>
               Réinitialiser
             </button>
           )}
@@ -463,6 +475,14 @@ export default function Historique() {
             </div>
           )}
         </section>
+
+        <Pagination
+          page={page}
+          total={total}
+          taillePage={50}
+          onChange={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          libelle="saisies"
+        />
       </div>
     </div>
   );
@@ -485,25 +505,25 @@ const styles = {
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
   offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: ALERTE_FOND, color: ALERTE, fontSize: 12.5, fontWeight: 500, padding: "9px 16px", marginBottom: 14, borderRadius: 10 },
   filters: { display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" },
-  select: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 13.5, fontFamily: "inherit", color: INK },
+  select: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 14, fontFamily: "inherit", color: INK },
   dateLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: TEXTE_META },
-  date: { padding: "8px 10px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
+  date: { padding: "8px 10px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 14, fontFamily: "inherit", color: INK },
   clear: { padding: "8px 14px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 12.5, cursor: "pointer", color: TEXTE_META, fontFamily: "inherit" },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
-  resumeHead: { display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", fontSize: 13, fontWeight: 600, color: GREEN_DARK, borderBottom: "1px solid #ECE9DF" },
+  resumeHead: { display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", fontSize: 14, fontWeight: 600, color: GREEN_DARK, borderBottom: "1px solid #ECE9DF" },
   badgeEnCours: { marginLeft: 8, fontSize: 12, fontWeight: 700, color: GREEN_DARK, background: VERT_FOND, borderRadius: 6, padding: "1px 6px", textTransform: "uppercase", letterSpacing: .3 },
   clotureRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontSize: 12.5, color: GREEN_DARK, background: FOND_PAGE, borderRadius: 9, padding: "7px 11px" },
   rowUrgente: { background: ALERTE_FOND },
-  empty: { padding: 24, textAlign: "center", color: TEXTE_DOUX, fontSize: 13.5, margin: 0 },
+  empty: { padding: 24, textAlign: "center", color: TEXTE_DOUX, fontSize: 14, margin: 0 },
   tableWrap: { overflowX: "auto" },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 14 },
   th: { textAlign: "left", padding: "12px 16px", fontSize: 12, textTransform: "uppercase", letterSpacing: .5, color: TEXTE_DOUX, borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
   td: { padding: "11px 16px", borderBottom: "1px solid #F2F0E8", color: INK, whiteSpace: "nowrap" },
   detailCell: { padding: "14px 16px 18px 40px", background: "#FBFAF6", borderBottom: "1px solid #F2F0E8" },
   detailGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "10px 20px" },
   detailItem: { display: "flex", flexDirection: "column", gap: 2 },
   detailLabel: { fontSize: 12, color: TEXTE_DOUX },
-  detailValue: { fontSize: 13.5, fontWeight: 600, color: GREEN_DARK },
+  detailValue: { fontSize: 14, fontWeight: 600, color: GREEN_DARK },
   sortiesDetail: { marginTop: 14, background: FOND_PAGE, borderRadius: 9, padding: "8px 11px" },
   sortiesTitre: { fontSize: 12, fontWeight: 600, color: TEXTE_DOUX, textTransform: "uppercase", letterSpacing: .5, marginBottom: 5 },
   sortieLigne: { display: "flex", justifyContent: "space-between", fontSize: 12.5, color: GREEN_DARK, padding: "3px 0" },

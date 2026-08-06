@@ -161,8 +161,8 @@ const styles = {
   },
   logo: { height: 48, width: 48, borderRadius: 12, objectFit: "cover", marginBottom: 4 },
   nom: { fontSize: 20, fontWeight: 700, margin: 0, color: INK },
-  ferme: { fontSize: 13, color: TEXTE_GRIS, margin: "0 0 10px" },
-  statut: { fontSize: 13.5, color: TEXTE_GRIS, margin: "0 0 16px" },
+  ferme: { fontSize: 14, color: TEXTE_GRIS, margin: "0 0 10px" },
+  statut: { fontSize: 14, color: TEXTE_GRIS, margin: "0 0 16px" },
   bouton: {
     display: "flex", alignItems: "center", gap: 8, background: GREEN, color: "#fff", border: "none",
     borderRadius: 12, padding: "14px 22px", fontSize: 15.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", width: "100%", justifyContent: "center",

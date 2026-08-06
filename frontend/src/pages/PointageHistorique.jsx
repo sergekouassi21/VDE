@@ -7,6 +7,7 @@ import {
 } from "../api/client";
 import { genererFichePaie, telechargerPdf, visualiserPdf } from "../utils/pdf";
 import { GREEN, GREEN_DARK, INK, CLAY, TEXTE_DOUX, TEXTE_META, TEXTE_GRIS, FOND_PAGE, FOND_PAGE_ALT, ALERTE } from "../theme";
+import Pagination from "../components/Pagination";
 
 const LABEL_MODE_PAIEMENT = {
   WAVE: "Wave", ORANGE_MONEY: "Orange Money", MTN_MONEY: "MTN Money",
@@ -48,6 +49,10 @@ export default function PointageHistorique() {
   const [absences, setAbsences] = useState([]);
   const [lignesPaie, setLignesPaie] = useState([]);
   const [resume, setResume] = useState([]);
+  // Pagination de la liste des pointages uniquement — les absences, lignes de
+  // paie et le résumé restent complets, cf. rafraichir.
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [chargement, setChargement] = useState(true);
   const [fermeId, setFermeId] = useState("");
   const [employeId, setEmployeId] = useState("");
@@ -88,27 +93,40 @@ export default function PointageHistorique() {
     if (dateFin) params.date_fin = dateFin;
     const paieParams = { ...params };
     if (moisPremierJour) paieParams.mois = moisPremierJour;
+    // `page` n'est passé QU'À la liste des pointages. Les absences, les
+    // lignes de paie et le résumé doivent rester complets : ils alimentent
+    // les totaux et la fiche de paie, qui portent sur toute la période et
+    // non sur la page consultée.
     let annule = false;
     Promise.all([
-      getPointages(params),
+      getPointages({ ...params, page }),
       getAbsences(params),
       moisPremierJour ? getLignesPaie(paieParams) : Promise.resolve([]),
       getResumePaie(paieParams),
     ]).then(([pts, abs, paie, resumeData]) => {
       if (annule) return;
-      setPointages(pts); setAbsences(abs); setLignesPaie(paie); setResume(resumeData); setChargement(false);
+      setPointages(pts.results ?? pts);
+      setTotal(pts.count ?? (pts.results ?? pts).length);
+      setAbsences(abs); setLignesPaie(paie); setResume(resumeData); setChargement(false);
     });
     return () => { annule = true; };
-  }, [fermeId, employeId, dateDebut, dateFin, moisPremierJour]);
+  }, [fermeId, employeId, dateDebut, dateFin, moisPremierJour, page]);
 
   // Empêche une réponse obsolète (changement rapide de filtre pendant le
   // chargement) d'écraser un state plus récent — cf. audit du 30/07/2026.
   useEffect(() => rafraichir(), [rafraichir]);
 
+  // Totaux dérivés du résumé serveur, PAS de la liste affichée.
+  //
+  // Deux raisons. D'abord la pagination : sommer `pointages` ne donnerait
+  // plus que le total de la page en cours — un montant de paie faux, affiché
+  // comme s'il couvrait toute la période. Ensuite la cohérence : /resume-paie
+  // est déjà la source de vérité de la fiche de paie PDF, et l'écran affiche
+  // désormais exactement les mêmes chiffres qu'elle.
   const totaux = useMemo(() => ({
-    heures: pointages.reduce((s, p) => s + Number(p.heures_travaillees || 0), 0),
-    montant: pointages.reduce((s, p) => s + Number(p.montant_du_jour || 0), 0),
-  }), [pointages]);
+    heures: resume.reduce((s, g) => s + Number(g.totalHeures || 0), 0),
+    montant: resume.reduce((s, g) => s + Number(g.totalMontant || 0), 0),
+  }), [resume]);
 
   const periodeLabel = useMemo(() => {
     if (dateDebut && dateFin) return `Du ${new Date(dateDebut).toLocaleDateString("fr-FR")} au ${new Date(dateFin).toLocaleDateString("fr-FR")}`;
@@ -252,11 +270,11 @@ export default function PointageHistorique() {
         </header>
 
         <div style={styles.filters}>
-          <select style={styles.select} value={fermeId} onChange={(e) => setFermeId(e.target.value)}>
+          <select style={styles.select} value={fermeId} onChange={(e) => { setFermeId(e.target.value); setPage(1); }}>
             <option value="">Toutes les fermes</option>
             {fermes.map((f) => <option key={f.id} value={f.id}>{f.nom}</option>)}
           </select>
-          <select style={styles.select} value={employeId} onChange={(e) => setEmployeId(e.target.value)}>
+          <select style={styles.select} value={employeId} onChange={(e) => { setEmployeId(e.target.value); setPage(1); }}>
             <option value="">Tous les employés</option>
             {employes.map((emp) => <option key={emp.id} value={emp.id}>{emp.nom}</option>)}
           </select>
@@ -266,14 +284,14 @@ export default function PointageHistorique() {
           </label>
           <label style={styles.dateLabel}>
             Du
-            <input type="date" style={styles.date} value={dateDebut} onChange={(e) => { setDateDebut(e.target.value); setMois(""); }} />
+            <input type="date" style={styles.date} value={dateDebut} onChange={(e) => { setDateDebut(e.target.value); setMois(""); setPage(1); }} />
           </label>
           <label style={styles.dateLabel}>
             Au
-            <input type="date" style={styles.date} value={dateFin} onChange={(e) => { setDateFin(e.target.value); setMois(""); }} />
+            <input type="date" style={styles.date} value={dateFin} onChange={(e) => { setDateFin(e.target.value); setMois(""); setPage(1); }} />
           </label>
           {(fermeId || employeId || dateDebut || dateFin) && (
-            <button style={styles.clear} onClick={() => { setFermeId(""); setEmployeId(""); setDateDebut(""); setDateFin(""); setMois(""); }}>
+            <button style={styles.clear} onClick={() => { setFermeId(""); setEmployeId(""); setDateDebut(""); setDateFin(""); setMois(""); setPage(1); }}>
               Réinitialiser
             </button>
           )}
@@ -484,6 +502,14 @@ export default function PointageHistorique() {
               </table>
             </div>
           )}
+
+          <Pagination
+            page={page}
+            total={total}
+            taillePage={50}
+            onChange={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+            libelle="pointages"
+          />
         </section>
       </div>
 
@@ -567,25 +593,25 @@ const styles = {
   eyebrow: { fontSize: 12, color: GREEN, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
   h1: { fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -.5 },
   filters: { display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" },
-  select: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 13.5, fontFamily: "inherit", color: INK },
+  select: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 14, fontFamily: "inherit", color: INK },
   dateLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: TEXTE_META },
-  date: { padding: "8px 10px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
+  date: { padding: "8px 10px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 14, fontFamily: "inherit", color: INK },
   clear: { padding: "8px 14px", borderRadius: 10, border: "1px solid #DAD5C7", background: "#fff", fontSize: 12.5, cursor: "pointer", color: TEXTE_META, fontFamily: "inherit" },
   addBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: CLAY, border: "1.5px solid #E0BBA9", borderRadius: 10, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginLeft: "auto" },
   formCard: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", padding: 18, marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
-  input: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK, flex: "1 1 160px" },
-  submitBtn: { background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
+  input: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 14, fontFamily: "inherit", color: INK, flex: "1 1 160px" },
+  submitBtn: { background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
   erreur: { color: ALERTE, fontSize: 12.5, margin: 0, width: "100%" },
   totaux: { display: "flex", gap: 12, marginBottom: 16 },
   totalItem: { background: "#fff", borderRadius: 14, border: "1px solid #ECE9DF", padding: "12px 18px", display: "flex", flexDirection: "column", gap: 2 },
   totalLabel: { fontSize: 12, color: TEXTE_DOUX, textTransform: "uppercase", letterSpacing: .5 },
   totalValeur: { fontSize: 18, fontWeight: 700, color: GREEN_DARK },
   card: { background: "#fff", borderRadius: 16, border: "1px solid #ECE9DF", overflow: "hidden" },
-  resumeHead: { display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", fontSize: 13, fontWeight: 600, color: GREEN_DARK, borderBottom: "1px solid #ECE9DF" },
+  resumeHead: { display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", fontSize: 14, fontWeight: 600, color: GREEN_DARK, borderBottom: "1px solid #ECE9DF" },
   pdfBtn: { display: "flex", alignItems: "center", gap: 6, background: "#fff", color: GREEN_DARK, border: `1.5px solid ${GREEN}`, borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" },
-  empty: { padding: 24, textAlign: "center", color: TEXTE_DOUX, fontSize: 13.5, margin: 0 },
+  empty: { padding: 24, textAlign: "center", color: TEXTE_DOUX, fontSize: 14, margin: 0 },
   tableWrap: { overflowX: "auto" },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 14 },
   th: { textAlign: "left", padding: "12px 16px", fontSize: 12, textTransform: "uppercase", letterSpacing: .5, color: TEXTE_DOUX, borderBottom: "1px solid #ECE9DF", whiteSpace: "nowrap" },
   td: { padding: "11px 16px", borderBottom: "1px solid #F2F0E8", color: INK, whiteSpace: "nowrap" },
   iconBtn: { background: FOND_PAGE, border: "1px solid #ECE9DF", borderRadius: 8, padding: 6, cursor: "pointer", color: GREEN_DARK, display: "flex" },
@@ -597,6 +623,6 @@ const styles = {
   modalSousTitre: { fontSize: 12.5, color: TEXTE_DOUX, margin: "0 0 8px" },
   champLabel: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: TEXTE_GRIS },
   grillePaie: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
-  champInput: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 13.5, fontFamily: "inherit", color: INK },
+  champInput: { padding: "9px 12px", borderRadius: 10, border: "1px solid #DAD5C7", fontSize: 14, fontFamily: "inherit", color: INK },
   erreurEdit: { color: ALERTE, fontSize: 12.5, margin: 0 },
 };

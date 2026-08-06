@@ -227,7 +227,7 @@ const styles = {
   logo: { height: 48, width: 48, borderRadius: 12, objectFit: "cover", marginBottom: 4 },
   photo: { height: 80, width: 80, borderRadius: "50%", objectFit: "cover", marginBottom: 4 },
   nom: { fontSize: 20, fontWeight: 700, margin: 0, color: INK },
-  ferme: { fontSize: 13, color: TEXTE_GRIS, margin: "0 0 10px" },
+  ferme: { fontSize: 14, color: TEXTE_GRIS, margin: "0 0 10px" },
   statut: { fontSize: 14, color: INK, margin: "6px 0 8px" },
   selfieNote: { fontSize: 12, color: TEXTE_DOUX, margin: "0 0 14px" },
   bouton: {
@@ -237,10 +237,10 @@ const styles = {
   attente: { fontSize: 14, color: TEXTE_GRIS },
   erreur: { fontSize: 14, color: ALERTE, margin: 0 },
   offlineBanner: { display: "flex", alignItems: "center", gap: 8, background: ALERTE_FOND, color: ALERTE, fontSize: 12, fontWeight: 500, padding: "8px 12px", borderRadius: 10, width: "100%", marginBottom: 6 },
-  txtHorsLigne: { fontSize: 13, color: TEXTE_GRIS, margin: "0 0 10px", lineHeight: 1.5 },
+  txtHorsLigne: { fontSize: 14, color: TEXTE_GRIS, margin: "0 0 10px", lineHeight: 1.5 },
   reessayerBtn: { display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: TEXTE_GRIS, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", marginTop: 10, padding: 0 },
   recap: { width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginTop: 6 },
   recapTitre: { fontSize: 16, fontWeight: 700, color: INK, margin: "6px 0 10px" },
-  recapLigne: { display: "flex", justifyContent: "space-between", width: "100%", fontSize: 13.5, color: "#4C544E", padding: "5px 0", borderBottom: "1px solid #ECE9DF" },
+  recapLigne: { display: "flex", justifyContent: "space-between", width: "100%", fontSize: 14, color: "#4C544E", padding: "5px 0", borderBottom: "1px solid #ECE9DF" },
   dejaCompletNote: { fontSize: 12.5, color: CLAY, marginTop: 10, textAlign: "center", lineHeight: 1.4 },
 };

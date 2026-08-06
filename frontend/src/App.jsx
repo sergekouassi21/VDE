@@ -451,7 +451,7 @@ const searchStyles = {
   row: {
     display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, width: "100%",
     background: "none", border: "none", borderRadius: 8, padding: "8px 8px", cursor: "pointer",
-    fontSize: 13.5, color: "#1A2420", fontFamily: "inherit", textAlign: "left",
+    fontSize: 14, color: "#1A2420", fontFamily: "inherit", textAlign: "left",
   },
   meta: { fontSize: 12, color: "#7A857F", whiteSpace: "nowrap" },
 };
@@ -494,7 +494,7 @@ function MiseAJourDisponible() {
 const majStyles = {
   bandeau: {
     display: "flex", alignItems: "center", justifyContent: "center", gap: 14, flexWrap: "wrap",
-    background: GREEN_DARK, color: "#fff", fontFamily: "inherit", fontSize: 13,
+    background: GREEN_DARK, color: "#fff", fontFamily: "inherit", fontSize: 14,
     padding: "10px 16px",
   },
   bouton: {

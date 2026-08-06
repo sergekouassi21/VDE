@@ -21,7 +21,7 @@ const styles = {
     gap: 8,
     background: ALERTE_FOND,
     color: ALERTE,
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: 500,
     padding: "10px 16px",
     marginBottom: 14,
