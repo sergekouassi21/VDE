@@ -1,3 +1,4 @@
+import os
 import tempfile
 from datetime import date, timedelta
 from decimal import Decimal
@@ -11,9 +12,13 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from exploitation.models import Ferme, Magasin, ProfilUtilisateur, RoleUtilisateur, TypeFerme
 from exploitation.views import employes_ferme
 
-from .models import Absence, AppareilPointage, BadgeTemporaire, Employe, EvaluationEmploye, LignePaie, Pointage, StatutAbsence
+from .models import (
+    Absence, AppareilPointage, BadgeTemporaire, DocumentEmploye, Employe, EvaluationEmploye, LignePaie,
+    Pointage, StatutAbsence,
+)
 from .views import (
     AbsenceViewSet,
+    DocumentEmployeViewSet,
     EmployeViewSet,
     EvaluationEmployeViewSet,
     LignePaieViewSet,
@@ -95,6 +100,83 @@ class SelfiePointageTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         pointage = Pointage.objects.get(employe=self.employe)
         self.assertTrue(bool(pointage.photo_debut))
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class DocumentEmployeConfidentialiteTests(TestCase):
+    """Les pièces administratives (CNI, contrat) étaient téléversées sur
+    Cloudinary en livraison PUBLIQUE, et le serializer renvoyait cette URL au
+    navigateur. L'API protégeait la liste des documents, pas les documents :
+    quiconque obtenait l'URL téléchargeait la carte d'identité, sans compte.
+    Cf. audit de sécurité du 06/08/2026."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.direction = User.objects.create(username="direction_docs")
+        ProfilUtilisateur.objects.create(user=self.direction, role=RoleUtilisateur.DIRECTION)
+        self.chef = User.objects.create(username="chef_docs")
+        ProfilUtilisateur.objects.create(user=self.chef, role=RoleUtilisateur.CHEF_FERME)
+
+        self.employe = Employe.objects.create(nom="Employe Documents")
+        self.document = DocumentEmploye.objects.create(
+            employe=self.employe,
+            type_document="CNI",
+            nom="CNI recto",
+            fichier=SimpleUploadedFile("cni.png", PIXEL_PNG, content_type="image/png"),
+        )
+
+    def _lister(self, user):
+        vue = DocumentEmployeViewSet.as_view({"get": "list"})
+        req = self.factory.get("/api/pointage/documents-employe/", {"employe": self.employe.id})
+        force_authenticate(req, user=user)
+        return vue(req)
+
+    def test_l_url_de_stockage_n_est_jamais_renvoyee(self):
+        """Le test central : tant que l'API publie l'URL du stockage, le
+        contrôle d'accès ne vaut rien — le navigateur va chercher le fichier
+        directement, sans repasser par nous."""
+        resp = self._lister(self.direction)
+        self.assertEqual(resp.status_code, 200)
+        donnees = resp.data[0]
+        self.assertNotIn("fichier", donnees, "l'URL de stockage ne doit pas sortir de l'API")
+        self.assertEqual(donnees["fichier_url"], f"/api/pointage/documents-employe/{self.document.id}/fichier/")
+
+    def test_la_direction_peut_telecharger(self):
+        vue = DocumentEmployeViewSet.as_view({"get": "fichier"})
+        req = self.factory.get(f"/api/pointage/documents-employe/{self.document.id}/fichier/")
+        force_authenticate(req, user=self.direction)
+        resp = vue(req, pk=self.document.id)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Cache-Control"], "private, no-store")
+
+    def test_un_chef_de_ferme_ne_peut_pas_telecharger(self):
+        vue = DocumentEmployeViewSet.as_view({"get": "fichier"})
+        req = self.factory.get(f"/api/pointage/documents-employe/{self.document.id}/fichier/")
+        force_authenticate(req, user=self.chef)
+        resp = vue(req, pk=self.document.id)
+        self.assertEqual(resp.status_code, 403)
+
+    def test_un_anonyme_ne_peut_pas_telecharger(self):
+        vue = DocumentEmployeViewSet.as_view({"get": "fichier"})
+        req = self.factory.get(f"/api/pointage/documents-employe/{self.document.id}/fichier/")
+        resp = vue(req, pk=self.document.id)
+        self.assertEqual(resp.status_code, 401)
+
+    def test_supprimer_le_document_supprime_aussi_le_fichier(self):
+        """Django n'efface pas le fichier d'un FileField à la suppression de
+        l'objet : « supprimer » ne retirait que la ligne en base, le scan de
+        la CNI restait sur le stockage."""
+        chemin = self.document.fichier.path
+        self.assertTrue(os.path.exists(chemin))
+
+        vue = DocumentEmployeViewSet.as_view({"delete": "destroy"})
+        req = self.factory.delete(f"/api/pointage/documents-employe/{self.document.id}/")
+        force_authenticate(req, user=self.direction)
+        resp = vue(req, pk=self.document.id)
+
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(DocumentEmploye.objects.filter(id=self.document.id).exists())
+        self.assertFalse(os.path.exists(chemin), "le fichier doit disparaître du stockage")
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())

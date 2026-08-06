@@ -12,7 +12,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import ProtectedError, Sum
-from django.http import HttpResponse
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -216,6 +216,55 @@ class DocumentEmployeViewSet(AuditMixin, viewsets.ModelViewSet):
         if employe_id:
             qs = qs.filter(employe_id=employe_id)
         return qs
+
+    @action(detail=True, methods=["get"], url_path="fichier")
+    def fichier(self, request, pk=None):
+        """Sert la pièce elle-même, après vérification du rôle.
+
+        C'est ici que se joue désormais le contrôle d'accès. Avant, le
+        serializer renvoyait l'URL Cloudinary publique et le navigateur allait
+        chercher le fichier directement : l'API protégeait la LISTE des
+        documents, pas les documents. Le fichier est maintenant stocké en
+        livraison privée (cf. pointage/stockage.py) et ne transite que par
+        ici, où `permission_classes` du viewset s'applique à chaque appel.
+        """
+        document = self.get_object()
+        if not document.fichier:
+            return Response({"detail": "Aucun fichier."}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            fichier = document.fichier.open("rb")
+        except (IOError, OSError):
+            return Response(
+                {"detail": "Fichier introuvable sur le stockage."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        nom = os.path.basename(document.fichier.name) or "document"
+        reponse = FileResponse(fichier, as_attachment=False, filename=nom)
+        # Ces pièces ne doivent jamais être mises en cache par un proxy
+        # partagé : elles sont personnelles et réglementées.
+        reponse["Cache-Control"] = "private, no-store"
+        return reponse
+
+    def perform_destroy(self, instance):
+        """Supprime AUSSI le fichier du stockage.
+
+        Django n'appelle pas storage.delete() quand on supprime un objet
+        portant un FileField (comportement volontaire depuis Django 1.3, pour
+        éviter de perdre un fichier lors d'un rollback de transaction). Sans
+        ce nettoyage, « supprimer » un document ne faisait disparaître que la
+        ligne en base : le scan de la carte d'identité restait indéfiniment
+        sur Cloudinary. Cf. audit de sécurité du 06/08/2026.
+        """
+        fichier = instance.fichier
+        super().perform_destroy(instance)
+        if fichier:
+            try:
+                fichier.storage.delete(fichier.name)
+            except Exception:
+                # Le stockage distant peut être injoignable ; la ligne est
+                # déjà supprimée et l'utilisateur n'y peut rien. On ne fait
+                # pas échouer sa suppression pour autant.
+                pass
 
 
 class PointageViewSet(AuditMixin, viewsets.ModelViewSet):

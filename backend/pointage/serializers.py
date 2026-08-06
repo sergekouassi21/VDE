@@ -147,7 +147,20 @@ class ScanEmployeSerializer(serializers.ModelSerializer):
 
 
 class DocumentEmployeSerializer(serializers.ModelSerializer):
+    # `fichier` reste accepté en écriture (téléversement multipart) mais n'est
+    # plus jamais RENVOYÉ : il exposait l'URL du stockage, que le navigateur
+    # allait chercher directement, sans que l'API ne puisse vérifier quoi que
+    # ce soit. On ne publie plus qu'un chemin d'API, protégé par le rôle.
+    # Cf. audit de sécurité du 06/08/2026.
+    fichier = serializers.FileField(write_only=True)
+    fichier_url = serializers.SerializerMethodField()
+
     class Meta:
         model = DocumentEmploye
-        fields = ["id", "employe", "type_document", "nom", "fichier", "date_ajout"]
+        fields = ["id", "employe", "type_document", "nom", "fichier", "fichier_url", "date_ajout"]
         read_only_fields = ["date_ajout"]
+
+    def get_fichier_url(self, obj):
+        if not obj.fichier:
+            return None
+        return f"/api/pointage/documents-employe/{obj.id}/fichier/"

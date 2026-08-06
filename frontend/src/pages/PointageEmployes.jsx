@@ -4,7 +4,7 @@ import {
   getFermes, getEmployes, creerEmploye, modifierEmploye, supprimerEmploye, getQrEmployeBlob, regenererQrEmployeBlob, getUtilisateursDisponibles,
   getQrBadgeTemporaireBlob, getQrBadgeAbsenceBlob, getQrAppareilPointageBlob, regenererAppareilPointageBlob,
   getStatutAppareilPointage, desactiverAppareilPointage,
-  getDocumentsEmploye, uploaderDocumentEmploye, supprimerDocumentEmploye,
+  getDocumentsEmploye, uploaderDocumentEmploye, supprimerDocumentEmploye, getDocumentEmployeBlob,
 } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY, TEXTE_DOUX, TEXTE_META, FOND_PAGE, FOND_PAGE_ALT, ALERTE } from "../theme";
 
@@ -186,6 +186,20 @@ export default function PointageEmployes() {
       setErreurDoc("Impossible d'enregistrer ce document.");
     } finally {
       setEnvoiDoc(false);
+    }
+  }
+
+  // Le document n'a plus d'URL publique : on le récupère via l'API, qui
+  // vérifie le rôle, puis on l'ouvre depuis la mémoire du navigateur. L'URL
+  // temporaire est libérée après ouverture pour ne pas laisser la pièce
+  // d'identité en mémoire toute la session.
+  async function ouvrirDocument(doc) {
+    try {
+      const url = await getDocumentEmployeBlob(doc.id);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch {
+      window.alert("Impossible d'ouvrir ce document.");
     }
   }
 
@@ -442,9 +456,9 @@ export default function PointageEmployes() {
                       <div style={styles.docMeta}>{LABEL_TYPE_DOCUMENT[d.type_document]} · {new Date(d.date_ajout).toLocaleDateString("fr-FR")}</div>
                     </div>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <a href={d.fichier} target="_blank" rel="noopener noreferrer" style={styles.iconBtn} title="Ouvrir">
+                      <button style={styles.iconBtn} onClick={() => ouvrirDocument(d)} title="Ouvrir">
                         <Download size={14} />
-                      </a>
+                      </button>
                       <button style={{ ...styles.iconBtn, color: CLAY }} onClick={() => supprimerDocument(d)} title="Supprimer">
                         <Trash2 size={14} />
                       </button>

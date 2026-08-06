@@ -113,12 +113,17 @@ def _storage_documents_employes():
     # PDF/scans quelconques, pas forcément des images — MediaCloudinaryStorage
     # (utilisé pour Employe.photo) refuse les fichiers non-image, il faut le
     # stockage "raw" de Cloudinary pour accepter n'importe quel type.
+    #
+    # Stockage PRIVÉ : RawMediaCloudinaryStorage téléversait en livraison
+    # publique, donc la CNI d'un employé était téléchargeable par quiconque
+    # connaissait l'URL, sans authentification. Cf. pointage/stockage.py et
+    # l'audit de sécurité du 06/08/2026.
     from django.conf import settings
 
     if settings.CLOUDINARY_STORAGE.get("CLOUD_NAME"):
-        from cloudinary_storage.storage import RawMediaCloudinaryStorage
+        from .stockage import StockagePriveDocuments
 
-        return RawMediaCloudinaryStorage()
+        return StockagePriveDocuments()
     from django.core.files.storage import FileSystemStorage
 
     return FileSystemStorage()

@@ -187,6 +187,13 @@ export const supprimerEmploye = (id) => api.delete(`/pointage/employes/${id}/`);
 export const getDocumentsEmploye = (employeId) => api.get("/pointage/documents-employe/", { params: { employe: employeId } }).then((r) => r.data);
 export const uploaderDocumentEmploye = (formData) => api.post("/pointage/documents-employe/", formData).then((r) => r.data);
 export const supprimerDocumentEmploye = (id) => api.delete(`/pointage/documents-employe/${id}/`);
+// Les pièces administratives (CNI, contrat) ne sont plus servies par une URL
+// de stockage publique : elles passent par l'API, qui vérifie le rôle à
+// chaque téléchargement. Un simple <a href> n'enverrait pas l'en-tête
+// Authorization — même raison que pour les QR de badges, d'où le passage par
+// un blob récupéré via axios.
+export const getDocumentEmployeBlob = (id) =>
+  api.get(`/pointage/documents-employe/${id}/fichier/`, { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
 // Le endpoint QR exige une authentification par token — un <img src=...>
 // classique n'enverrait pas l'en-tête Authorization, d'où le passage par
 // un blob récupéré via axios puis converti en URL locale.
