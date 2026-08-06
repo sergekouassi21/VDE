@@ -4,6 +4,7 @@ import { getFermes, definirPerimetreFerme } from "../api/client";
 import { obtenirPosition } from "../utils/position";
 import {
   GREEN, GREEN_DARK, INK, CLAY, TEXTE_DOUX, TEXTE_GRIS, BORD, BORD_FORT, ALERTE, ALERTE_FOND, VERT_FOND,
+  FOND_PAGE_ALT,
 } from "../theme";
 
 // Périmètre de pointage par ferme.
@@ -13,6 +14,11 @@ import {
 // demande aucune compétence particulière. Tant qu'une ferme n'a pas de
 // périmètre, ses employés pointent sans vérification de lieu — la protection
 // s'active donc ferme par ferme, à mesure des déplacements.
+
+// Au-delà, la position ne vient très probablement pas d'un GPS : un téléphone
+// en extérieur annonce 5 à 30 m, un ordinateur qui devine d'après le réseau
+// annonce des centaines voire des milliers de mètres.
+const PRECISION_SUSPECTE_M = 150;
 
 export default function PerimetresFermes() {
   const [fermes, setFermes] = useState([]);
@@ -41,6 +47,25 @@ export default function PerimetresFermes() {
       );
       setEnCours(null);
       return;
+    }
+
+    // Un ordinateur de bureau n'a pas de GPS : son navigateur déduit la
+    // position du Wi-Fi ou de l'adresse IP, et se trompe couramment de
+    // plusieurs kilomètres. Enregistrer ça comme point de référence ferait
+    // refuser tous les pointages légitimes le jour où la vérification
+    // s'activerait. Un vrai GPS de téléphone en extérieur annonce 5 à 30 m.
+    if (position.precision && position.precision > PRECISION_SUSPECTE_M) {
+      const confirme = window.confirm(
+        `La position obtenue n'est précise qu'à ${Math.round(position.precision)} m près.\n\n`
+        + "C'est le signe qu'elle ne vient pas d'un vrai GPS — typiquement un ordinateur, "
+        + "qui devine sa position d'après le réseau et peut se tromper de plusieurs kilomètres.\n\n"
+        + "Enregistrer une position fausse fera refuser des pointages légitimes.\n\n"
+        + "Utilisez plutôt un téléphone, dehors, sur la ferme. Enregistrer quand même ?",
+      );
+      if (!confirme) {
+        setEnCours(null);
+        return;
+      }
     }
     try {
       await definirPerimetreFerme(ferme.id, {
@@ -99,9 +124,14 @@ export default function PerimetresFermes() {
       </div>
 
       <p style={styles.explication}>
-        Rendez-vous sur chaque ferme, puis appuyez sur <b>Capturer ma position</b> depuis
-        ce téléphone. Tant qu'une ferme n'a pas de position, ses employés pointent
-        sans vérification de lieu.
+        Rendez-vous sur chaque ferme, puis appuyez sur <b>Capturer ma position</b>.
+        Tant qu'une ferme n'a pas de position, ses employés pointent sans
+        vérification de lieu.
+      </p>
+      <p style={styles.attention}>
+        <b>Depuis un téléphone, dehors, sur la ferme.</b> Un ordinateur n'a pas de GPS :
+        il devine sa position d'après le réseau et peut se tromper de plusieurs
+        kilomètres — de quoi faire refuser ensuite des pointages parfaitement légitimes.
       </p>
 
       {sansPerimetre > 0 && (
@@ -171,7 +201,12 @@ const styles = {
   entete: { display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 12 },
   titre: { fontSize: 17, fontWeight: 700, margin: 0, color: INK },
   sousTitre: { fontSize: 14, color: TEXTE_GRIS, margin: "4px 0 0", lineHeight: 1.4 },
-  explication: { fontSize: 14, color: TEXTE_GRIS, lineHeight: 1.5, margin: "0 0 12px" },
+  explication: { fontSize: 14, color: TEXTE_GRIS, lineHeight: 1.5, margin: "0 0 8px" },
+  attention: {
+    fontSize: 14, color: INK, lineHeight: 1.5, margin: "0 0 12px",
+    background: FOND_PAGE_ALT, borderLeft: `3px solid ${GREEN}`,
+    padding: "10px 12px", borderRadius: 8,
+  },
   avertissement: {
     background: ALERTE_FOND, color: ALERTE, fontSize: 14, fontWeight: 500,
     padding: "9px 14px", borderRadius: 10, marginBottom: 12,
