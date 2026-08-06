@@ -245,6 +245,13 @@ if BREVO_SMTP_LOGIN and BREVO_SMTP_KEY:
     EMAIL_USE_TLS = True
     EMAIL_HOST_USER = BREVO_SMTP_LOGIN
     EMAIL_HOST_PASSWORD = BREVO_SMTP_KEY
+    # Sans ce délai, Django attend Brevo sans limite. Comme l'envoi se fait
+    # pendant la requête HTTP, c'est l'utilisateur qui attend : le 06/08/2026,
+    # une demande de réinitialisation est restée bloquée 30 s, Render a coupé,
+    # et le navigateur a affiché « Serveur injoignable » — alors que le
+    # serveur, lui, allait très bien. Mieux vaut renoncer vite : la panne est
+    # journalisée, et la réponse reste la même de toute façon.
+    EMAIL_TIMEOUT = int(os.environ.get('DJANGO_EMAIL_TIMEOUT', '10'))
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
