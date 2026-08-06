@@ -19,6 +19,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+from exploitation.mot_de_passe import mot_de_passe_oublie, reinitialiser_mot_de_passe
 from exploitation.deux_facteurs import (
     connexion,
     deconnexion,
@@ -32,6 +33,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/login/', connexion, name='api-login'),
     path('api/auth/logout/', deconnexion, name='api-logout'),
+    path('api/auth/mot-de-passe-oublie/', mot_de_passe_oublie, name='api-mot-de-passe-oublie'),
+    path('api/auth/reinitialiser/', reinitialiser_mot_de_passe, name='api-reinitialiser'),
     path('api/auth/2fa/statut/', deux_facteurs_statut, name='api-2fa-statut'),
     path('api/auth/2fa/configurer/', deux_facteurs_configurer, name='api-2fa-configurer'),
     path('api/auth/2fa/confirmer/', deux_facteurs_confirmer, name='api-2fa-confirmer'),

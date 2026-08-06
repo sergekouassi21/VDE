@@ -8,6 +8,8 @@ import { LayoutDashboard, ClipboardList, LogOut, ShoppingBasket, Shield, Menu, X
 // sur le réseau faible d'une zone rurale, justement le contexte visé par le
 // mode hors-ligne de cette appli (cf. audit du 30/07/2026).
 const Login = lazy(() => import("./pages/Login"));
+const MotDePasseOublie = lazy(() => import("./pages/MotDePasseOublie"));
+const NouveauMotDePasse = lazy(() => import("./pages/NouveauMotDePasse"));
 const PointJournalier = lazy(() => import("./pages/PointJournalier"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Ventes = lazy(() => import("./pages/Ventes"));
@@ -513,6 +515,8 @@ export default function App() {
       <Routes>
         {/* Écrans publics — pas de session, pas de barre de navigation. */}
         <Route path="/connexion" element={<Login />} />
+        <Route path="/mot-de-passe-oublie" element={<MotDePasseOublie />} />
+        <Route path="/nouveau-mot-de-passe/:uid/:jeton" element={<NouveauMotDePasse />} />
         <Route path="/pointage/:token" element={<PointageScan />} />
         <Route path="/pointage/temporaire/:token" element={<PointageBadgeTemporaire />} />
         <Route path="/pointage/absence/:token" element={<PointageBadgeAbsence />} />

@@ -90,6 +90,14 @@ export function isAuthenticated() {
   return !!localStorage.getItem("vde_token");
 }
 
+// Réinitialisation d'un mot de passe oublié — endpoints publics (on est par
+// définition incapable de s'authentifier), d'où l'usage d'axios brut plutôt
+// que de `api` qui ajoute un jeton inexistant.
+export const demanderReinitialisation = (identifiant) =>
+  axios.post(`${API_BASE_URL}/auth/mot-de-passe-oublie/`, { identifiant }).then((r) => r.data);
+export const reinitialiserMotDePasse = (payload) =>
+  axios.post(`${API_BASE_URL}/auth/reinitialiser/`, payload).then((r) => r.data);
+export const definirMonEmail = (email) => api.post("/moi/email/", { email }).then((r) => r.data);
 export const getMoi = () => api.get("/moi/").then((r) => r.data);
 export const getStatut2FA = () => api.get("/auth/2fa/statut/").then((r) => r.data);
 // Le mot de passe n'est exigé par le serveur que si une 2FA est déjà active

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { login, getMoi } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, TEXTE_META, TEXTE_GRIS, ALERTE } from "../theme";
@@ -131,10 +131,12 @@ export default function Login() {
         <button style={styles.bouton} type="submit" disabled={chargement}>
           {chargement ? "Connexion..." : etape2FA ? "Vérifier" : "Se connecter"}
         </button>
-        {etape2FA && (
+        {etape2FA ? (
           <button type="button" style={styles.retourBtn} onClick={() => { setEtape2FA(false); setCode(""); setErreur(""); }}>
             ← Retour
           </button>
+        ) : (
+          <Link to="/mot-de-passe-oublie" style={styles.lienOublie}>Mot de passe oublié ?</Link>
         )}
       </form>
     </div>
@@ -173,6 +175,10 @@ const styles = {
   bouton: {
     background: GREEN, color: "#fff", border: "none", borderRadius: 10, padding: "13px",
     fontSize: 15, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginTop: 8,
+  },
+  lienOublie: {
+    display: "flex", alignItems: "center", justifyContent: "center", minHeight: 44,
+    color: TEXTE_META, fontSize: 14, textDecoration: "none", marginTop: 4,
   },
   retourBtn: {
     background: "none", border: "none", color: TEXTE_META, fontSize: 14, fontFamily: "inherit",

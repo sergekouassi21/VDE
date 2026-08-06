@@ -117,6 +117,12 @@ DATABASES = {
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
+# Durée de validité d'un lien « mot de passe oublié ». Le défaut de Django
+# est de 3 JOURS : un lien resté dans une boîte mail reste alors exploitable
+# tout ce temps. 2 heures suffisent largement pour recevoir le message et
+# choisir un mot de passe, et redemander un lien ne coûte rien.
+PASSWORD_RESET_TIMEOUT = 2 * 60 * 60
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
