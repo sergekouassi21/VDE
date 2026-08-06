@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import { login, getMoi } from "../api/client";
 import { GREEN, GREEN_DARK, CREAM, INK, TEXTE_META, TEXTE_GRIS, ALERTE } from "../theme";
 
@@ -10,6 +11,7 @@ export default function Login() {
   const [etape2FA, setEtape2FA] = useState(false);
   const [erreur, setErreur] = useState("");
   const [chargement, setChargement] = useState(false);
+  const [motDePasseVisible, setMotDePasseVisible] = useState(false);
   const navigate = useNavigate();
 
   async function finaliserConnexion() {
@@ -84,19 +86,34 @@ export default function Login() {
               spellCheck={false}
               autoFocus
             />
-            <input
-              style={styles.input}
-              name="vde-password"
-              type="password"
-              placeholder="Mot de passe"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onPaste={(e) => { const v = e.clipboardData.getData("text"); if (v) { setPassword(v); e.preventDefault(); } }}
-              autoComplete="current-password"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-            />
+            {/* Sur un téléphone, une faute de frappe dans un mot de passe
+                masqué est invisible — et les mots de passe distribués aux
+                chefs de ferme sont longs et générés. Pouvoir relire ce qu'on
+                a tapé évite des blocages inutiles à la connexion. */}
+            <div style={styles.champMotDePasse}>
+              <input
+                style={{ ...styles.input, ...styles.inputMotDePasse }}
+                name="vde-password"
+                type={motDePasseVisible ? "text" : "password"}
+                placeholder="Mot de passe"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onPaste={(e) => { const v = e.clipboardData.getData("text"); if (v) { setPassword(v); e.preventDefault(); } }}
+                autoComplete="current-password"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+              <button
+                type="button"
+                style={styles.oeilBtn}
+                onClick={() => setMotDePasseVisible((v) => !v)}
+                aria-label={motDePasseVisible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                title={motDePasseVisible ? "Masquer" : "Afficher"}
+              >
+                {motDePasseVisible ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
           </>
         ) : (
           <input
@@ -141,6 +158,16 @@ const styles = {
   input: {
     border: "1px solid #DDE2DE", borderRadius: 9, padding: "11px 13px", fontSize: 15,
     fontFamily: "inherit", background: "#fff", color: INK,
+  },
+  // L'oeil est posé PAR-DESSUS le champ, qui garde une réserve à droite pour
+  // que le texte ne passe jamais dessous.
+  champMotDePasse: { position: "relative", display: "flex" },
+  inputMotDePasse: { flex: 1, paddingRight: 52 },
+  oeilBtn: {
+    position: "absolute", right: 0, top: 0, bottom: 0, width: 48,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    background: "none", border: "none", cursor: "pointer", color: TEXTE_META,
+    padding: 0,
   },
   erreur: { color: ALERTE, fontSize: 14, margin: 0 },
   bouton: {
