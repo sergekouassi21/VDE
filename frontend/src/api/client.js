@@ -218,6 +218,14 @@ export const getRentabilite = (params) => api.get("/pointage/rentabilite/", { pa
 export const getRapportMensuel = (params) => api.get("/pointage/rapport-mensuel/", { params }).then((r) => r.data);
 export const getResumePaie = (params) => api.get("/pointage/resume-paie/", { params }).then((r) => r.data);
 export const enregistrerLignePaie = (payload) => api.post("/pointage/lignes-paie/", payload).then((r) => r.data);
+// Les badges de secours et d'absence sont imprimés une fois et gardés par le
+// superviseur. Sans révocation, un QR photographié ou parti avec un employé
+// restait valable à vie — c'était le seul mécanisme d'accès sans moyen de le
+// couper (cf. audit de sécurité du 06/08/2026).
+export const regenererBadgeTemporaireBlob = () =>
+  api.post("/pointage/badge-temporaire/regenerer/", {}, { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
+export const regenererBadgeAbsenceBlob = () =>
+  api.post("/pointage/badge-absence/regenerer/", {}, { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
 export const getQrBadgeTemporaireBlob = () =>
   api.get("/pointage/badge-temporaire/qr/", { responseType: "blob" }).then((r) => URL.createObjectURL(r.data));
 // Téléphone unique autorisé à valider les pointages (cf. conversation du

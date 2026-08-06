@@ -33,7 +33,9 @@ from .views import (
     appareil_pointage_verifier,
     badge_absence_declarer,
     badge_absence_employes,
+    badge_absence_regenerer,
     badge_temporaire_employes,
+    badge_temporaire_regenerer,
     badge_temporaire_valider,
     resume_paie,
     scan_info,
@@ -212,6 +214,10 @@ class BadgesPublicsAppareilTests(TestCase):
         self.employe.fermes.add(ferme)
         self.badge_secours = BadgeTemporaire.objects.create()
         self.badge_absence = BadgeAbsence.objects.create()
+        self.direction = User.objects.create(username="dir_badges")
+        ProfilUtilisateur.objects.create(user=self.direction, role=RoleUtilisateur.DIRECTION)
+        self.chef = User.objects.create(username="chef_badges")
+        ProfilUtilisateur.objects.create(user=self.chef, role=RoleUtilisateur.CHEF_FERME)
 
     # --- Liste du personnel via le badge de secours ---
 
@@ -261,6 +267,42 @@ class BadgesPublicsAppareilTests(TestCase):
         resp = badge_absence_declarer(req, token=str(self.badge_absence.token))
         self.assertEqual(resp.status_code, 201)
         self.assertTrue(Absence.objects.filter(employe=self.employe).exists())
+
+    # --- Révocation des badges imprimés ---
+
+    def test_regenerer_le_badge_de_secours_invalide_l_ancien(self):
+        """Sans révocation, un QR photographié ou parti avec un employé restait
+        valable à vie — c'était le seul badge dans ce cas, avec celui
+        d'absence. Cf. audit de sécurité du 06/08/2026."""
+        ancien = self.badge_secours.token
+        req = self.factory.post("/api/pointage/badge-temporaire/regenerer/")
+        force_authenticate(req, user=self.direction)
+        self.assertEqual(badge_temporaire_regenerer(req).status_code, 200)
+
+        nouveau = BadgeTemporaire.objects.get().token
+        self.assertNotEqual(ancien, nouveau)
+        # Le test qui compte : l'ancien QR imprimé ne mène plus nulle part.
+        req_ancien = self.factory.get(f"/api/pointage/badge-temporaire/{ancien}/employes/")
+        self.assertEqual(badge_temporaire_employes(req_ancien, token=str(ancien)).status_code, 404)
+        # Et le nouveau fonctionne.
+        req_nouveau = self.factory.get(f"/api/pointage/badge-temporaire/{nouveau}/employes/")
+        self.assertEqual(badge_temporaire_employes(req_nouveau, token=str(nouveau)).status_code, 200)
+
+    def test_regenerer_le_badge_d_absence_invalide_l_ancien(self):
+        ancien = self.badge_absence.token
+        req = self.factory.post("/api/pointage/badge-absence/regenerer/")
+        force_authenticate(req, user=self.direction)
+        self.assertEqual(badge_absence_regenerer(req).status_code, 200)
+        self.assertNotEqual(ancien, BadgeAbsence.objects.get().token)
+
+    def test_regenerer_est_reserve_a_la_direction(self):
+        req = self.factory.post("/api/pointage/badge-temporaire/regenerer/")
+        force_authenticate(req, user=self.chef)
+        self.assertEqual(badge_temporaire_regenerer(req).status_code, 403)
+
+    def test_regenerer_refuse_a_un_anonyme(self):
+        req = self.factory.post("/api/pointage/badge-absence/regenerer/")
+        self.assertEqual(badge_absence_regenerer(req).status_code, 401)
 
     def test_sans_appareil_configure_tout_continue_de_fonctionner(self):
         """Transition en douceur : tant que la Direction n'a activé aucun

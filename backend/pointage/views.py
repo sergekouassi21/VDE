@@ -916,6 +916,33 @@ def badge_temporaire_qr(request):
     return HttpResponse(_composer_badge(url, "Badge temporaire"), content_type="image/png")
 
 
+@api_view(["POST"])
+@permission_classes([EstDirectionOuAdmin])
+@transaction.atomic
+def badge_temporaire_regenerer(request):
+    """Invalide immédiatement le badge de secours imprimé (photographié,
+    égaré, ou parti avec un employé qui a quitté l'entreprise) en générant un
+    nouveau jeton.
+
+    Ce badge n'avait aucun moyen de révocation, contrairement au badge
+    personnel d'un employé et au téléphone de pointage : un QR compromis
+    l'était définitivement. C'est d'autant plus important que la vérification
+    d'appareil ne protège rien tant qu'aucun téléphone n'est configuré — la
+    révocation est alors le seul levier disponible. Cf. audit de sécurité du
+    06/08/2026.
+
+    L'ancien papier cesse de fonctionner : il faut réimprimer le nouveau QR."""
+    _verrou_consultatif(_LOCK_CLASSID_BADGE_TEMPORAIRE, 1)
+    BadgeTemporaire.objects.all().delete()
+    badge = BadgeTemporaire.objects.create()
+    journaliser(
+        request.user, ActionAudit.MODIFICATION, "BadgeTemporaire", badge.pk, str(badge),
+        details="Régénération du badge de secours — l'ancien QR imprimé est invalidé",
+    )
+    url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/temporaire/{badge.token}"
+    return HttpResponse(_composer_badge(url, "Badge temporaire"), content_type="image/png")
+
+
 @api_view(["GET"])
 @permission_classes([])
 @throttle_classes([ThrottlePointagePublic])
@@ -980,6 +1007,27 @@ def badge_absence_qr(request):
     01/08/2026 avec Serge)."""
     _verrou_consultatif(_LOCK_CLASSID_BADGE_ABSENCE, 1)
     badge = BadgeAbsence.objects.first() or BadgeAbsence.objects.create()
+    url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/absence/{badge.token}"
+    return HttpResponse(_composer_badge(url, "Badge absence"), content_type="image/png")
+
+
+@api_view(["POST"])
+@permission_classes([EstDirectionOuAdmin])
+@transaction.atomic
+def badge_absence_regenerer(request):
+    """Invalide immédiatement le badge d'absence imprimé — même raison et même
+    mécanique que badge_temporaire_regenerer.
+
+    Celui-ci compte au moins autant : il permet d'ÉCRIRE (déclarer un employé
+    absent), donc un QR compromis a un effet sur la paie, pas seulement sur la
+    confidentialité."""
+    _verrou_consultatif(_LOCK_CLASSID_BADGE_ABSENCE, 1)
+    BadgeAbsence.objects.all().delete()
+    badge = BadgeAbsence.objects.create()
+    journaliser(
+        request.user, ActionAudit.MODIFICATION, "BadgeAbsence", badge.pk, str(badge),
+        details="Régénération du badge d'absence — l'ancien QR imprimé est invalidé",
+    )
     url = f"{settings.FRONTEND_URL.rstrip('/')}/pointage/absence/{badge.token}"
     return HttpResponse(_composer_badge(url, "Badge absence"), content_type="image/png")
 

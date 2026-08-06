@@ -5,6 +5,7 @@ import {
   getQrBadgeTemporaireBlob, getQrBadgeAbsenceBlob, getQrAppareilPointageBlob, regenererAppareilPointageBlob,
   getStatutAppareilPointage, desactiverAppareilPointage,
   getDocumentsEmploye, uploaderDocumentEmploye, supprimerDocumentEmploye, getDocumentEmployeBlob,
+  regenererBadgeTemporaireBlob, regenererBadgeAbsenceBlob,
 } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY, TEXTE_DOUX, TEXTE_META, FOND_PAGE, FOND_PAGE_ALT, ALERTE } from "../theme";
 
@@ -151,6 +152,28 @@ export default function PointageEmployes() {
     setQrUrl("");
     try {
       const url = await regenererQrEmployeBlob(emp.id);
+      setQrUrl(url);
+    } finally {
+      setActionEnCours(false);
+    }
+  }
+
+  // Les badges de secours et d'absence n'avaient aucun moyen de révocation,
+  // contrairement au badge personnel d'un employé et au téléphone de
+  // pointage : un QR photographié, égaré, ou parti avec quelqu'un restait
+  // valable à vie. Cf. audit de sécurité du 06/08/2026.
+  async function regenererBadgePartage() {
+    if (actionEnCours) return;
+    const estAbsence = !!qrOuvert?.absence;
+    const nom = estAbsence ? "badge d'absence" : "badge de secours";
+    if (!window.confirm(
+      `Régénérer le ${nom} ? Le QR actuellement imprimé cessera immédiatement de fonctionner`
+      + " — il faudra imprimer et redistribuer le nouveau.",
+    )) return;
+    setActionEnCours(true);
+    setQrUrl("");
+    try {
+      const url = estAbsence ? await regenererBadgeAbsenceBlob() : await regenererBadgeTemporaireBlob();
       setQrUrl(url);
     } finally {
       setActionEnCours(false);
@@ -427,6 +450,11 @@ export default function PointageEmployes() {
                 {qrOuvert.id && (
                   <button type="button" style={styles.regenererBtn} onClick={() => regenererBadgeEmploye(qrOuvert)} disabled={actionEnCours}>
                     <RefreshCw size={14} /> Régénérer (invalide l'ancienne carte)
+                  </button>
+                )}
+                {(qrOuvert.temporaire || qrOuvert.absence) && (
+                  <button type="button" style={styles.regenererBtn} onClick={regenererBadgePartage} disabled={actionEnCours}>
+                    <RefreshCw size={14} /> Régénérer (invalide le QR imprimé)
                   </button>
                 )}
               </>
