@@ -27,7 +27,7 @@ const JournalAudit = lazy(() => import("./pages/JournalAudit"));
 const Securite = lazy(() => import("./pages/Securite"));
 import { isAuthenticated, logout, ADMIN_URL, getRechercheGlobale, getDashboard, getEvenementsSante, getAbsences, getEmployes, getFactures, getPointages } from "./api/client";
 import { GREEN_DARK } from "./theme";
-import { calculerAlertes, signatureAlertes, joursDepuis, JOURS_CREANCE_RETARD, estPointageOublie } from "./alertes";
+import { calculerAlertes, signatureAlertes, joursDepuis, JOURS_CREANCE_RETARD, estPointageOublie, estSansPosition } from "./alertes";
 import { estDirectionOuAdmin, estTechnicien } from "./utils/auth";
 
 function RequireAuth({ children }) {
@@ -259,6 +259,7 @@ function useBadgeAlertes() {
           evenementsSanteEnRetard: evenementsSante.filter((e) => e.statut === "EN_RETARD"),
           creancesEnRetard: factures.filter((f) => Number(f.reste_du) > 0 && joursDepuis(f.date) > JOURS_CREANCE_RETARD),
           pointagesOublies: pointages.filter(estPointageOublie),
+            pointagesSansPosition: pointages.filter(estSansPosition),
         });
         setSignatureActuelle(signatureAlertes(alertes));
         setNbAlertes(alertes.length);

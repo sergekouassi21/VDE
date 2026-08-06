@@ -6,6 +6,7 @@ import { GREEN, GREEN_DARK, CREAM, INK, CLAY, TEXTE_DOUX, TEXTE_GRIS, FOND_DOUX,
 import CaptureSelfie from "../components/CaptureSelfie";
 import { ajouterPointageEnAttente, listerPointagesEnAttente } from "../offline/queuePointage";
 import { synchroniserPointagesEnAttente } from "../offline/syncPointage";
+import { obtenirPosition } from "../utils/position";
 
 // timeZone explicite : sans lui, l'heure s'affiche dans le fuseau du
 // téléphone/navigateur (souvent réglé sur l'heure française, GMT+1/+2) au
@@ -85,9 +86,12 @@ export default function PointageBadgeTemporaire() {
     const employeId = employeAValiderRef.current;
     setCaptureOuverte(false);
     setEnvoi(true);
+    // Position lue au moment du scan, y compris hors-ligne, pour qu'elle
+    // parte avec le pointage mis en file (cf. utils/position.js).
+    const position = await obtenirPosition();
     if (!navigator.onLine) {
       try {
-        await ajouterPointageEnAttente({ type: "temporaire", token, employeId, photo });
+        await ajouterPointageEnAttente({ type: "temporaire", token, employeId, photo, position });
         await rafraichirEnAttente();
         setEnvoyeHorsLigne(true);
       } catch {
@@ -101,7 +105,7 @@ export default function PointageBadgeTemporaire() {
       return;
     }
     try {
-      const data = await validerBadgeTemporaire(token, employeId, photo);
+      const data = await validerBadgeTemporaire(token, employeId, photo, position);
       if (data.deja_complet) {
         window.alert("Ce badge a déjà pointé arrivée et départ aujourd'hui. Contactez la Direction pour un rappel.");
       }
@@ -110,7 +114,7 @@ export default function PointageBadgeTemporaire() {
     } catch (err) {
       if (!err.response) {
         try {
-          await ajouterPointageEnAttente({ type: "temporaire", token, employeId, photo });
+          await ajouterPointageEnAttente({ type: "temporaire", token, employeId, photo, position });
           await rafraichirEnAttente();
           setEnvoyeHorsLigne(true);
         } catch {

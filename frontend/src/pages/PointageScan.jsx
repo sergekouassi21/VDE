@@ -6,6 +6,7 @@ import { GREEN, GREEN_DARK, CREAM, INK, CLAY, TEXTE_DOUX, TEXTE_GRIS, ALERTE, AL
 import CaptureSelfie from "../components/CaptureSelfie";
 import { ajouterPointageEnAttente, listerPointagesEnAttente } from "../offline/queuePointage";
 import { synchroniserPointagesEnAttente } from "../offline/syncPointage";
+import { obtenirPosition } from "../utils/position";
 
 // timeZone explicite : sans lui, l'heure s'affiche dans le fuseau du
 // téléphone/navigateur (souvent réglé sur l'heure française, GMT+1/+2) au
@@ -75,9 +76,13 @@ export default function PointageScan() {
   async function valider(photo) {
     setCaptureOuverte(false);
     setEnvoi(true);
+    // Position lue au moment du scan — y compris hors-ligne, pour qu'elle
+    // parte avec le pointage mis en file. Elle vaut null si le GPS n'aboutit
+    // pas : le serveur accepte alors et signale, il ne bloque pas.
+    const position = await obtenirPosition();
     if (!navigator.onLine) {
       try {
-        await ajouterPointageEnAttente({ type: "scan", token, photo });
+        await ajouterPointageEnAttente({ type: "scan", token, photo, position });
         await rafraichirEnAttente();
         setEnvoyeHorsLigne(true);
       } catch {
@@ -91,7 +96,7 @@ export default function PointageScan() {
       return;
     }
     try {
-      const data = await validerPointageScan(token, photo);
+      const data = await validerPointageScan(token, photo, position);
       setEtat(data);
       setHorsLigne(false);
       setEnvoyeHorsLigne(false);
@@ -100,7 +105,7 @@ export default function PointageScan() {
         // Coupure réseau pendant l'envoi (pas juste au chargement) — on met
         // en file plutôt que d'afficher une erreur, comme au-dessus.
         try {
-          await ajouterPointageEnAttente({ type: "scan", token, photo });
+          await ajouterPointageEnAttente({ type: "scan", token, photo, position });
           await rafraichirEnAttente();
           setEnvoyeHorsLigne(true);
         } catch {

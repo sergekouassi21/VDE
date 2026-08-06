@@ -3,7 +3,7 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContai
 import { Egg, TrendingUp, AlertTriangle, AlertCircle, Skull, Package, ChevronRight, Activity, Wheat, Droplet } from "lucide-react";
 import { getDashboard, getEmployes, getAbsences, getEvenementsSante, getFacturesCreances, getPointages, corrigerPointage, getRentabilite, getRapportMensuel } from "../api/client";
 import { GREEN, GREEN_DARK, INK, formatSacs, formatColis, AGE_REFORME_SEMAINES, KG_PAR_SAC, TEXTE_DOUX, TEXTE_META, TEXTE_GRIS, FOND_PAGE, FOND_PAGE_ALT, FOND_DOUX, ALERTE, ALERTE_FOND, VERT_FOND, CLAY } from "../theme";
-import { calculerAlertes, signatureAlertes, JOURS_CREANCE_RETARD, joursDepuis, estPointageOublie } from "../alertes";
+import { calculerAlertes, signatureAlertes, JOURS_CREANCE_RETARD, joursDepuis, estPointageOublie, estSansPosition } from "../alertes";
 import { estDirectionOuAdmin as estDirectionOuAdminRole } from "../utils/auth";
 import { useEnLigne } from "../utils/reseau";
 import BandeauFraicheur from "../components/BandeauFraicheur";
@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [creancesTotal, setCreancesTotal] = useState(0);
   const [pointagesSecoursRecents, setPointagesSecoursRecents] = useState([]);
   const [pointagesOublies, setPointagesOublies] = useState([]);
+  const [pointagesSansPosition, setPointagesSansPosition] = useState([]);
   const [rentabilite, setRentabilite] = useState(null);
   const [rapportMoisPrecedent, setRapportMoisPrecedent] = useState(null);
   const [sel, setSel] = useState(null);
@@ -53,6 +54,7 @@ export default function Dashboard() {
     getPointages({ date_debut: depuis }).then((pts) => {
       setPointagesSecoursRecents(pts.filter((p) => p.arrivee_via_secours || p.depart_via_secours));
       setPointagesOublies(pts.filter(estPointageOublie));
+      setPointagesSansPosition(pts.filter(estSansPosition));
     });
   }, [estDirectionOuAdmin]);
 
@@ -207,8 +209,8 @@ export default function Dashboard() {
   }, [actives, pondeuses]);
 
   const alertes = useMemo(
-    () => calculerAlertes({ fermes, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard, creancesEnRetard, pointagesSecoursRecents, pointagesOublies }),
-    [fermes, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard, creancesEnRetard, pointagesSecoursRecents, pointagesOublies],
+    () => calculerAlertes({ fermes, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard, creancesEnRetard, pointagesSecoursRecents, pointagesOublies, pointagesSansPosition }),
+    [fermes, absencesEnAttente, employesSansSalaire, evenementsSanteEnRetard, creancesEnRetard, pointagesSecoursRecents, pointagesOublies, pointagesSansPosition],
   );
 
   // Gravité la plus haute par ferme concernée — sert à mettre en avant les

@@ -75,6 +75,10 @@ class PointageSerializer(serializers.ModelSerializer):
             "id", "employe", "employe_nom", "ferme_nom", "date",
             "heure_debut", "heure_fin", "photo_debut", "photo_fin",
             "arrivee_via_secours", "depart_via_secours", "heures_travaillees", "montant_du_jour",
+            # Le téléphone n'a pas su se localiser au moment du scan — la
+            # Direction le voit en alerte plutôt que de le découvrir en
+            # cherchant (cf. pointage/geo.py).
+            "sans_position_debut", "sans_position_fin",
         ]
 
     def get_ferme_nom(self, obj):

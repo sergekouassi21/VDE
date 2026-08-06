@@ -168,6 +168,21 @@ class Pointage(models.Model):
     # repérer ces pointages plus à risque (cf. conversation du 29/07/2026).
     arrivee_via_secours = models.BooleanField(default=False)
     depart_via_secours = models.BooleanField(default=False)
+    # Position du téléphone au moment de la validation, et verdict figé à cet
+    # instant (cf. pointage/geo.py). Le verdict est mémorisé plutôt que
+    # recalculé : si la Direction corrige plus tard les coordonnées d'une
+    # ferme, l'historique doit continuer de refléter ce qui a été constaté sur
+    # le moment — même logique d'instantané que heures_travaillees.
+    #
+    # latitude/longitude nulles = le téléphone n'a pas su se localiser
+    # (toit en tôle, permission refusée). Le pointage est alors accepté mais
+    # signalé à la Direction : refuser bloquerait la paie sur une panne de GPS.
+    latitude_debut = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude_debut = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    latitude_fin = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude_fin = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    sans_position_debut = models.BooleanField(default=False)
+    sans_position_fin = models.BooleanField(default=False)
     heures_travaillees = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     montant_du_jour = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 

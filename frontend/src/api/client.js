@@ -1,4 +1,5 @@
 import axios from "axios";
+import { ajouterPosition } from "../utils/position";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8010/api";
 export const ADMIN_URL = `${API_BASE_URL.replace(/\/api\/?$/, "")}/admin/`;
@@ -102,6 +103,7 @@ export const desactiver2FA = (password) => api.post("/auth/2fa/desactiver/", { p
 export const getRechercheGlobale = (q) => api.get("/recherche/", { params: { q } }).then((r) => r.data);
 export const getJournalAudit = (params) => api.get("/journal-audit/", { params }).then((r) => r.data);
 export const getFermes = () => api.get("/fermes/").then((r) => r.data);
+export const definirPerimetreFerme = (id, payload) => api.post(`/fermes/${id}/perimetre/`, payload).then((r) => r.data);
 export const getFerme = (id) => api.get(`/fermes/${id}/`).then((r) => r.data);
 export const declarerBande = (id, payload) => api.post(`/fermes/${id}/declarer-bande/`, payload).then((r) => r.data);
 export const terminerBande = (id, payload) => api.post(`/fermes/${id}/terminer-bande/`, payload).then((r) => r.data);
@@ -249,21 +251,25 @@ export const getInfosPointageScan = (token) => scanApi.get(`/pointage/scan/${tok
 // Le selfie (obligatoire, cf. conversation du 28/07/2026 — un seul
 // téléphone partagé scanne le badge de chaque employé, plus celui d'un
 // superviseur qui reconnaît chacun) est envoyé en multipart.
-export const validerPointageScan = (token, photo) => {
+// `position` peut être null : le serveur accepte alors le pointage et le
+// signale à la Direction plutôt que de le refuser (cf. utils/position.js).
+export const validerPointageScan = (token, photo, position) => {
   const donnees = new FormData();
   // Un Blob recompressé (cf. utils/image.js) n'a pas de nom de fichier —
   // on lui en donne un explicitement pour que l'upload multipart reste
   // cohérent quel que soit le navigateur.
   donnees.append("photo", photo, photo.name || "selfie.jpg");
+  ajouterPosition(donnees, position);
   return scanApi.post(`/pointage/scan/${token}/valider/`, donnees).then((r) => r.data);
 };
 
 // Badge temporaire (secours) — public lui aussi, pas de compte employé.
 export const getEmployesBadgeTemporaire = (token, params) =>
   scanApi.get(`/pointage/badge-temporaire/${token}/employes/`, { params }).then((r) => r.data);
-export const validerBadgeTemporaire = (token, employeId, photo) => {
+export const validerBadgeTemporaire = (token, employeId, photo, position) => {
   const donnees = new FormData();
   donnees.append("photo", photo, photo.name || "selfie.jpg");
+  ajouterPosition(donnees, position);
   return scanApi.post(`/pointage/badge-temporaire/${token}/employes/${employeId}/valider/`, donnees).then((r) => r.data);
 };
 

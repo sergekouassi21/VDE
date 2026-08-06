@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { ShieldCheck, ShieldOff, Smartphone } from "lucide-react";
 import { getStatut2FA, getQrConfigurer2FA, confirmer2FA, desactiver2FA } from "../api/client";
+import PerimetresFermes from "../components/PerimetresFermes";
 import { GREEN, GREEN_DARK, INK, CLAY, TEXTE_DOUX, TEXTE_META, TEXTE_GRIS, FOND_PAGE_ALT, ALERTE } from "../theme";
 
 export default function Securite() {
@@ -123,6 +124,8 @@ export default function Securite() {
             </form>
           )}
         </section>
+
+        <PerimetresFermes />
       </div>
     </div>
   );

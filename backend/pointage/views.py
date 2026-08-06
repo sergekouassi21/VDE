@@ -30,6 +30,8 @@ from exploitation.permissions import est_technicien as _est_technicien
 from exploitation.pagination import PaginationOptionnelle
 from exploitation.views import _borner_si_non_pagine, _limite_borne
 
+from .geo import lire_position, verifier_position
+
 # Espaces de noms pour pg_advisory_xact_lock (cf. exploitation/calculs.py,
 # _LOCK_CLASSID_*) — classid 1 à 3 y sont déjà pris (numéro de facture, nom
 # client, nom fournisseur), celui-ci continue la numérotation pour rester
@@ -648,20 +650,32 @@ def _pointage_actuel(employe):
     return _garde_ouverte_hier(employe) or Pointage.objects.filter(employe=employe, date=timezone.localdate()).first()
 
 
-def _traiter_scan(employe, photo=None, via_secours=False):
+def _traiter_scan(employe, photo=None, via_secours=False, latitude=None, longitude=None):
     """Résout le pointage concerné par ce scan (garde de nuit d'hier encore
     ouverte, sinon celui d'aujourd'hui) et y applique l'arrivée ou le
     départ. `deja_complet` indique qu'aucune action n'a été faite (journée
     déjà terminée) — un 3e scan ne crée pas de 2e plage, mais le signale au
-    lieu d'un no-op silencieux (cf. conversation du 02/08/2026 avec Serge)."""
+    lieu d'un no-op silencieux (cf. conversation du 02/08/2026 avec Serge).
+
+    La position du téléphone est enregistrée sur l'arrivée ou le départ selon
+    ce qui est validé, avec le constat « sans position » figé à cet instant
+    (cf. pointage/geo.py)."""
     pointage = _garde_ouverte_hier(employe)
     if pointage is None:
         pointage, _ = Pointage.objects.get_or_create(employe=employe, date=timezone.localdate())
+    sans_position = latitude is None or longitude is None
+
     if not pointage.heure_debut:
         pointage.valider_debut(photo=photo, via_secours=via_secours)
+        pointage.latitude_debut, pointage.longitude_debut = latitude, longitude
+        pointage.sans_position_debut = sans_position
+        pointage.save(update_fields=["latitude_debut", "longitude_debut", "sans_position_debut"])
         return pointage, False
     if not pointage.heure_fin:
         pointage.valider_fin(photo=photo, via_secours=via_secours)
+        pointage.latitude_fin, pointage.longitude_fin = latitude, longitude
+        pointage.sans_position_fin = sans_position
+        pointage.save(update_fields=["latitude_fin", "longitude_fin", "sans_position_fin"])
         return pointage, False
     return pointage, True
 
@@ -721,6 +735,31 @@ def utilisateurs_disponibles(request):
 TAILLE_MAX_SELFIE_OCTETS = 8 * 1024 * 1024
 
 
+def _refus_hors_perimetre(request, employe):
+    """Renvoie une réponse 403 si la position est CONNUE et hors de tous les
+    périmètres définis pour les fermes de cet employé, sinon None.
+
+    Sans position transmise, ou tant qu'aucune ferme de cet employé n'a de
+    périmètre saisi, on laisse passer : refuser bloquerait la paie sur une
+    panne de GPS ou sur une configuration incomplète. Le cas « sans position »
+    est mémorisé sur le pointage et remonté en alerte à la Direction
+    (cf. pointage/geo.py)."""
+    latitude, longitude = lire_position(request)
+    accepte, _hors, distance, ferme_proche = verifier_position(employe, latitude, longitude)
+    if accepte:
+        return None
+    return Response(
+        {
+            "detail": (
+                f"Pointage refusé : vous êtes à {round(distance)} m de {ferme_proche.nom}, "
+                f"hors du périmètre autorisé ({ferme_proche.rayon_metres} m). "
+                "Rapprochez-vous de la ferme et réessayez."
+            )
+        },
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
 def _erreur_photo_invalide(photo):
     """Renvoie un message d'erreur si `photo` n'est pas exploitable comme
     selfie, sinon None. Vérifie la taille puis que le contenu est une
@@ -772,7 +811,11 @@ def scan_valider(request, token):
     if erreur:
         return Response({"detail": erreur}, status=status.HTTP_400_BAD_REQUEST)
     employe = get_object_or_404(Employe, qr_token=token, actif=True)
-    pointage, deja_complet = _traiter_scan(employe, photo=photo)
+    erreur_lieu = _refus_hors_perimetre(request, employe)
+    if erreur_lieu:
+        return erreur_lieu
+    latitude, longitude = lire_position(request)
+    pointage, deja_complet = _traiter_scan(employe, photo=photo, latitude=latitude, longitude=longitude)
     return Response(_reponse_etat(request, employe, pointage, deja_complet=deja_complet))
 
 
@@ -917,7 +960,13 @@ def badge_temporaire_valider(request, token, employe_id):
         return Response({"detail": erreur}, status=status.HTTP_400_BAD_REQUEST)
     get_object_or_404(BadgeTemporaire, token=token)
     employe = get_object_or_404(Employe, id=employe_id, actif=True)
-    pointage, deja_complet = _traiter_scan(employe, photo=photo, via_secours=True)
+    erreur_lieu = _refus_hors_perimetre(request, employe)
+    if erreur_lieu:
+        return erreur_lieu
+    latitude, longitude = lire_position(request)
+    pointage, deja_complet = _traiter_scan(
+        employe, photo=photo, via_secours=True, latitude=latitude, longitude=longitude,
+    )
     return Response(_reponse_etat(request, employe, pointage, deja_complet=deja_complet))
 
 

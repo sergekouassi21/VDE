@@ -12,6 +12,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from exploitation.models import Ferme, Magasin, ProfilUtilisateur, RoleUtilisateur, TypeFerme
 from exploitation.views import employes_ferme
 
+from .geo import distance_metres
 from .models import (
     Absence, AppareilPointage, BadgeAbsence, BadgeTemporaire, DocumentEmploye, Employe, EvaluationEmploye,
     LignePaie,
@@ -104,6 +105,94 @@ class SelfiePointageTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         pointage = Pointage.objects.get(employe=self.employe)
         self.assertTrue(bool(pointage.photo_debut))
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class GeolocalisationPointageTests(TestCase):
+    """Le téléphone de pointage doit rester dans le périmètre d'une ferme où
+    travaille la personne scannée. Trois règles, toutes choisies pour ne
+    jamais bloquer la paie à tort — cf. pointage/geo.py et la demande de
+    Serge du 06/08/2026."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        magasin = Magasin.objects.create(nom="Magasin geo")
+        # Abidjan, à peu près : 5.3599, -4.0083
+        self.ferme = Ferme.objects.create(
+            nom="Ferme Geo", type=TypeFerme.PONTE, nombre_chambres=1, magasin=magasin,
+            latitude=Decimal("5.359900"), longitude=Decimal("-4.008300"), rayon_metres=300,
+        )
+        self.ferme_lointaine = Ferme.objects.create(
+            nom="Ferme Lointaine", type=TypeFerme.PONTE, nombre_chambres=1, magasin=magasin,
+            latitude=Decimal("6.827600"), longitude=Decimal("-5.289300"), rayon_metres=300,
+        )
+        self.employe = Employe.objects.create(nom="Employe Geo")
+        self.employe.fermes.add(self.ferme)
+
+    def _photo(self):
+        return SimpleUploadedFile("selfie.png", PIXEL_PNG, content_type="image/png")
+
+    def _scanner(self, **position):
+        donnees = {"photo": self._photo(), **position}
+        req = self.factory.post(f"/api/pointage/scan/{self.employe.qr_token}/valider/", donnees)
+        return scan_valider(req, token=str(self.employe.qr_token))
+
+    def test_sur_place_le_pointage_passe(self):
+        # ~50 m de la ferme
+        resp = self._scanner(latitude="5.360300", longitude="-4.008300")
+        self.assertEqual(resp.status_code, 200)
+        pointage = Pointage.objects.get(employe=self.employe)
+        self.assertFalse(pointage.sans_position_debut)
+        self.assertIsNotNone(pointage.latitude_debut)
+
+    def test_trop_loin_le_pointage_est_refuse(self):
+        # Yamoussoukro, à ~200 km
+        resp = self._scanner(latitude="6.827600", longitude="-5.289300")
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn("hors du périmètre", resp.data["detail"])
+        self.assertFalse(Pointage.objects.filter(employe=self.employe).exists())
+
+    def test_sans_position_le_pointage_passe_mais_est_signale(self):
+        """La règle qui protège la paie : un GPS qui n'aboutit pas sous un
+        toit en tôle ne doit jamais empêcher quelqu'un de pointer."""
+        resp = self._scanner()
+        self.assertEqual(resp.status_code, 200)
+        pointage = Pointage.objects.get(employe=self.employe)
+        self.assertTrue(pointage.sans_position_debut)
+        self.assertIsNone(pointage.latitude_debut)
+
+    def test_sans_perimetre_saisi_aucune_verification(self):
+        """La protection s'active ferme par ferme : tant que la Direction n'a
+        pas capturé la position d'une ferme, ses employés pointent librement."""
+        self.ferme.latitude = None
+        self.ferme.longitude = None
+        self.ferme.save()
+        resp = self._scanner(latitude="6.827600", longitude="-5.289300")
+        self.assertEqual(resp.status_code, 200)
+
+    def test_un_superviseur_peut_pointer_sur_chacune_de_ses_fermes(self):
+        """Le périmètre est celui de l'employé scanné, pas un lieu unique :
+        un superviseur couvre plusieurs fermes."""
+        self.employe.fermes.add(self.ferme_lointaine)
+        self.assertEqual(self._scanner(latitude="5.360300", longitude="-4.008300").status_code, 200)
+
+        # Départ depuis l'autre ferme, à 200 km — accepté aussi.
+        resp = self._scanner(latitude="6.827800", longitude="-5.289300")
+        self.assertEqual(resp.status_code, 200)
+        pointage = Pointage.objects.get(employe=self.employe)
+        self.assertIsNotNone(pointage.heure_fin)
+
+    def test_une_position_aberrante_est_ignoree_plutot_que_refusee(self):
+        """Une latitude impossible vient d'un navigateur qui déraille, pas
+        d'une fraude : on la traite comme une absence de position."""
+        resp = self._scanner(latitude="999", longitude="-4.008300")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(Pointage.objects.get(employe=self.employe).sans_position_debut)
+
+    def test_distance_calculee_correctement(self):
+        """Repère connu : 0,001° de latitude ≈ 111 m."""
+        d = distance_metres(5.3599, -4.0083, 5.3609, -4.0083)
+        self.assertAlmostEqual(d, 111, delta=2)
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())

@@ -15,6 +15,9 @@ export const joursDepuis = (iso) => Math.floor((Date.now() - new Date(iso).getTi
 // App.jsx (même raison que le reste de ce fichier). Cf. conversation du
 // 05/08/2026 avec Serge.
 const SEUIL_POINTAGE_OUBLIE_MS = 8 * 3600 * 1000;
+// Un pointage dont l'arrivée OU le départ n'a pas pu être localisé.
+export const estSansPosition = (p) => !!(p.sans_position_debut || p.sans_position_fin);
+
 export const estPointageOublie = (p) =>
   Boolean(p.heure_debut) && !p.heure_fin && Date.now() - new Date(p.heure_debut).getTime() > SEUIL_POINTAGE_OUBLIE_MS;
 
@@ -27,7 +30,7 @@ const tauxCasseJour = (f) => {
   return ((f.dernier_point?.casse || 0) + (f.dernier_point?.brise || 0)) / p * 100;
 };
 
-export function calculerAlertes({ fermes, absencesEnAttente = [], employesSansSalaire = [], evenementsSanteEnRetard = [], creancesEnRetard = [], pointagesSecoursRecents = [], pointagesOublies = [] }) {
+export function calculerAlertes({ fermes, absencesEnAttente = [], employesSansSalaire = [], evenementsSanteEnRetard = [], creancesEnRetard = [], pointagesSecoursRecents = [], pointagesOublies = [], pointagesSansPosition = [] }) {
   const actives = fermes.filter((f) => !f.est_vide);
   const a = [];
   actives.forEach((f) => {
@@ -93,6 +96,18 @@ export function calculerAlertes({ fermes, absencesEnAttente = [], employesSansSa
   pointagesSecoursRecents.forEach((p) => {
     const via = [p.arrivee_via_secours && "arrivée", p.depart_via_secours && "départ"].filter(Boolean).join(" et ");
     a.push({ ferme: "Pointage", txt: `Badge de secours utilisé pour ${p.employe_nom} (${via}, ${new Date(p.date).toLocaleDateString("fr-FR")})`, grav: "moy" });
+  });
+  // Le téléphone n'a pas su se localiser : le pointage a été accepté pour ne
+  // pas bloquer la paie sur une panne de GPS, mais la vérification de lieu
+  // n'a pas pu être faite — la Direction doit le savoir plutôt que de le
+  // découvrir en fouillant l'historique (cf. backend/pointage/geo.py).
+  pointagesSansPosition.forEach((p) => {
+    const quand = [p.sans_position_debut && "arrivée", p.sans_position_fin && "départ"].filter(Boolean).join(" et ");
+    a.push({
+      ferme: "Pointage",
+      txt: `${p.employe_nom} a pointé sans position vérifiable (${quand}, ${new Date(p.date).toLocaleDateString("fr-FR")})`,
+      grav: "moy",
+    });
   });
   // Affecte directement la paie du jour si non corrigé — grav "haut".
   // pointageOublie porte le pointage brut pour l'action "Valider le départ"
