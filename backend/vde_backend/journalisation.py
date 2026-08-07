@@ -22,6 +22,8 @@ import traceback
 
 from django.utils.log import AdminEmailHandler
 
+LONGUEUR_SUJET = 140
+
 
 class HandlerEmailAdminBavard(AdminEmailHandler):
     def send_mail(self, subject, message, *args, **kwargs):
@@ -36,3 +38,22 @@ class HandlerEmailAdminBavard(AdminEmailHandler):
                 "Vérifiez la configuration e-mail : manage.py diagnostic_email\n"
             )
             traceback.print_exc(file=sys.stderr)
+
+
+class HandlerErreurFrontend(HandlerEmailAdminBavard):
+    """Erreur JavaScript côté client — message court, sans le rapport Django.
+
+    Le rapport d'exception complet décrit le SERVEUR : réglages, applications
+    installées, intergiciels. Pour une erreur survenue dans le navigateur d'un
+    chef de ferme, il n'apprend rien, noie les trois lignes utiles sous deux
+    cents lignes de configuration, et expose au passage l'hôte de la base de
+    données dans une boîte mail (07/08/2026, premier e-mail reçu pour de bon).
+
+    Les erreurs SERVEUR, elles, gardent le rapport complet : là, l'état de
+    l'application est précisément ce qu'on cherche.
+    """
+
+    def emit(self, record):
+        message = record.getMessage()
+        sujet = message.splitlines()[0][:LONGUEUR_SUJET] if message else "Erreur frontend"
+        self.send_mail(f"Erreur frontend — {sujet}", message)

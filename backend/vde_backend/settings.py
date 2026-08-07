@@ -287,10 +287,16 @@ LOGGING = {
             # totalement inopérant et invisible du 30/07 au 07/08/2026.
             'class': 'vde_backend.journalisation.HandlerEmailAdminBavard',
         },
+        # Une erreur JS n'a pas besoin du rapport d'exception du serveur :
+        # il décrit la mauvaise machine et enterre l'information utile.
+        'mail_erreur_frontend': {
+            'level': 'ERROR',
+            'class': 'vde_backend.journalisation.HandlerErreurFrontend',
+        },
     },
     'loggers': {
         'vde.frontend_errors': {
-            'handlers': ['mail_admins'],
+            'handlers': ['mail_erreur_frontend'],
             'level': 'ERROR',
             'propagate': False,
         },
