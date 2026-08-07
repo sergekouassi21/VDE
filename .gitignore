@@ -25,3 +25,7 @@ npm-debug.*
 # OS
 .DS_Store
 Thumbs.db
+
+# Exports de la base — ne doivent JAMAIS partir sur un dépôt public
+sauvegardes/
+*.json.gz
