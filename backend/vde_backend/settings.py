@@ -282,7 +282,10 @@ LOGGING = {
     'handlers': {
         'mail_admins': {
             'level': 'ERROR',
-            'class': 'django.utils.log.AdminEmailHandler',
+            # Sous-classe qui écrit sur stderr quand l'envoi échoue : celui de
+            # Django avale l'échec, ce qui a rendu ce suivi d'erreurs
+            # totalement inopérant et invisible du 30/07 au 07/08/2026.
+            'class': 'vde_backend.journalisation.HandlerEmailAdminBavard',
         },
     },
     'loggers': {
