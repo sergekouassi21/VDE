@@ -22,6 +22,25 @@ jobs:
       - name: Installer les dépendances
         run: pip install -r requirements.txt
 
+      # Ce job a échoué huit jours d'affilée sans que sa cause soit lisible
+      # autrement qu'en dépliant les logs à la main. Il se diagnostique
+      # maintenant lui-même, avant de travailler. N'échoue jamais : son rôle
+      # est d'expliquer l'échec suivant, pas de le provoquer.
+      - name: Diagnostic (base de données, configuration e-mail)
+        continue-on-error: true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BREVO_SMTP_LOGIN: ${{ secrets.BREVO_SMTP_LOGIN }}
+          BREVO_SMTP_KEY: ${{ secrets.BREVO_SMTP_KEY }}
+          DJANGO_DEFAULT_FROM_EMAIL: ${{ secrets.DJANGO_DEFAULT_FROM_EMAIL }}
+          DJANGO_ALERTES_EMAILS: ${{ secrets.DJANGO_ALERTES_EMAILS }}
+        run: |
+          export DJANGO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(50))')"
+          echo "--- Migrations en attente sur la base de production ? ---"
+          python manage.py migrate --check && echo "Aucune. La base est à jour." || true
+          echo ""
+          python manage.py diagnostic_email || true
+
       - name: Vérifier les seuils et envoyer l'email récapitulatif
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
