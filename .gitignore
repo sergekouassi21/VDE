@@ -3,6 +3,9 @@ dist/
 dev-dist/
 .env
 .env.local
+# Identifiants de production, jamais versionnes
+.env.prod
+.env.prod.*
 
 # Cloudflare — état local de wrangler, recréé à chaque déploiement
 .wrangler/
