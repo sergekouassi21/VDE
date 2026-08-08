@@ -109,7 +109,17 @@ WSGI_APPLICATION = 'vde_backend.wsgi.application'
 DATABASES = {
     'default': dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        # Les connexions sont gardées ouvertes 10 minutes : rouvrir une
+        # connexion TLS vers Neon à chaque requête coûterait cher depuis
+        # Abidjan.
         conn_max_age=600,
+        # ...mais Neon ferme les connexions inactives de son côté, sans
+        # prévenir. Sans cette vérification, Django ressort du réservoir une
+        # connexion déjà morte et la requête casse sur un
+        # « SSL connection has been closed unexpectedly » — c'est arrivé en
+        # production le 08/08/2026 sur /api/sante/. Django teste désormais la
+        # connexion avant de la réutiliser et en rouvre une si besoin.
+        conn_health_checks=True,
     )
 }
 
