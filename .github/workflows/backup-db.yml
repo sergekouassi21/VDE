@@ -1,32 +1,75 @@
-name: Sauvegarde quotidienne de la base de données
+name: Vérification quotidienne de la sauvegarde
+
+# Ce workflow NE PUBLIE PLUS la sauvegarde.
+#
+# Il déposait chaque nuit un export complet de la base en artefact. Or ce
+# dépôt est PUBLIC : les artefacts y sont téléchargeables par n'importe quel
+# titulaire d'un compte GitHub, et leur liste est même consultable sans
+# compte du tout. Ventes, paie, employés, clients — tout y serait passé.
+#
+# Rien n'a fuité, mais par accident : les quinze exports produits pesaient
+# 182 octets, c'est-à-dire rien. Ils étaient vides ET publics. Réparer
+# l'export sans retirer la publication aurait donc créé la fuite.
+#
+# Ce qu'il reste ici est utile et sans risque : vérifier chaque nuit que la
+# base PEUT être exportée, et le dire fort quand ce n'est pas le cas. La
+# sauvegarde réelle, elle, se fait hors ligne — `prod.ps1 sauvegarde` puis
+# dépôt du fichier sur un Drive (cf. exploitation/management/commands/
+# sauvegarde.py). Un secret ne doit pas voyager par un dépôt public.
 
 on:
   schedule:
-    # 02:00 UTC chaque jour (~03:00/04:00 Abidjan selon la saison — hors
-    # heures d'utilisation habituelles de l'app)
+    # 02:00 UTC — hors des heures de saisie des fermes.
     - cron: "0 2 * * *"
   workflow_dispatch: {}
 
 jobs:
-  backup:
+  verification:
     runs-on: ubuntu-latest
     steps:
       - name: Installer le client PostgreSQL
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Exporter la base (pg_dump)
+      - name: Vérifier que la base peut être exportée
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          # pipefail est le cœur du correctif : sans lui, `pg_dump | gzip`
+          # renvoie le code de sortie de GZIP, qui réussit toujours. Un
+          # pg_dump en échec produisait donc un job vert et un fichier vide,
+          # quinze fois de suite, sans que rien ne l'indique.
+          set -euo pipefail
+
           if [ -z "$DATABASE_URL" ]; then
             echo "DATABASE_URL n'est pas configuré (Settings > Secrets and variables > Actions)."
             exit 1
           fi
-          pg_dump "$DATABASE_URL" --no-owner --no-privileges | gzip > "vde-backup-$(date +%Y-%m-%d).sql.gz"
 
-      - name: Publier la sauvegarde comme artefact
-        uses: actions/upload-artifact@v4
-        with:
-          name: vde-backup-${{ github.run_id }}
-          path: vde-backup-*.sql.gz
-          retention-days: 90
+          # Neon : pg_dump doit passer par le point d'accès DIRECT. À travers
+          # le « pooler », il produit un export tronqué sans lever d'erreur —
+          # c'est l'explication la plus probable des 182 octets.
+          URL_DIRECTE="${DATABASE_URL/-pooler/}"
+
+          pg_dump "$URL_DIRECTE" --no-owner --no-privileges > export.sql
+
+          octets=$(wc -c < export.sql)
+          tables=$(grep -c "^CREATE TABLE" export.sql || true)
+          echo "Export : $octets octets, $tables tables."
+
+          # Un export qui ne contient pas les tables métier n'est pas une
+          # sauvegarde, même s'il est syntaxiquement valide.
+          for table in exploitation_ferme exploitation_pointjournalier pointage_employe; do
+            if ! grep -q "CREATE TABLE public.$table" export.sql; then
+              echo "ÉCHEC : la table $table est absente de l'export."
+              exit 1
+            fi
+          done
+
+          if [ "$octets" -lt 50000 ]; then
+            echo "ÉCHEC : export anormalement petit ($octets octets)."
+            echo "Une sauvegarde vide est pire qu'aucune : elle rassure."
+            exit 1
+          fi
+
+          echo "La base est exportable. Pensez à votre export mensuel hors ligne :"
+          echo "  cd backend && .\\prod.ps1 sauvegarde   puis dépôt sur un Drive."

@@ -28,13 +28,19 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          set -euo pipefail
           if [ -z "$DATABASE_URL" ]; then
             echo "DATABASE_URL n'est pas configuré (Settings > Secrets and variables > Actions)."
             exit 1
           fi
-          pg_dump "$DATABASE_URL" --no-owner --no-privileges > backup_test.sql
-          echo "Taille de l'export :"
-          wc -l backup_test.sql
+          # Neon : le point d'accès « pooler » tronque silencieusement
+          # pg_dump. Toujours passer par le point d'accès direct.
+          pg_dump "${DATABASE_URL/-pooler/}" --no-owner --no-privileges > backup_test.sql
+          echo "Taille de l'export : $(wc -c < backup_test.sql) octets"
+          if [ "$(wc -c < backup_test.sql)" -lt 50000 ]; then
+            echo "ÉCHEC : export vide ou tronqué — inutile d'essayer de le restaurer."
+            exit 1
+          fi
 
       - name: Restaurer dans une base vide et jetable
         env:
