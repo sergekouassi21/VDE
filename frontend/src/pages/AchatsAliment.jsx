@@ -3,6 +3,7 @@ import { Trash2, Wheat } from "lucide-react";
 import { getFermes, getFournisseurs, getCommandesAliment, creerCommandeAliment, supprimerCommandeAliment } from "../api/client";
 import { GREEN, GREEN_DARK, INK, CLAY, TEXTE_DOUX, TEXTE_GRIS, FOND_PAGE, FOND_PAGE_ALT, ALERTE } from "../theme";
 import ChampNombre from "../components/ChampNombre";
+import MagasinsStock from "../components/MagasinsStock";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const separeMilliers = (n) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
@@ -93,6 +94,10 @@ export default function AchatsAliment() {
           <div style={styles.eyebrow}>Volailles de l'Est · Direction</div>
           <h1 style={styles.h1}>Achats d'aliment</h1>
         </header>
+
+        {/* Le stock d'abord : c'est ce qu'on vient verifier avant de commander,
+            et c'est la qu'on corrige un ecart constate. */}
+        <MagasinsStock />
 
         <form style={styles.formCard} onSubmit={soumettre}>
           <div style={styles.fieldRow}>

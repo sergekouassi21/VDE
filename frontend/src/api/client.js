@@ -160,6 +160,15 @@ export const getCommandesAliment = (params) => api.get("/commandes-aliment/", { 
 export const creerCommandeAliment = (payload) => api.post("/commandes-aliment/", payload).then((r) => r.data);
 export const supprimerCommandeAliment = (id) => api.delete(`/commandes-aliment/${id}/`);
 
+// --- Magasins : stock d'aliment/alveoles et inventaires dates ---
+// Le stock n'est pas une valeur qu'on ecrit : il se deduit des Points
+// Journaliers. Un ecart se corrige en CONSTATANT un inventaire a une date,
+// que la chaine de calcul rejoue ensuite comme le reste (cf. ajusterMagasin).
+export const getMagasins = () => api.get("/magasins/").then((r) => r.data);
+export const getStockTheorique = (id, date) => api.get(`/magasins/${id}/theorique/`, { params: { date } }).then((r) => r.data);
+export const getAjustementsMagasin = (id) => api.get(`/magasins/${id}/ajustements/`).then((r) => r.data);
+export const ajusterMagasin = (id, payload) => api.post(`/magasins/${id}/ajuster/`, payload).then((r) => r.data);
+
 // --- Transferts de stock entre fermes (aliment, alvéoles, œufs) ---
 export const getTransfertsStock = (params) => api.get("/transferts-stock/", { params }).then((r) => r.data);
 export const creerTransfertStock = (payload) => api.post("/transferts-stock/", payload).then((r) => r.data);
