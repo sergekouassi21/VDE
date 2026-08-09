@@ -60,7 +60,36 @@ foreach ($ligne in Get-Content $fichier) {
 $anciennes["DJANGO_DEBUG"] = $env:DJANGO_DEBUG
 $env:DJANGO_DEBUG = "True"
 
-Write-Host "Base de PRODUCTION - commande : $($args -join ' ')" -ForegroundColor Cyan
+# Sans DATABASE_URL, settings.py retombe SILENCIEUSEMENT sur le SQLite local
+# (dj_database_url.config a un `default=sqlite://...`). Le script annoncerait
+# alors "Base de PRODUCTION" en migrant la base de developpement — et un
+# `migrate` repondrait "No migrations to apply" de facon parfaitement
+# rassurante. Mieux vaut refuser de demarrer.
+if (-not $env:DATABASE_URL) {
+    Write-Host "DATABASE_URL absent de .env.prod." -ForegroundColor Red
+    Write-Host "Sans lui, Django utiliserait la base LOCALE en croyant parler a la production."
+    Write-Host "Ajoutez la ligne DATABASE_URL=postgresql://... (valeur prise sur Render > Environment)."
+    exit 1
+}
+if ($env:DATABASE_URL -notmatch "^postgres") {
+    Write-Host "DATABASE_URL ne pointe pas sur PostgreSQL." -ForegroundColor Red
+    exit 1
+}
+
+# Affiche la CIBLE, jamais l'identifiant ni le mot de passe : on doit pouvoir
+# copier toute la fenetre sans rien divulguer. Seul l'hote est montre, et
+# encore, ampute de sa partie identifiante.
+$hote = "inconnu"
+if ($env:DATABASE_URL -match "@([^/:?]+)") {
+    $morceaux = $matches[1].Split(".")
+    if ($morceaux.Count -gt 2) {
+        $hote = "(...)." + ($morceaux[-2..-1] -join ".")
+    } else {
+        $hote = $matches[1]
+    }
+}
+
+Write-Host "Base de PRODUCTION ($hote) - commande : $($args -join ' ')" -ForegroundColor Cyan
 Write-Host ""
 
 try {
