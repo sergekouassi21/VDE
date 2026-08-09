@@ -70,15 +70,32 @@ jobs:
         env:
           PGPASSWORD: test
         run: |
-          echo "--- Fermes ---"
-          /usr/lib/postgresql/18/bin/psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_ferme;"
-          echo "--- Bandes ---"
-          /usr/lib/postgresql/18/bin/psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_bande;"
-          echo "--- Points journaliers ---"
-          /usr/lib/postgresql/18/bin/psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_pointjournalier;"
-          echo "--- Sorties d'œufs ---"
-          /usr/lib/postgresql/18/bin/psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_sortieoeuf;"
-          echo "--- Factures ---"
-          /usr/lib/postgresql/18/bin/psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_facture;"
+          set -euo pipefail
+          PSQL="/usr/lib/postgresql/18/bin/psql -h localhost -U postgres -d vde_restore_test -tAc"
+
+          # Le job COMPTE les lignes et ECHOUE si l'une des tables metier est
+          # vide. Il se contentait d'afficher les nombres en concluant « si
+          # ces nombres sont > 0, la restauration fonctionne » — c'est-a-dire
+          # qu'il laissait le lecteur juger, et personne ne lit un job vert.
+          # Une sauvegarde au schema correct mais sans donnees serait passee.
+          manquantes=0
+          TABLES='exploitation_ferme exploitation_bande exploitation_pointjournalier exploitation_sortieoeuf exploitation_facture pointage_employe'
+          for table in $TABLES; do
+            n=$($PSQL "SELECT count(*) FROM $table;")
+            echo "  $table : $n ligne(s)"
+            if [ "$n" -eq 0 ]; then
+              echo "    ^ VIDE"
+              manquantes=$((manquantes + 1))
+            fi
+          done
+
+          if [ "$manquantes" -gt 0 ]; then
+            echo ""
+            echo "ECHEC : $manquantes table(s) metier vide(s) apres restauration."
+            echo "La sauvegarde est syntaxiquement valide mais ne contient pas"
+            echo "les donnees du restaurant. Ne comptez pas dessus."
+            exit 1
+          fi
+
           echo ""
-          echo "Si ces nombres sont > 0 et cohérents avec la production, la restauration fonctionne."
+          echo "Restauration verifiee : toutes les tables metier contiennent des donnees."
