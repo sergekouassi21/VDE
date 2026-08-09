@@ -41,7 +41,12 @@ jobs:
           echo "deb [signed-by=$CLE] $DEPOT" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-18
-          pg_dump --version
+          # Chemin ABSOLU verifie ici : /usr/bin/pg_dump est un lanceur qui
+          # choisit tout seul une version installee, et il a choisi la 16 —
+          # d'ou l'echec « server version mismatch » malgre l'installation
+          # reussie de la 18 (09/08/2026).
+          test -x /usr/lib/postgresql/18/bin/pg_dump
+          /usr/lib/postgresql/18/bin/pg_dump --version
 
       - name: Vérifier que la base peut être exportée
         env:
@@ -63,7 +68,7 @@ jobs:
           # c'est l'explication la plus probable des 182 octets.
           URL_DIRECTE="${DATABASE_URL/-pooler/}"
 
-          pg_dump "$URL_DIRECTE" --no-owner --no-privileges > export.sql
+          /usr/lib/postgresql/18/bin/pg_dump "$URL_DIRECTE" --no-owner --no-privileges > export.sql
 
           octets=$(wc -c < export.sql)
           tables=$(grep -c "^CREATE TABLE" export.sql || true)

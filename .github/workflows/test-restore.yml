@@ -36,7 +36,12 @@ jobs:
           echo "deb [signed-by=$CLE] $DEPOT" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-18
-          pg_dump --version
+          # Chemin ABSOLU verifie ici : /usr/bin/pg_dump est un lanceur qui
+          # choisit tout seul une version installee, et il a choisi la 16 —
+          # d'ou l'echec « server version mismatch » malgre l'installation
+          # reussie de la 18 (09/08/2026).
+          test -x /usr/lib/postgresql/18/bin/pg_dump
+          /usr/lib/postgresql/18/bin/pg_dump --version
 
       - name: Exporter la production (pg_dump)
         env:
@@ -49,7 +54,7 @@ jobs:
           fi
           # Neon : le point d'accès « pooler » tronque silencieusement
           # pg_dump. Toujours passer par le point d'accès direct.
-          pg_dump "${DATABASE_URL/-pooler/}" --no-owner --no-privileges > backup_test.sql
+          /usr/lib/postgresql/18/bin/pg_dump "${DATABASE_URL/-pooler/}" --no-owner --no-privileges > backup_test.sql
           echo "Taille de l'export : $(wc -c < backup_test.sql) octets"
           if [ "$(wc -c < backup_test.sql)" -lt 50000 ]; then
             echo "ÉCHEC : export vide ou tronqué — inutile d'essayer de le restaurer."
@@ -59,21 +64,21 @@ jobs:
       - name: Restaurer dans une base vide et jetable
         env:
           PGPASSWORD: test
-        run: psql -h localhost -U postgres -d vde_restore_test -f backup_test.sql
+        run: /usr/lib/postgresql/18/bin/psql -h localhost -U postgres -d vde_restore_test -f backup_test.sql
 
       - name: Vérifier que les données restaurées sont cohérentes
         env:
           PGPASSWORD: test
         run: |
           echo "--- Fermes ---"
-          psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_ferme;"
+          /usr/lib/postgresql/18/bin/psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_ferme;"
           echo "--- Bandes ---"
-          psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_bande;"
+          /usr/lib/postgresql/18/bin/psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_bande;"
           echo "--- Points journaliers ---"
-          psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_pointjournalier;"
+          /usr/lib/postgresql/18/bin/psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_pointjournalier;"
           echo "--- Sorties d'œufs ---"
-          psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_sortieoeuf;"
+          /usr/lib/postgresql/18/bin/psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_sortieoeuf;"
           echo "--- Factures ---"
-          psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_facture;"
+          /usr/lib/postgresql/18/bin/psql -h localhost -U postgres -d vde_restore_test -c "SELECT count(*) FROM exploitation_facture;"
           echo ""
           echo "Si ces nombres sont > 0 et cohérents avec la production, la restauration fonctionne."
