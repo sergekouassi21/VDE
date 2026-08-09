@@ -27,8 +27,21 @@ jobs:
   verification:
     runs-on: ubuntu-latest
     steps:
-      - name: Installer le client PostgreSQL
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Installer le client PostgreSQL 18
+        # Et non le `postgresql-client` par defaut d'Ubuntu, en version 16 ou
+        # 17 : pg_dump REFUSE de sauvegarder un serveur plus recent que lui, et
+        # Neon tourne en 18.4. La verification nocturne a echoue des son
+        # premier passage pour cette seule raison (09/08/2026).
+        run: |
+          set -euo pipefail
+          CLE=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o "$CLE" https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          DEPOT="https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main"
+          echo "deb [signed-by=$CLE] $DEPOT" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-18
+          pg_dump --version
 
       - name: Vérifier que la base peut être exportée
         env:
