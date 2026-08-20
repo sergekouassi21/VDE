@@ -30,7 +30,9 @@ from exploitation.deux_facteurs import (
 )
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    # Chemin secret (cf. settings.ADMIN_PATH) : un bot qui tape /admin/ tombe
+    # sur un 404. Le vrai chemin n'est livré qu'à la Direction via /api/moi/.
+    path(f'{settings.ADMIN_PATH}/', admin.site.urls),
     path('api/auth/login/', connexion, name='api-login'),
     path('api/auth/logout/', deconnexion, name='api-logout'),
     path('api/auth/mot-de-passe-oublie/', mot_de_passe_oublie, name='api-mot-de-passe-oublie'),

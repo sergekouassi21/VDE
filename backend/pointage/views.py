@@ -19,7 +19,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.throttling import SimpleRateThrottle
 
 from exploitation.audit import AuditMixin, journaliser, journaliser_objet
 from exploitation.calculs import _verrou_consultatif, _verrou_consultatif_texte, prix_moyen_sac_aliment
@@ -46,12 +46,19 @@ _LOCK_CLASSID_LIGNE_PAIE = 8
 _LOCK_CLASSID_POINTAGE_CORRECTION = 9
 
 
-class ThrottlePointagePublic(ScopedRateThrottle):
+class ThrottlePointagePublic(SimpleRateThrottle):
     """Applique la limite par IP aux endpoints publics du pointage (aucun
     compte à vérifier) — cf. audit du 30/07/2026 : rien n'empêchait un
-    script de les marteler."""
+    script de les marteler.
+
+    Base SimpleRateThrottle et non ScopedRateThrottle : cette dernière est un
+    no-op sur une @api_view sans `throttle_scope` sur la vue. Mesuré au pentest
+    du 20/08/2026 : 200 appels au scan public, 0 blocage. Cf. ThrottleConnexion."""
 
     scope = "pointage_public"
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
 
 from .models import (
     Absence, AppareilPointage, BadgeAbsence, BadgeTemporaire, DocumentEmploye, Employe, EvaluationEmploye,
