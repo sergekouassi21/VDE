@@ -22,10 +22,14 @@ export default function Login() {
       localStorage.setItem("vde_nom", moi.nom_complet || "");
       localStorage.setItem("vde_telephone", moi.telephone || "");
       localStorage.setItem("vde_photo", moi.photo || "");
+      // Chemin (secret) de l'admin Django, livré par /moi/ à la Direction
+      // uniquement — cf. pentest du 20/08/2026.
+      localStorage.setItem("vde_admin_url", moi.admin_url || "");
     } catch {
       localStorage.setItem("vde_role", "");
       localStorage.setItem("vde_role_display", "");
       localStorage.setItem("vde_nom", "");
+      localStorage.setItem("vde_admin_url", "");
       localStorage.setItem("vde_telephone", "");
       localStorage.setItem("vde_photo", "");
     }

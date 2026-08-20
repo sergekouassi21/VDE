@@ -27,7 +27,7 @@ const StockMateriel = lazy(() => import("./pages/StockMateriel"));
 const Vaccinations = lazy(() => import("./pages/Vaccinations"));
 const JournalAudit = lazy(() => import("./pages/JournalAudit"));
 const Securite = lazy(() => import("./pages/Securite"));
-import { isAuthenticated, logout, ADMIN_URL, getRechercheGlobale, getDashboard, getEvenementsSante, getAbsences, getEmployes, getFactures, getPointages } from "./api/client";
+import { isAuthenticated, logout, getRechercheGlobale, getDashboard, getEvenementsSante, getAbsences, getEmployes, getFactures, getPointages } from "./api/client";
 import { GREEN_DARK } from "./theme";
 import { calculerAlertes, signatureAlertes, joursDepuis, JOURS_CREANCE_RETARD, estPointageOublie, estSansPosition } from "./alertes";
 import { estDirectionOuAdmin, estTechnicien } from "./utils/auth";
@@ -362,7 +362,9 @@ function NavBar() {
             <Link to="/achats-aliment" style={navStyles.link}><Wheat size={16} /> Achats d'aliment</Link>
             <Link to="/journal-audit" style={navStyles.link}><ScrollText size={16} /> Journal d'audit</Link>
             <Link to="/securite" style={navStyles.link}><Lock size={16} /> Sécurité</Link>
-            <a href={ADMIN_URL} target="_blank" rel="noopener noreferrer" style={navStyles.link}><Shield size={16} /> Admin</a>
+            {localStorage.getItem("vde_admin_url") && (
+              <a href={localStorage.getItem("vde_admin_url")} target="_blank" rel="noopener noreferrer" style={navStyles.link}><Shield size={16} /> Admin</a>
+            )}
           </>
         )}
         <button className="nav-logout" style={navStyles.logout} onClick={() => { logout(); navigate("/connexion"); }}>

@@ -15,6 +15,7 @@ import {
 export default function MonEmail() {
   const [email, setEmail] = useState("");
   const [initial, setInitial] = useState("");
+  const [motDePasse, setMotDePasse] = useState("");
   const [chargement, setChargement] = useState(true);
   const [envoi, setEnvoi] = useState(false);
   const [message, setMessage] = useState("");
@@ -32,8 +33,9 @@ export default function MonEmail() {
     setErreur("");
     setMessage("");
     try {
-      const data = await definirMonEmail(email.trim());
+      const data = await definirMonEmail(email.trim(), motDePasse);
       setInitial(data.email);
+      setMotDePasse("");
       setMessage(data.email ? "Adresse enregistrée." : "Adresse effacée.");
     } catch (err) {
       setErreur(err?.response?.data?.detail || "Impossible d'enregistrer cette adresse.");
@@ -69,20 +71,39 @@ export default function MonEmail() {
       {message && <div style={styles.succes}><Check size={14} /> {message}</div>}
       {erreur && <div style={styles.erreur}>{erreur}</div>}
 
-      <form style={styles.ligne} onSubmit={enregistrer}>
-        <input
-          type="email"
-          style={styles.input}
-          placeholder="vous@exemple.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
-          autoCapitalize="none"
-          spellCheck={false}
-        />
-        <button style={styles.btn} type="submit" disabled={envoi || email.trim() === initial}>
-          {envoi ? "..." : "Enregistrer"}
-        </button>
+      <form style={styles.form} onSubmit={enregistrer}>
+        <div style={styles.ligne}>
+          <input
+            type="email"
+            style={styles.input}
+            placeholder="vous@exemple.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+          />
+          <button
+            style={styles.btn}
+            type="submit"
+            disabled={envoi || email.trim() === initial || motDePasse === ""}
+          >
+            {envoi ? "..." : "Enregistrer"}
+          </button>
+        </div>
+        {/* Le serveur exige le mot de passe actuel pour tout changement
+            d'adresse — sans lui, un jeton volé suffisait à détourner le
+            « mot de passe oublié » (cf. pentest du 20/08/2026). */}
+        {email.trim() !== initial && (
+          <input
+            type="password"
+            style={styles.input}
+            placeholder="Votre mot de passe actuel"
+            value={motDePasse}
+            onChange={(e) => setMotDePasse(e.target.value)}
+            autoComplete="current-password"
+          />
+        )}
       </form>
     </section>
   );
@@ -105,6 +126,7 @@ const styles = {
     background: ALERTE_FOND, color: ALERTE, fontSize: 14, padding: "9px 14px",
     borderRadius: 10, marginBottom: 12,
   },
+  form: { display: "flex", flexDirection: "column", gap: 8 },
   ligne: { display: "flex", gap: 8, flexWrap: "wrap" },
   input: {
     flex: "1 1 200px", minWidth: 0, minHeight: 46, padding: "0 12px", borderRadius: 10,

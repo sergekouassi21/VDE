@@ -11,6 +11,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import sys
+from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
@@ -69,6 +71,12 @@ INSTALLED_APPS = [
     'corsheaders',
     'exploitation',
     'pointage',
+    # django-axes : blocage après N échecs de connexion. Ferme la faille
+    # critique du pentest du 20/08/2026 — /admin/login/ est une vue Django
+    # standard, hors de l'API, donc le throttle DRF ne la couvrait PAS ; rien
+    # n'empêchait un script d'y essayer des mots de passe en boucle. À placer
+    # en dernier (recommandation officielle d'axes).
+    'axes',
 ]
 
 MIDDLEWARE = [
@@ -81,7 +89,47 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # En dernier : intercepte la connexion pour appliquer le verrouillage axes.
+    'axes.middleware.AxesMiddleware',
 ]
+
+# Chemin d'accès à l'admin Django, configurable et NON deviné par le frontend.
+# Le lien « Admin » était calculé dans le bundle JS public (/admin/) : un bot
+# le trouvait sans effort. On le remplace par un chemin secret défini en
+# variable d'environnement (ex: DJANGO_ADMIN_PATH="gestion-x7k2"), livré
+# uniquement à la Direction authentifiée via /api/moi/ (cf. exploitation.views).
+# Défaut "admin" en local pour ne pas gêner le développement. Cf. pentest du
+# 20/08/2026.
+ADMIN_PATH = os.environ.get('DJANGO_ADMIN_PATH', 'admin').strip('/')
+
+# django-axes : ModelBackend enveloppé par AxesStandaloneBackend, qui doit
+# venir EN PREMIER pour intercepter chaque tentative avant la vérification du
+# mot de passe.
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# 5 échecs par (identifiant + IP) puis 30 min de pause — la combinaison, et
+# non l'IP seule, pour ne pas verrouiller toute une équipe derrière un même
+# partage de connexion (NAT). Le compteur retombe à zéro dès une connexion
+# réussie.
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(minutes=30)
+AXES_LOCKOUT_PARAMETERS = [['username', 'ip_address']]
+AXES_RESET_ON_SUCCESS = True
+# axes lit la vraie IP client derrière le proxy Render (un seul proxy de
+# confiance), cohérent avec REST_FRAMEWORK['NUM_PROXIES'] et
+# SECURE_PROXY_SSL_HEADER. Sans ça, tout le monde partagerait l'IP du proxy.
+AXES_IPWARE_PROXY_COUNT = 1
+AXES_IPWARE_META_PRECEDENCE_ORDER = ['HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR']
+# Désactivé pendant la suite de tests : plusieurs tests enchaînent des
+# connexions volontairement échouées (2FA, réauthentification) et
+# épuiseraient sinon le compteur d'axes, verrouillant des tests suivants —
+# même souci que le throttle. Le verrouillage lui-même est vérifié séparément
+# en conditions réelles (HTTP). Motif documenté par django-axes.
+if 'test' in sys.argv:
+    AXES_ENABLED = False
 
 ROOT_URLCONF = 'vde_backend.urls'
 
@@ -339,6 +387,16 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.ScopedRateThrottle',
     ],
+    # Render (comme tout PaaS) place un proxy devant l'appli : sans ce réglage,
+    # DRF identifie l'appelant par REMOTE_ADDR — l'IP du proxy, IDENTIQUE pour
+    # tous les utilisateurs. Le throttle de connexion (10/min) serait alors
+    # PARTAGÉ par toute l'entreprise et bloquerait tout le monde dès le 11ᵉ
+    # login du matin. NUM_PROXIES=1 fait lire la vraie IP client dans
+    # X-Forwarded-For (l'entrée posée par Render, la plus à droite — donc non
+    # falsifiable par un attaquant qui préfixerait de fausses IP). À vérifier
+    # d'un coup d'œil aux logs après le 1er déploiement. Cohérent avec
+    # SECURE_PROXY_SSL_HEADER, qui fait déjà confiance au même proxy.
+    'NUM_PROXIES': 1,
     'DEFAULT_THROTTLE_RATES': {
         'connexion': '10/min',
         # Endpoints publics du pointage (scan, badges de secours/absence,

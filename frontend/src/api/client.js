@@ -2,7 +2,11 @@ import axios from "axios";
 import { ajouterPosition } from "../utils/position";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8010/api";
-export const ADMIN_URL = `${API_BASE_URL.replace(/\/api\/?$/, "")}/admin/`;
+// Le chemin de l'admin Django n'est PLUS deviné ici (il était calculé en dur
+// sur /admin/, donc trouvable par n'importe quel bot dans le bundle public).
+// Il est désormais secret côté serveur (settings.ADMIN_PATH) et livré à la
+// seule Direction via /api/moi/ (champ admin_url), stocké à la connexion.
+// Cf. pentest du 20/08/2026.
 
 export const api = axios.create({ baseURL: API_BASE_URL });
 
@@ -55,6 +59,16 @@ function viderSession() {
   localStorage.removeItem("vde_nom");
   localStorage.removeItem("vde_telephone");
   localStorage.removeItem("vde_photo");
+  localStorage.removeItem("vde_admin_url");
+  // Vider AUSSI le cache des réponses API du service worker (cf.
+  // vite.config.js, NetworkFirst sur /api/, conservé 7 jours). Sans ça, sur
+  // le téléphone partagé du pointage, l'utilisateur suivant qui ouvre l'appli
+  // hors réseau se voyait resservir le tableau de bord — ou les salaires — du
+  // précédent. Cf. pentest du 20/08/2026. Fire-and-forget : la déconnexion ne
+  // doit pas attendre, et l'API `caches` n'existe pas hors contexte sécurisé.
+  if (typeof caches !== "undefined") {
+    caches.delete("vde-api-cache").catch(() => {});
+  }
 }
 
 // Vide l'appareil ET invalide le jeton côté serveur. Auparavant seul le
@@ -97,7 +111,10 @@ export const demanderReinitialisation = (identifiant) =>
   axios.post(`${API_BASE_URL}/auth/mot-de-passe-oublie/`, { identifiant }).then((r) => r.data);
 export const reinitialiserMotDePasse = (payload) =>
   axios.post(`${API_BASE_URL}/auth/reinitialiser/`, payload).then((r) => r.data);
-export const definirMonEmail = (email) => api.post("/moi/email/", { email }).then((r) => r.data);
+// Le mot de passe actuel est exigé par le serveur pour tout changement
+// d'adresse (empêche une prise de compte via un jeton volé — cf. pentest
+// du 20/08/2026, exploitation/views.definir_mon_email).
+export const definirMonEmail = (email, password) => api.post("/moi/email/", { email, password }).then((r) => r.data);
 export const getMoi = () => api.get("/moi/").then((r) => r.data);
 export const getStatut2FA = () => api.get("/auth/2fa/statut/").then((r) => r.data);
 // Le mot de passe n'est exigé par le serveur que si une 2FA est déjà active
