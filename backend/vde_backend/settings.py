@@ -241,12 +241,19 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://localhost:4173',
-    'http://127.0.0.1:4173',
-] + [o.strip() for o in os.environ.get('DJANGO_CORS_ALLOWED_ORIGINS', '').split(',') if o.strip()]
+# Les origines de production viennent de l'environnement ; les origines de
+# développement (Vite en 5173/4173) ne sont ajoutées qu'en DEBUG — inutile de
+# déclarer localhost comme origine autorisée sur le serveur de production.
+# Impact réel faible (jeton en en-tête, pas de cookies cross-site), mais on ne
+# laisse pas traîner ce qui ne sert pas. Cf. pentest du 20/08/2026.
+CORS_ALLOWED_ORIGINS = [o.strip() for o in os.environ.get('DJANGO_CORS_ALLOWED_ORIGINS', '').split(',') if o.strip()]
+if DEBUG:
+    CORS_ALLOWED_ORIGINS += [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        'http://localhost:4173',
+        'http://127.0.0.1:4173',
+    ]
 
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()]
 
